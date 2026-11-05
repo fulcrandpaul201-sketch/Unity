@@ -72,27 +72,94 @@ function tiled(uri, width, height) {
 }
 const surface = map => new THREE.MeshStandardMaterial({ map, roughness: 0.95, metalness: 0 });
 
+// Obscurité en hauteur : chaque matériau des murs se fond dans le noir au-dessus de 2,2 m (pas de plafond visible)
+const FADE_START = 2.2, FADE_END = 7.7;
+function withHeightFade(mat) {
+  mat.customProgramCacheKey = () => "heightFade";   // sinon Three.js réutilise le shader du sol, sans le fondu
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.fadeColor = { value: new THREE.Color(COLORS.bg) };
+    sh.vertexShader = "varying float vWorldY;\n" + sh.vertexShader.replace("#include <begin_vertex>",
+      "#include <begin_vertex>\nvWorldY = (modelMatrix * vec4(transformed, 1.0)).y;");
+    sh.fragmentShader = "varying float vWorldY;\nuniform vec3 fadeColor;\n" + sh.fragmentShader.replace("#include <dithering_fragment>",
+      "#include <dithering_fragment>\nfloat fadeT = smoothstep(" + FADE_START.toFixed(2) + ", " + FADE_END.toFixed(2) + ", vWorldY);\n" +
+      "gl_FragColor.rgb = mix(gl_FragColor.rgb, fadeColor, pow(fadeT, 0.8));");
+  };
+  return mat;
+}
+
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), surface(tiled(FLOOR_URI, ROOM, ROOM)));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-// 4 murs : un plan par mur, tourné vers l'intérieur
-const wallMat = surface(tiled(BRICK_URI, ROOM, WALL_H));
-wallMat.vertexColors = true;
-// dégradé vertical : les briques s'assombrissent en montant jusqu'au noir complet (pas de plafond visible)
-function fadingWall() {
-  const g = new THREE.PlaneGeometry(ROOM, WALL_H, 1, 20);
-  const pos = g.attributes.position, col = [];
-  for (let i = 0; i < pos.count; i++) {
-    const h = (pos.getY(i) + WALL_H / 2);                     // hauteur en mètres
-    const t = Math.min(1, Math.max(0, (h - 2.2) / 5.5));
-    const c = Math.pow(1 - t * t * (3 - 2 * t), 1.4);
-    col.push(c, c, c);
+
+// Murs du fond et de devant : plans simples (UV 0..1 -> texture répétée selon la taille)
+const wallMat = withHeightFade(surface(tiled(BRICK_URI, ROOM, WALL_H)));
+for (const [z, ry] of [[-HALF, 0], [HALF, Math.PI]]) {
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, WALL_H), wallMat);
+  wall.position.set(0, WALL_H / 2, z); wall.rotation.y = ry; wall.receiveShadow = true; scene.add(wall);
+}
+
+// ---------- Arches sur les murs de côté ----------
+// Repère local : x le long du mur, y vers le haut, z vers l'intérieur de la pièce (0 = surface du mur)
+const ARCH = { w: 3.0, h: 3.0, depth: 1.4, ring: 0.42, out: 0.2 };   // ouverture 3 m, montants de 3 m, alcôve de 1,4 m
+const AR = ARCH.w / 2;
+const metersBrick = () => tiled(BRICK_URI, 1, 1);                    // UV en mètres -> 1 répétition tous les 2 m
+const sideWallMat = withHeightFade(surface(metersBrick()));
+const nicheMat = withHeightFade(new THREE.MeshStandardMaterial({ map: metersBrick(), color: 0x8f86a8, roughness: 0.95, side: THREE.BackSide }));
+const stoneMats = [0xcfc6df, 0xc5bad8, 0xd6cee5].map(c => withHeightFade(new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 })));
+const stepMat = withHeightFade(new THREE.MeshStandardMaterial({ color: 0xc2b8d6, roughness: 0.9 }));
+
+function sideWallGeometry() {          // mur entier avec l'ouverture de l'arche découpée
+  const s = new THREE.Shape();
+  s.moveTo(-HALF, 0); s.lineTo(-AR, 0); s.lineTo(-AR, ARCH.h);
+  s.absarc(0, ARCH.h, AR, Math.PI, 0, true);
+  s.lineTo(AR, 0); s.lineTo(HALF, 0); s.lineTo(HALF, WALL_H); s.lineTo(-HALF, WALL_H); s.closePath();
+  return new THREE.ShapeGeometry(s, 32);
+}
+function archOpening(r) {              // contour de l'ouverture (rectangle + demi-cercle)
+  const s = new THREE.Shape();
+  s.moveTo(-r, 0); s.lineTo(r, 0); s.lineTo(r, ARCH.h); s.absarc(0, ARCH.h, r, 0, Math.PI, false); s.closePath();
+  return s;
+}
+function block(geo, x, y, z, i) {
+  const m = new THREE.Mesh(geo, stoneMats[i % stoneMats.length]);
+  m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; return m;
+}
+
+function buildArchWall() {
+  const g = new THREE.Group();
+  const wall = new THREE.Mesh(sideWallGeometry(), sideWallMat); wall.receiveShadow = true; g.add(wall);
+
+  // alcôve : volume extrudé derrière le mur, vu de l'intérieur (faces arrière)
+  const niche = new THREE.Mesh(new THREE.ExtrudeGeometry(archOpening(AR), { depth: ARCH.depth, bevelEnabled: false, curveSegments: 32 }), nicheMat);
+  niche.position.z = -ARCH.depth; niche.receiveShadow = true; g.add(niche);
+  const step = new THREE.Mesh(new THREE.BoxGeometry(ARCH.w, 0.22, ARCH.depth), stepMat);   // marche en pierre au fond
+  step.position.set(0, 0.11, -ARCH.depth / 2); step.receiveShadow = true; g.add(step);
+
+  // montants : blocs alternés large / étroit, séparés par un joint fin
+  const rows = 6, bh = ARCH.h / rows, gap = 0.035;
+  for (let i = 0; i < rows; i++) {
+    const wdt = i % 2 ? 0.42 : 0.62;
+    const geo = new THREE.BoxGeometry(wdt, bh - gap, ARCH.out);
+    for (const side of [-1, 1])
+      g.add(block(geo, side * (AR + wdt / 2), i * bh + bh / 2, ARCH.out / 2, i + (side > 0 ? 1 : 0)));
   }
-  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  // claveaux : pierres en éventail sur l'arc, clé de voûte plus grande au sommet
+  const n = 9, ga = 0.018;
+  for (let i = 0; i < n; i++) {
+    const a0 = Math.PI - i * Math.PI / n - ga, a1 = Math.PI - (i + 1) * Math.PI / n + ga;
+    const key = i === (n - 1) / 2;
+    const r2 = AR + ARCH.ring + (key ? 0.16 : 0);
+    const s = new THREE.Shape();
+    s.absarc(0, 0, r2, a0, a1, true); s.absarc(0, 0, AR, a1, a0, false); s.closePath();
+    const geo = new THREE.ExtrudeGeometry(s, { depth: ARCH.out + (key ? 0.06 : 0), bevelEnabled: false, curveSegments: 6 });
+    g.add(block(geo, 0, ARCH.h, 0, i));
+  }
+  // socles un peu plus larges au pied des montants
+  const base = new THREE.BoxGeometry(0.78, 0.26, ARCH.out + 0.08);
+  for (const side of [-1, 1]) g.add(block(base, side * (AR + 0.36), 0.13, (ARCH.out + 0.08) / 2, 2));
   return g;
 }
-for (const [x, z, ry] of [[0, -HALF, 0], [0, HALF, Math.PI], [-HALF, 0, Math.PI / 2], [HALF, 0, -Math.PI / 2]]) {
-  const wall = new THREE.Mesh(fadingWall(), wallMat);
-  wall.position.set(x, WALL_H / 2, z); wall.rotation.y = ry; wall.receiveShadow = true; scene.add(wall);
+for (const [x, ry] of [[-HALF, Math.PI / 2], [HALF, -Math.PI / 2]]) {
+  const g = buildArchWall(); g.position.x = x; g.rotation.y = ry; scene.add(g);
 }
 
 scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.42));
@@ -192,7 +259,7 @@ function frame(now) {
     // avant = direction de la caméra (à plat), droite = perpendiculaire
     const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
     const mx = fx * f + rx * s, mz = fz * f + rz * s;
-    const lim = HALF - 0.35;
+    const lim = HALF - 0.35 - (Math.abs(p.z) < AR + 1.0 ? ARCH.out + 0.1 : 0);   // recul devant les arches
     p.x = Math.max(-lim, Math.min(lim, p.x + mx * SPEED * dt));
     p.z = Math.max(-lim, Math.min(lim, p.z + mz * SPEED * dt));
     p.facing = Math.atan2(mx, mz);
