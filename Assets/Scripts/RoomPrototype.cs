@@ -31,6 +31,9 @@ public class RoomPrototype : MonoBehaviour
     const float PillarW = 0.7f, PillarOut = 0.3f, PillarH = 5f;
     const float PlinthH = 0.32f, PlinthOut = 0.1f, CorniceY = 5.35f, CorniceH = 0.26f, CorniceOut = 0.2f;
     const float WallClear = 0.8f;   // distance minimale avatar / mur
+    // Fontaine au centre : grand bassin, vasque du milieu, vasque du haut, gazon fleuri
+    const float BasinIn = 1.6f, BasinOut = 1.95f, Water0 = 0.42f, GrassOut = 2.9f, FountainCollide = 2.3f;
+    const float Bowl1Y = 1.25f, Bowl1R = 0.98f, Bowl2Y = 1.95f, Bowl2R = 0.48f, SpoutY = 2.38f;
     // Fenêtres sur les murs de gauche et de droite : plein cintre, appui à 1,5 m, sommet à 3,4 m
     const float WinW = 1.4f, WinBottom = 1.5f, WinSpring = 2.7f, WinDepth = 0.45f, WinRing = 0.3f, WinOut = 0.16f, WR = WinW / 2f;
     static readonly float[] WinX = { -6.5f, 6.5f };
@@ -45,7 +48,7 @@ public class RoomPrototype : MonoBehaviour
     Transform player, billboard;
     SpriteRenderer body;
     Camera cam;
-    Vector3 pos = new Vector3(0f, 0f, -3f);
+    Vector3 pos = new Vector3(0f, 0f, -5f);
     float facing;                 // angle (degrés) de la direction regardée, autour de Y
     float yaw = 0f, pitch = 20f, dist = 5.5f, animT;
 
@@ -72,6 +75,7 @@ public class RoomPrototype : MonoBehaviour
         cam.backgroundColor = BgColor;
 
         BuildRoom();
+        BuildFountain();
         BuildAvatar();
         UpdateCameraAndAvatar(false);
     }
@@ -336,6 +340,97 @@ public class RoomPrototype : MonoBehaviour
         l.transform.localPosition = new Vector3(cx, WinSpring, 0.9f);
     }
 
+    void BuildFountain()
+    {
+        var root = new GameObject("Fountain").transform;
+        Color32[] stones = { new Color32(207, 198, 223, 255), new Color32(197, 186, 216, 255), new Color32(214, 206, 229, 255), new Color32(194, 184, 214, 255) };
+
+        // grand bassin : socle, deux rangées de blocs décalées, margelle
+        StoneRing(root, BasinIn - 0.05f, BasinOut + 0.12f, 0f, 0.12f, 16, 0f, stones, 3);
+        StoneRing(root, BasinIn, BasinOut, 0.12f, 0.2f, 14, 0f, stones, 0);
+        StoneRing(root, BasinIn, BasinOut, 0.32f, 0.2f, 14, 0.5f, stones, 1);
+        StoneRing(root, BasinIn - 0.06f, BasinOut + 0.06f, 0.52f, 0.11f, 12, 0f, stones, 2);
+        Disk(root, "Basin floor", BasinIn, 0.02f, 0.3f, stones[3]);
+        // colonnes et vasques
+        Disk(root, "Column", 0.3f, 0.3f, 1.2f, stones[0]);
+        Disk(root, "Bowl 1", Bowl1R, Bowl1Y, Bowl1Y + 0.22f, stones[2]);
+        Disk(root, "Column 2", 0.16f, Bowl1Y + 0.2f, Bowl2Y, stones[1]);
+        Disk(root, "Bowl 2", Bowl2R, Bowl2Y, Bowl2Y + 0.16f, stones[0]);
+        Disk(root, "Finial", 0.08f, Bowl2Y + 0.1f, SpoutY, stones[2]);
+
+        // eau (légèrement lumineuse)
+        var water = NewMaterial(new Color32(63, 127, 214, 255), null);
+        water.EnableKeyword("_EMISSION");
+        water.SetColor("_EmissionColor", new Color32(22, 64, 126, 255));
+        foreach (var (r, y) in new[] { (BasinIn, Water0), (Bowl1R - 0.1f, Bowl1Y + 0.23f), (Bowl2R - 0.07f, Bowl2Y + 0.17f) })
+            Disk(root, "Water", r, y - 0.01f, y, Color.white).GetComponent<Renderer>().sharedMaterial = water;
+
+        // gazon fleuri autour du bassin
+        Disk(root, "Grass", GrassOut, 0f, 0.012f, new Color32(79, 138, 60, 255));
+        Color32[] flowers = { new Color32(243, 166, 212, 255), new Color32(255, 255, 255, 255), new Color32(247, 214, 90, 255), new Color32(217, 138, 232, 255) };
+        var rnd = new System.Random(7);
+        for (int i = 0; i < 140; i++)
+        {
+            float a = (float)rnd.NextDouble() * Mathf.PI * 2f, r = BasinOut + 0.22f + (float)rnd.NextDouble() * (GrassOut - BasinOut - 0.35f);
+            var leafPos = new Vector3(Mathf.Cos(a) * r, 0.06f, Mathf.Sin(a) * r);
+            LocalPrimitive(root, PrimitiveType.Sphere, "Leaf", leafPos, new Vector3(0.14f, 0.12f, 0.14f), new Color32(70, 124, 53, 255));
+            if (i % 2 == 0) LocalPrimitive(root, PrimitiveType.Sphere, "Flower", leafPos + new Vector3(0.03f, 0.1f, 0f), Vector3.one * 0.12f, flowers[i % flowers.Length]);
+        }
+
+        // gouttes : jet au sommet qui retombe dans les vasques
+        var ps = new GameObject("Fountain water").AddComponent<ParticleSystem>();
+        ps.transform.SetParent(root, false);
+        ps.transform.localPosition = new Vector3(0f, SpoutY, 0f);
+        ps.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);   // émission vers le haut
+        var main = ps.main;
+        main.startSpeed = new ParticleSystem.MinMaxCurve(1.5f, 2.1f);
+        main.startLifetime = 1.4f;
+        main.startSize = 0.05f;
+        main.gravityModifier = 1f;
+        main.maxParticles = 800;
+        main.startColor = new Color(0.81f, 0.91f, 1f, 0.85f);
+        var em = ps.emission; em.rateOverTime = 400f;
+        var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Cone; shape.angle = 28f; shape.radius = 0.03f;
+        var col = ps.collision;                                    // les gouttes rebondissent sur les vasques et l'eau
+        col.enabled = true; col.type = ParticleSystemCollisionType.World; col.bounce = 0.05f; col.lifetimeLoss = 0.4f;
+    }
+
+    // anneau de blocs de pierre posés en cercle
+    static void StoneRing(Transform root, float r1, float r2, float y, float h, int n, float offset, Color32[] stones, int shade0)
+    {
+        float ga = 0.012f;
+        for (int i = 0; i < n; i++)
+        {
+            float a0 = (i + offset) * Mathf.PI * 2f / n + ga, a1 = (i + 1 + offset) * Mathf.PI * 2f / n - ga;
+            var mb = new MeshBuilder();
+            mb.FlatSector(r1, r2, a0, a1, y, h);
+            AddMesh(root, "Fountain stone", mb, NewMaterial(stones[(i + shade0) % stones.Length], null));
+        }
+    }
+
+    // disque plein (cylindre) entre y0 et y1, avec collisionneur pour les gouttes
+    static GameObject Disk(Transform root, string name, float r, float y0, float y1, Color color)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        go.name = name;
+        go.transform.SetParent(root, false);
+        go.transform.localPosition = new Vector3(0f, (y0 + y1) / 2f, 0f);
+        go.transform.localScale = new Vector3(r * 2f, Mathf.Max(0.001f, (y1 - y0) / 2f), r * 2f);
+        go.GetComponent<Renderer>().material.color = color;
+        return go;
+    }
+
+    static void LocalPrimitive(Transform root, PrimitiveType type, string name, Vector3 pos, Vector3 size, Color color)
+    {
+        var go = GameObject.CreatePrimitive(type);
+        go.name = name;
+        Destroy(go.GetComponent<Collider>());
+        go.transform.SetParent(root, false);
+        go.transform.localPosition = pos;
+        go.transform.localScale = size;
+        go.GetComponent<Renderer>().material.color = color;
+    }
+
     static Vector2 UVxy(Vector3 p) => new Vector2(p.x / Tile, p.y / Tile);
 
     static void AddMesh(Transform parent, string name, MeshBuilder mb, Material mat)
@@ -399,6 +494,24 @@ public class RoomPrototype : MonoBehaviour
             Face(P(aStart, r1, 0f), P(aStart, r2, 0f), P(aStart, r2, depth), P(aStart, r1, depth), mid);
             Face(P(aEnd, r1, 0f), P(aEnd, r2, 0f), P(aEnd, r2, depth), P(aEnd, r1, depth), mid);
         }
+        // bloc en secteur d'anneau posé à plat (pour les pierres rondes de la fontaine)
+        public void FlatSector(float r1, float r2, float aStart, float aEnd, float y, float h)
+        {
+            const int n = 4;
+            float am = (aStart + aEnd) / 2f, rm = (r1 + r2) / 2f;
+            Vector3 mid = new Vector3(Mathf.Cos(am) * rm, y + h / 2f, Mathf.Sin(am) * rm);
+            Vector3 P(float a, float r, float yy) => new Vector3(Mathf.Cos(a) * r, yy, Mathf.Sin(a) * r);
+            for (int i = 0; i < n; i++)
+            {
+                float a0 = Mathf.Lerp(aStart, aEnd, i / (float)n), a1 = Mathf.Lerp(aStart, aEnd, (i + 1) / (float)n);
+                Face(P(a0, r1, y + h), P(a1, r1, y + h), P(a1, r2, y + h), P(a0, r2, y + h), mid);   // dessus
+                Face(P(a0, r1, y), P(a1, r1, y), P(a1, r1, y + h), P(a0, r1, y + h), mid);           // intérieur
+                Face(P(a0, r2, y), P(a1, r2, y), P(a1, r2, y + h), P(a0, r2, y + h), mid);           // extérieur
+            }
+            Face(P(aStart, r1, y), P(aStart, r2, y), P(aStart, r2, y + h), P(aStart, r1, y + h), mid);
+            Face(P(aEnd, r1, y), P(aEnd, r2, y), P(aEnd, r2, y + h), P(aEnd, r1, y + h), mid);
+        }
+
         void Face(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 blockCenter)
         {
             Vector3 want = (a + b + c + d) * 0.25f - blockCenter;   // normale vers l'extérieur du bloc
@@ -544,6 +657,9 @@ public class RoomPrototype : MonoBehaviour
             float lim = Half - WallClear;   // l'avatar reste devant les piliers et les arches
             pos.x = Mathf.Clamp(pos.x + dir.x * Speed * Time.deltaTime, -lim, lim);
             pos.z = Mathf.Clamp(pos.z + dir.z * Speed * Time.deltaTime, -lim, lim);
+            // on fait le tour de la fontaine sans la traverser
+            var flat = new Vector2(pos.x, pos.z);
+            if (flat.magnitude < FountainCollide) { flat = (flat.sqrMagnitude > 1e-6f ? flat.normalized : Vector2.up) * FountainCollide; pos.x = flat.x; pos.z = flat.y; }
             facing = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
             animT += Time.deltaTime;
         }

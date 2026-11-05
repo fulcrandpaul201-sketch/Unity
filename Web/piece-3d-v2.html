@@ -253,11 +253,122 @@ buildWall(0, -HALF, 0);
 buildWall(0, HALF, Math.PI);
 buildWall(-HALF, 0, Math.PI / 2, true);     // fenêtres sur les deux murs parallèles de gauche et de droite
 buildWall(HALF, 0, -Math.PI / 2, true);
+// ---------- Fontaine au centre : 3 niveaux en pierre, eau animée, gazon fleuri ----------
+const FOUNT = { basinIn: 1.6, basinOut: 1.95, basinH: 0.55, water0: 0.42, grassOut: 2.9, collide: 2.3 };
+const BOWL1 = { y: 1.25, r: 0.98, water: 1.42 }, BOWL2 = { y: 1.95, r: 0.48, water: 2.07 }, SPOUT_Y = 2.38;
+
+// bloc en secteur d'anneau, posé à plat (extrudé vers le haut)
+function ringBlock(r1, r2, a0, a1, y, h, shade) {
+  const sh = new THREE.Shape();
+  sh.absarc(0, 0, r2, a0, a1, false); sh.absarc(0, 0, r1, a1, a0, true); sh.closePath();
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false, curveSegments: 4 });
+  stone(geo, new THREE.Matrix4().makeTranslation(0, y, 0).multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2)), shade);
+}
+function stoneRing(r1, r2, y, h, n, shade0, offset = 0) {
+  const ga = 0.012;
+  for (let i = 0; i < n; i++) {
+    const a0 = (i + offset) * Math.PI * 2 / n + ga, a1 = (i + 1 + offset) * Math.PI * 2 / n - ga;
+    ringBlock(r1, r2, a0, a1, y, h, i + shade0);
+  }
+}
+function lathe(points, y, shade) {
+  const geo = new THREE.LatheGeometry(points.map(([r, h]) => new THREE.Vector2(r, h)), 32);
+  stone(geo, new THREE.Matrix4().makeTranslation(0, y, 0), shade);
+}
+// grand bassin : socle, deux rangées de pierres décalées, margelle
+stoneRing(FOUNT.basinIn - 0.05, FOUNT.basinOut + 0.12, 0, 0.12, 16, 3);
+stoneRing(FOUNT.basinIn, FOUNT.basinOut, 0.12, 0.2, 14, 0);
+stoneRing(FOUNT.basinIn, FOUNT.basinOut, 0.32, 0.2, 14, 1, 0.5);
+stoneRing(FOUNT.basinIn - 0.06, FOUNT.basinOut + 0.06, 0.52, 0.11, 12, 2);
+lathe([[0, 0], [FOUNT.basinIn, 0], [FOUNT.basinIn, 0.3], [0, 0.3]], 0.0, 3);           // fond du bassin
+// colonne et vasque du milieu
+lathe([[0, 0], [0.42, 0], [0.42, 0.14], [0.3, 0.2], [0.3, 0.75], [0.36, 0.82], [0.36, 0.9], [0, 0.9]], 0.3, 0);
+lathe([[0.1, -0.12], [0.45, -0.08], [0.85, 0.04], [BOWL1.r, 0.14], [BOWL1.r, 0.22], [BOWL1.r - 0.1, 0.22], [0.8, 0.12], [0, 0.1]], BOWL1.y, 2);
+// colonne et vasque du haut, fleuron
+lathe([[0, 0], [0.2, 0], [0.16, 0.08], [0.16, 0.5], [0.22, 0.58], [0, 0.58]], BOWL1.y + 0.12, 1);
+lathe([[0.06, -0.08], [0.25, -0.05], [0.42, 0.04], [BOWL2.r, 0.11], [BOWL2.r, 0.16], [BOWL2.r - 0.07, 0.16], [0.38, 0.08], [0, 0.07]], BOWL2.y, 0);
+lathe([[0, 0], [0.09, 0], [0.06, 0.12], [0.1, 0.2], [0.04, 0.3], [0, 0.34]], BOWL2.y + 0.05, 2);
+
+// eau : texture pixel art qui défile
+const waterCanvas = document.createElement("canvas"); waterCanvas.width = waterCanvas.height = 64;
+{
+  const c = waterCanvas.getContext("2d");
+  c.fillStyle = "#3f7fd6"; c.fillRect(0, 0, 64, 64);
+  const shades = ["#5a98e6", "#7ab4f2", "#2f69c0", "#a8d4ff"];
+  for (let i = 0; i < 90; i++) {
+    const x = Math.floor(Math.random() * 64), y = Math.floor(Math.random() * 64), w = 2 + Math.floor(Math.random() * 6);
+    c.fillStyle = shades[i % shades.length]; c.fillRect(x, y, w, 1); if (x + w > 64) c.fillRect(0, y, x + w - 64, 1);
+  }
+}
+const waterTex = new THREE.CanvasTexture(waterCanvas);
+waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping; waterTex.magFilter = THREE.NearestFilter; waterTex.encoding = THREE.sRGBEncoding;
+waterTex.repeat.set(3, 3);
+const waterMat = new THREE.MeshStandardMaterial({ map: waterTex, emissive: 0x16407e, emissiveIntensity: 0.6, roughness: 0.25, transparent: true, opacity: 0.92 });
+for (const [r, y] of [[FOUNT.basinIn, FOUNT.water0], [BOWL1.r - 0.1, BOWL1.water], [BOWL2.r - 0.07, BOWL2.water]]) {
+  const w = new THREE.Mesh(new THREE.CircleGeometry(r, 40), waterMat);
+  w.rotation.x = -Math.PI / 2; w.position.y = y; scene.add(w);
+}
+
+// gazon fleuri autour du bassin
+const grass = new THREE.Mesh(new THREE.RingGeometry(FOUNT.basinOut + 0.1, FOUNT.grassOut, 48),
+  new THREE.MeshStandardMaterial({ color: 0x4f8a3c, roughness: 1 }));
+grass.rotation.x = -Math.PI / 2; grass.position.y = 0.012; grass.receiveShadow = true; scene.add(grass);
+{
+  const flowerGeo = new THREE.IcosahedronGeometry(0.07, 0);
+  const cols = [0xf3a6d4, 0xffffff, 0xf7d65a, 0xd98ae8, 0xffc0e0].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }));
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x467c35, roughness: 1 });
+  const leafGeo = new THREE.ConeGeometry(0.09, 0.16, 5);
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 140; i++) {
+    const a = rnd() * Math.PI * 2, r = FOUNT.basinOut + 0.22 + rnd() * (FOUNT.grassOut - FOUNT.basinOut - 0.35);
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.set(x, 0.08, z); scene.add(leaf);
+    if (i % 2 === 0) { const f = new THREE.Mesh(flowerGeo, cols[i % cols.length]); f.position.set(x + 0.03, 0.18, z); scene.add(f); }
+  }
+}
+
+// gouttes : jet au sommet, cascades depuis les deux vasques
+const DROPS = 700;
+const dropPos = new Float32Array(DROPS * 3), drops = [];
+const dropGeo = new THREE.BufferGeometry(); dropGeo.setAttribute("position", new THREE.BufferAttribute(dropPos, 3));
+const dropPts = new THREE.Points(dropGeo, new THREE.PointsMaterial({ color: 0xcfe8ff, size: 0.055, transparent: true, opacity: 0.85, depthWrite: false }));
+scene.add(dropPts);
+function spawnDrop(d) {
+  const a = Math.random() * Math.PI * 2, kind = d.kind;
+  if (kind === 0) {        // jet : monte puis retombe dans la vasque du haut
+    d.x = 0; d.y = SPOUT_Y; d.z = 0;
+    const out = 0.25 + Math.random() * 0.25;
+    d.vx = Math.cos(a) * out; d.vz = Math.sin(a) * out; d.vy = 1.5 + Math.random() * 0.5; d.floor = BOWL2.water;
+  } else {                 // cascade : déborde du bord d'une vasque
+    const r = kind === 1 ? BOWL2.r : BOWL1.r, y = kind === 1 ? BOWL2.y + 0.16 : BOWL1.y + 0.22;
+    d.x = Math.cos(a) * r; d.y = y; d.z = Math.sin(a) * r;
+    const out = 0.25 + Math.random() * 0.15;
+    d.vx = Math.cos(a) * out; d.vz = Math.sin(a) * out; d.vy = -Math.random() * 0.2;
+    d.floor = kind === 1 ? BOWL1.water : FOUNT.water0;
+  }
+}
+for (let i = 0; i < DROPS; i++) {
+  const d = { kind: i < 120 ? 0 : i < 330 ? 1 : 2 };
+  spawnDrop(d);
+  for (let k = Math.random() * 60; k > 0; k--) { d.vy -= 9.8 / 60; d.x += d.vx / 60; d.y += d.vy / 60; d.z += d.vz / 60; if (d.y < d.floor) spawnDrop(d); }
+  drops.push(d);
+}
+function updateFountain(dt, now) {
+  waterTex.offset.set(now * 0.00004, now * 0.00007);
+  for (let i = 0; i < DROPS; i++) {
+    const d = drops[i];
+    d.vy -= 9.8 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
+    if (d.y < d.floor) spawnDrop(d);
+    dropPos[i * 3] = d.x; dropPos[i * 3 + 1] = d.y; dropPos[i * 3 + 2] = d.z;
+  }
+  dropGeo.attributes.position.needsUpdate = true;
+}
+
 mergeStones();
 
 scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.42));
 const lamp = new THREE.PointLight(0xfff1dc, 1.0, 34, 1.5);
-lamp.position.set(0, LIGHT_H, 0); lamp.castShadow = true; lamp.shadow.mapSize.set(1024, 1024);
+lamp.position.set(0, LIGHT_H + 0.8, 0); lamp.castShadow = true; lamp.shadow.mapSize.set(1024, 1024);
 scene.add(lamp);
 
 // ---------- Avatar (sprite toujours face à la caméra) ----------
@@ -277,7 +388,7 @@ function setFrame(row, col) {
 }
 
 // ---------- État ----------
-const p = { x: 0, z: 3, facing: Math.PI, t: 0, moving: false };   // facing : angle de la direction regardée
+const p = { x: 0, z: 5, facing: Math.PI, t: 0, moving: false };   // facing : angle de la direction regardée
 const cam = { yaw: 0, pitch: 0.35, dist: 5.5 };
 
 // ---------- Entrées ----------
@@ -355,6 +466,9 @@ function frame(now) {
     const lim = HALF - WALL_CLEAR;                       // l'avatar reste devant les piliers et les arches
     p.x = Math.max(-lim, Math.min(lim, p.x + mx * SPEED * dt));
     p.z = Math.max(-lim, Math.min(lim, p.z + mz * SPEED * dt));
+    // on fait le tour de la fontaine sans la traverser
+    const fd = Math.hypot(p.x, p.z);
+    if (fd < FOUNT.collide) { const k = FOUNT.collide / (fd || 1); p.x *= k; p.z *= k; }
     p.facing = Math.atan2(mx, mz);
     p.t += dt;
   } else p.t = 0;
@@ -377,6 +491,7 @@ function frame(now) {
   avatar.position.set(p.x, 0, p.z);
   blob.position.set(p.x, 0.01, p.z);
 
+  updateFountain(dt, now);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
