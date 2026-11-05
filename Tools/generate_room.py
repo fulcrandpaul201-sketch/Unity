@@ -1,14 +1,14 @@
 """Salle vide (murs + sol) en haute définition, rendu anticrénelé.
-Géométrie exprimée en unités d'une image 640x480 ; sortie en 960x720 -> Assets/Resources/room_empty.png"""
+Géométrie en unités (hauteur 480) ; mur du fond 900 de large ; sortie x1.5 = 1860x720 -> Assets/Resources/room_empty.png"""
 import os
 import numpy as np
 from PIL import Image
 
-W, H = 640, 480            # unités de travail
+W, H = 1240, 480           # unités de travail (vue complète de la salle)
 OUT = 1.5                  # facteur de sortie -> 960x720
 SS = 3                     # sur-échantillonnage (anticrénelage)
-VPX, VPY = 320, 130        # point de fuite
-BL, BR, BT, BB = 170, 470, 60, 270   # mur du fond
+VPX, VPY = 620, 130        # point de fuite
+BL, BR, BT, BB = 170, 1070, 60, 270   # mur du fond
 FOC = 300                  # profondeur du mur du fond (unités monde)
 
 WALL, MORTAR = np.array([180, 170, 202.]), np.array([116, 104, 140.])
@@ -40,8 +40,12 @@ def masonry(u, v, bw, bh, base, mort, salt, m=1.3, r=0.0):
     return np.where(inside[..., None], stone, mortar)
 
 def render():
-    w, h = int(W * OUT * SS), int(H * OUT * SS)
-    x = (np.arange(w) + 0.5) / (OUT * SS); y = (np.arange(h) + 0.5) / (OUT * SS)
+    rows = [render_rows(r0, min(r0 + 60, int(H * OUT))) for r0 in range(0, int(H * OUT), 60)]
+    return np.concatenate(rows, axis=0)
+
+def render_rows(r0, r1):
+    w, h = int(W * OUT * SS), (r1 - r0) * SS
+    x = (np.arange(w) + 0.5) / (OUT * SS); y = (np.arange(r0 * SS, r1 * SS) + 0.5) / (OUT * SS)
     x, y = np.meshgrid(x, y)
     mx = np.where(x < VPX, x, 2 * VPX - x)
     side = (x < BL) | (x > BR)
@@ -66,7 +70,7 @@ def render():
     k = np.maximum((y - VPY) / (BB - VPY), 1e-6)
     z, wx = FOC / k, VPX + (x - VPX) / k
     fl = masonry(wx, z, 24, 16, FLOOR, FMORT, 21, m=1.6, r=3.5)
-    g = 1 + 0.07 * np.exp(-((wx - VPX) / 140) ** 2 - ((z - 190) / 80) ** 2)
+    g = 1 + 0.07 * np.exp(-((wx - VPX) / 420) ** 2 - ((z - 190) / 80) ** 2)
     g *= 1 - 0.28 * np.clip(1 - (FOC - z) / 16, 0, 1)
     g *= 1 - 0.28 * np.clip(1 - ((BR - BL) / 2 - np.abs(wx - VPX)) / 16, 0, 1)
     fl = fl * g[..., None]

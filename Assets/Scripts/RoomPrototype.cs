@@ -6,27 +6,29 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// Prototype : affiche la salle vide et un avatar déplaçable (flèches / ZQSD / manette).
 /// Se lance tout seul quand on appuie sur Play, dans n'importe quelle scène.
-/// Images attendues dans Assets/Resources : room_empty.png (960x720) et avatar_sheet.png (256x384, images de 64x96).
-/// La salle mesure 640x480 unités Unity.
+/// Images attendues dans Assets/Resources : room_empty.png (1860x720) et avatar_sheet.png (512x768, images de 128x192).
+/// La salle mesure 1240x480 unités Unity ; la caméra montre 480 unités de haut et suit l'avatar.
 /// </summary>
 public class RoomPrototype : MonoBehaviour
 {
     public static bool AutoStart = true;
 
     // Géométrie de la salle (mêmes valeurs que Tools/generate_rooms.py)
-    const float VPX = 320f, VPY = 130f, FloorY = 270f, Foc = 300f, WallL = 170f, WallR = 470f;
-    const float RoomW = 640f, RoomH = 480f;
-    const float AvatarHeight = 66f; // hauteur de l'avatar au fond de la salle
+    const float VPX = 620f, VPY = 130f, FloorY = 270f, Foc = 300f, WallL = 170f, WallR = 1070f;
+    const float RoomW = 1240f, RoomH = 480f;
+    const float Edge = 75f;         // distance minimale entre l'avatar et le bord de l'image
+    const float AvatarHeight = 92f; // hauteur de l'image de l'avatar au fond de la salle
     const float Speed = 95f;        // unités "monde" par seconde
     const float MinZ = 135f, MaxZ = 294f, Margin = 14f;
-    const int FrameW = 64, FrameH = 96;
+    const int FrameW = 128, FrameH = 192;
 
     enum Dir { Down = 0, Left = 1, Right = 2, Up = 3 }
 
     Sprite[,] frames = new Sprite[4, 4];
     SpriteRenderer body;
     Transform player;
-    float wx = 320f, z = 200f, animT;
+    float wx = 620f, z = 200f, animT;
+    Camera cam;
     Dir dir = Dir.Down;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -48,7 +50,7 @@ public class RoomPrototype : MonoBehaviour
         if (roomTex == null || sheetTex == null) { enabled = false; return; }
 
         // Caméra : la salle remplit exactement l'écran (480 unités de haut)
-        var cam = Camera.main;
+        cam = Camera.main;
         if (cam == null) cam = new GameObject("Main Camera").AddComponent<Camera>();
         cam.orthographic = true;
         cam.orthographicSize = RoomH / 2f;
@@ -91,7 +93,7 @@ public class RoomPrototype : MonoBehaviour
 
     static Sprite MakeShadowSprite()
     {
-        const int w = 48, h = 14;
+        const int w = 80, h = 20;
         var t = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
@@ -129,8 +131,11 @@ public class RoomPrototype : MonoBehaviour
         bool moving = v.sqrMagnitude > 0.01f;
         if (moving)
         {
-            wx = Mathf.Clamp(wx + v.x * Speed * Time.deltaTime, WallL + Margin, WallR - Margin);
             z = Mathf.Clamp(z + v.y * Speed * Time.deltaTime, MinZ, MaxZ);   // haut = vers le fond
+            float kz = Foc / z;
+            float lo = Mathf.Max(WallL + Margin, VPX + (Edge - VPX) / kz);
+            float hi = Mathf.Min(WallR - Margin, VPX + (RoomW - Edge - VPX) / kz);
+            wx = Mathf.Clamp(wx + v.x * Speed * Time.deltaTime, lo, hi);
             dir = Mathf.Abs(v.x) > Mathf.Abs(v.y) ? (v.x < 0 ? Dir.Left : Dir.Right) : (v.y > 0 ? Dir.Up : Dir.Down);
             animT += Time.deltaTime;
         }
@@ -148,6 +153,16 @@ public class RoomPrototype : MonoBehaviour
 
         float s = AvatarHeight * k / FrameH;
         player.localScale = new Vector3(s, s, 1f);
+
+        // La caméra suit l'avatar sans sortir de l'image
+        if (cam != null)
+        {
+            float halfW = cam.orthographicSize * cam.aspect;
+            float maxX = Mathf.Max(0f, RoomW / 2f - halfW);
+            float tx = Mathf.Clamp(player.position.x, -maxX, maxX);
+            var cp = cam.transform.position;
+            cam.transform.position = new Vector3(Mathf.Lerp(cp.x, tx, Mathf.Min(1f, Time.deltaTime * 6f)), 0f, cp.z);
+        }
 
         int col = moving ? Mathf.FloorToInt(animT * 8f) % 4 : 0;
         body.sprite = frames[(int)dir, col];

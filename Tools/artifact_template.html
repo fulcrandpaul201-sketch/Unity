@@ -20,10 +20,12 @@
 const room = new Image(); room.src = "data:image/png;base64,{{ROOM}}";
 const sheet = new Image(); sheet.src = "data:image/png;base64,{{AVATAR}}";
 
-// Géométrie de la salle (mêmes valeurs que Tools/generate_rooms.py)
-const DS = 1.5, VPX = 320, VPY = 130, FLOOR_Y = 270, FOC = 300, BL = 170, BR = 470;
-const AV_H = 66;                        // hauteur de l'avatar (unités) au fond de la salle
-const FW = 64, FH = 96;                 // taille d'une image de la planche
+// Géométrie de la salle (mêmes valeurs que Tools/generate_room.py)
+const DS = 1.5, VPX = 620, VPY = 130, FLOOR_Y = 270, FOC = 300, BL = 170, BR = 1070;
+const ROOM_W = 1240, VIEW_W = 640;      // largeur de la salle / largeur visible (unités)
+const EDGE = 75;                        // l'avatar reste à cette distance des bords de l'image
+const AV_H = 92;                        // hauteur de l'image de l'avatar (unités) au fond de la salle
+const FW = 128, FH = 192;               // taille d'une image de la planche
 const SPEED = 95;                       // unités monde / seconde
 const MIN_Z = 135, MAX_Z = FOC - 6, MARGIN = 14;
 const DIR = { down: 0, left: 1, right: 2, up: 3 };
@@ -31,7 +33,8 @@ const DIR = { down: 0, left: 1, right: 2, up: 3 };
 const cv = document.getElementById("c"), ctx = cv.getContext("2d");
 ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
 
-const p = { wx: 320, z: 200, dir: DIR.down, t: 0, moving: false };
+let camX = (ROOM_W - VIEW_W) / 2;
+const p = { wx: 620, z: 200, dir: DIR.down, t: 0, moving: false };
 const keys = new Set();
 addEventListener("keydown", e => { keys.add(e.code); if (e.code.startsWith("Arrow")) e.preventDefault(); });
 addEventListener("keyup", e => keys.delete(e.code));
@@ -72,19 +75,24 @@ function frame(now) {
   const [ix, iy] = input();
   p.moving = ix !== 0 || iy !== 0;
   if (p.moving) {
-    p.wx = Math.max(BL + MARGIN, Math.min(BR - MARGIN, p.wx + ix * SPEED * dt));
     p.z = Math.max(MIN_Z, Math.min(MAX_Z, p.z - iy * SPEED * dt));   // haut de l'écran = vers le fond
+    const kz = FOC / p.z;
+    const lo = Math.max(BL + MARGIN, VPX + (EDGE - VPX) / kz), hi = Math.min(BR - MARGIN, VPX + (ROOM_W - EDGE - VPX) / kz);
+    p.wx = Math.max(lo, Math.min(hi, p.wx + ix * SPEED * dt));
     p.dir = Math.abs(ix) > Math.abs(iy) ? (ix < 0 ? DIR.left : DIR.right) : (iy < 0 ? DIR.up : DIR.down);
     p.t += dt;
   } else p.t = 0;
 
-  ctx.drawImage(room, 0, 0, cv.width, cv.height);
-
   const [sx, sy, k] = project(p.wx, p.z);
+  const target = Math.max(0, Math.min(ROOM_W - VIEW_W, sx - VIEW_W / 2));   // la caméra suit l'avatar
+  camX += (target - camX) * Math.min(1, dt * 6);
+  const scale = room.naturalHeight / 480;
+  ctx.drawImage(room, camX * scale, 0, VIEW_W * scale, room.naturalHeight, 0, 0, cv.width, cv.height);
+
   const dh = AV_H * k * DS, dw = dh * FW / FH;                     // taille affichée
-  const fx = sx * DS, fy = sy * DS;
+  const fx = (sx - camX) * DS, fy = sy * DS;
   ctx.fillStyle = "rgba(40,24,56,0.28)";
-  ctx.beginPath(); ctx.ellipse(fx, fy - dh * 0.02, dw * 0.36, dw * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(fx, fy - dh * 0.02, dw * 0.3, dw * 0.08, 0, 0, Math.PI * 2); ctx.fill();
   const col = p.moving ? Math.floor(p.t * 8) % 4 : 0;
   ctx.drawImage(sheet, col * FW + 1, p.dir * FH + 1, FW - 2, FH - 2, fx - dw / 2, fy - dh, dw, dh);   // marge de 1 px : pas de débord entre images
 
