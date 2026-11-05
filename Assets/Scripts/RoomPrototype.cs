@@ -19,8 +19,7 @@ public class RoomPrototype : MonoBehaviour
     public static bool AutoStart = true;
 
     // Réglages (mêmes valeurs que Tools/web/game.js)
-    const float Room = 20f, Half = Room / 2f, WallH = 10f, WallT = 0.4f;   // murs très hauts, sans plafond
-    const float LightH = 3.2f;      // lampe à hauteur d'homme
+    const float Room = 26f, Half = Room / 2f, WallH = 10f, WallT = 0.4f;   // cour de 26 m, murs hauts qui se fondent dans la nuit
     const float FadeStart = 2.2f, FadeEnd = 7.7f;   // les murs se perdent dans le noir entre ces hauteurs
     const float Speed = 4.2f, AvatarHeight = 1.7f;
     const float JumpSpeed = 5.4f, Gravity = 15f;   // saut d'environ 1 m
@@ -28,15 +27,14 @@ public class RoomPrototype : MonoBehaviour
     // Cour de récréation : obstacles en boîtes alignées (bancs : on peut monter dessus ; bascule : on la contourne)
     struct Obstacle { public float minX, maxX, minZ, maxZ, top; public bool standable; }
     readonly System.Collections.Generic.List<Obstacle> obstacles = new System.Collections.Generic.List<Obstacle>();
-    const float BenchLen = 2.2f, BenchSeat = 0.45f, BenchDepth = 0.46f, BallR = 0.22f;
-    Rigidbody ball;
-    float kickCooldown;
+    const float BenchLen = 2.2f, BenchSeat = 0.45f, BenchDepth = 0.46f;
+    readonly System.Collections.Generic.List<(Light light, float seed)> lanterns = new System.Collections.Generic.List<(Light, float)>();
     const float Tile = 2f;          // mètres couverts par une texture
     // Arches des murs de côté : ouverture 3 m, montants 3 m, alcôve 1,4 m, encadrement qui dépasse de 0,2 m
     const float ArchW = 3f, ArchH = 3f, ArchDepth = 1.4f, ArchRing = 0.42f, ArchOut = 0.2f, AR = ArchW / 2f;
     // Même structure sur les 4 murs : une arche centrale, piliers entre elles et dans les angles, soubassement et corniche
     static readonly float[] ArchX = { 0f };   // une arche au centre de chaque mur
-    static readonly float[] PillarX = { -Half + 0.35f, -3.25f, 3.25f, Half - 0.35f };
+    static readonly float[] PillarX = { -Half + 0.35f, -9.75f, -3.25f, 3.25f, 9.75f, Half - 0.35f };
     const float PillarW = 0.7f, PillarOut = 0.3f, PillarH = 5f;
     const float PlinthH = 0.32f, PlinthOut = 0.1f, CorniceY = 5.35f, CorniceH = 0.26f, CorniceOut = 0.2f;
     const float WallClear = 0.8f;   // distance minimale avatar / mur
@@ -45,11 +43,12 @@ public class RoomPrototype : MonoBehaviour
     const float Bowl1Y = 1.25f, Bowl1R = 0.98f, Bowl2Y = 1.95f, Bowl2R = 0.48f, SpoutY = 2.38f;
     // Fenêtres sur les murs de gauche et de droite : plein cintre, appui à 1,5 m, sommet à 3,4 m
     const float WinW = 1.4f, WinBottom = 1.5f, WinSpring = 2.7f, WinDepth = 0.45f, WinRing = 0.3f, WinOut = 0.16f, WR = WinW / 2f;
-    static readonly float[] WinX = { -6.5f, 6.5f };
+    static readonly float[] WinX = { -11.2f, -6.5f, 6.5f, 11.2f };   // une fenêtre dans chaque travée
 
     static readonly Color FloorColor = new Color32(185, 176, 207, 255);
     static readonly Color WallColor = new Color32(135, 120, 166, 255);
-    static readonly Color BgColor = new Color32(7, 4, 11, 255);   // obscurité au-dessus des murs
+    static readonly Color BgColor = new Color32(11, 16, 32, 255);   // ciel de nuit au-dessus des murs
+    static readonly Color32[] StoneColors = { new Color32(185, 177, 165, 255), new Color32(175, 166, 153, 255), new Color32(195, 187, 176, 255), new Color32(167, 159, 147, 255) };
 
     Transform player;
     // avatar 3D : pivots animés
@@ -113,18 +112,21 @@ public class RoomPrototype : MonoBehaviour
         Fade(fade, new Vector3(f, 0f, 0f), -90f);
         Fade(fade, new Vector3(-f, 0f, 0f), 90f);
 
-        var lamp = new GameObject("Lamp").AddComponent<Light>();
-        lamp.type = LightType.Point;
-        lamp.color = new Color32(255, 241, 220, 255);
-        lamp.range = 22f;
-        lamp.intensity = 2.4f;
-        lamp.shadows = LightShadows.Soft;
-        lamp.transform.position = new Vector3(0f, LightH, 0f);
+        // clair de lune (ombres des murs et des arches)
+        var moon = new GameObject("Moon").AddComponent<Light>();
+        moon.type = LightType.Directional;
+        moon.color = new Color32(196, 210, 255, 255);
+        moon.intensity = 0.55f;
+        moon.shadows = LightShadows.Soft;
+        moon.transform.rotation = Quaternion.LookRotation(new Vector3(-9f, -22f, -7f));
+        // lanternes en fer forgé sur les piliers (lumière sur les piliers centraux)
+        foreach (var (wp, ry) in new[] { (new Vector3(0f, 0f, Half), 180f), (new Vector3(0f, 0f, -Half), 0f), (new Vector3(-Half, 0f, 0f), 90f), (new Vector3(Half, 0f, 0f), -90f) })
+            foreach (float x in new[] { -9.75f, -3.25f, 3.25f, 9.75f }) Lantern(wp, ry, x, Mathf.Abs(x) < 5f);
 
         RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-        RenderSettings.ambientSkyColor = new Color32(40, 34, 54, 255);
-        RenderSettings.ambientEquatorColor = new Color32(110, 98, 138, 255);
-        RenderSettings.ambientGroundColor = new Color32(70, 58, 96, 255);
+        RenderSettings.ambientSkyColor = new Color32(64, 74, 110, 255);
+        RenderSettings.ambientEquatorColor = new Color32(70, 70, 82, 255);
+        RenderSettings.ambientGroundColor = new Color32(46, 41, 36, 255);
     }
 
     // ---------- Arches ----------
@@ -177,8 +179,8 @@ public class RoomPrototype : MonoBehaviour
         wall.WallRect(x, 0f, Half, WallH, 0f, into);
         AddMesh(root, "Bricks", wall, NewMaterial(brick != null ? Color.white : WallColor, brick));
 
-        Color32[] stones = { new Color32(207, 198, 223, 255), new Color32(197, 186, 216, 255), new Color32(214, 206, 229, 255), new Color32(194, 184, 214, 255) };
-        var nicheMat = NewMaterial(new Color32(143, 134, 168, 255), brick);
+        Color32[] stones = StoneColors;
+        var nicheMat = NewMaterial(new Color32(125, 118, 109, 255), brick);
         if (windows) foreach (float wx in WinX) BuildWindow(root, wx, nicheMat, stones);
         int ai = 0;
         foreach (float cx in ArchX)
@@ -268,7 +270,7 @@ public class RoomPrototype : MonoBehaviour
             }
         }
         // corniche au-dessus des arches
-        const int cn = 16; float cl = Room / cn;
+        int cn = Mathf.RoundToInt(Room / 1.25f); float cl = Room / cn;
         for (int i = 0; i < cn; i++)
             LocalCube(root, "Cornice", new Vector3(-Half + cl * (i + 0.5f), CorniceY, CorniceOut / 2f), new Vector3(cl - 0.035f, CorniceH, CorniceOut), stones[i % 3]);
     }
@@ -310,13 +312,13 @@ public class RoomPrototype : MonoBehaviour
             float a0 = Mathf.PI * i / seg, a1 = Mathf.PI * (i + 1) / seg;
             glass.Tri(c0 + gz, c0 + gz + new Vector3(Mathf.Cos(a0), Mathf.Sin(a0), 0f) * WR, c0 + gz + new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * WR, into, Vector2.zero, Vector2.zero, Vector2.zero);
         }
-        var glassMat = NewMaterial(new Color32(169, 194, 240, 255), null);
+        var glassMat = NewMaterial(new Color32(255, 190, 99, 255), null);   // fenêtres éclairées de l'intérieur
         glassMat.EnableKeyword("_EMISSION");
-        glassMat.SetColor("_EmissionColor", new Color32(150, 175, 225, 255));
+        glassMat.SetColor("_EmissionColor", new Color32(255, 170, 80, 255));
         AddMesh(root, "Window glass", glass, glassMat);
 
         // croisillons
-        Color32 lead = new Color32(94, 84, 120, 255);
+        Color32 lead = new Color32(46, 42, 40, 255);
         float zc = zb + 0.05f;
         LocalCube(root, "Mullion", new Vector3(cx, (WinBottom + top) / 2f, zc), new Vector3(0.07f, top - WinBottom, 0.05f), lead);
         LocalCube(root, "Transom", new Vector3(cx, WinSpring, zc), new Vector3(WinW, 0.07f, 0.05f), lead);
@@ -343,20 +345,12 @@ public class RoomPrototype : MonoBehaviour
             AddMesh(root, key ? "Window keystone" : "Window voussoir", mb, NewMaterial(stones[i % 3], null));
         }
 
-        // lumière froide qui entre par la fenêtre
-        var l = new GameObject("Window light").AddComponent<Light>();
-        l.type = LightType.Point;
-        l.color = new Color32(159, 182, 255, 255);
-        l.range = 8f;
-        l.intensity = 0.9f;
-        l.transform.SetParent(root, false);
-        l.transform.localPosition = new Vector3(cx, WinSpring, 0.9f);
     }
 
     void BuildFountain()
     {
         var root = new GameObject("Fountain").transform;
-        Color32[] stones = { new Color32(207, 198, 223, 255), new Color32(197, 186, 216, 255), new Color32(214, 206, 229, 255), new Color32(194, 184, 214, 255) };
+        Color32[] stones = StoneColors;
 
         // grand bassin : socle, deux rangées de blocs décalées, margelle
         StoneRing(root, BasinIn - 0.05f, BasinOut + 0.12f, 0f, 0.12f, 16, 0f, stones, 3);
@@ -438,11 +432,13 @@ public class RoomPrototype : MonoBehaviour
     void BuildPlayground()
     {
         var root = new GameObject("Playground").transform;
-        Color32[] wood = { new Color32(154, 106, 62, 255), new Color32(143, 96, 56, 255), new Color32(164, 114, 70, 255) };
-        Color32 woodDark = new Color32(106, 66, 38, 255);
+        Color32[] wood = { new Color32(94, 61, 38, 255), new Color32(85, 55, 34, 255), new Color32(102, 68, 43, 255) };
+        Color32 woodDark = new Color32(47, 43, 42, 255);
 
-        // 4 bancs le long des murs du fond et de devant, entre les piliers
-        foreach (var (cx, cz) in new[] { (-6.5f, -Half + 1.25f), (6.5f, -Half + 1.25f), (-6.5f, Half - 1.25f), (6.5f, Half - 1.25f) })
+        // 8 bancs en chêne le long des murs du fond et de devant, dans chaque travée
+        var spots = new System.Collections.Generic.List<(float, float)>();
+        foreach (float bx in new[] { -11.2f, -6.5f, 6.5f, 11.2f }) { spots.Add((bx, -Half + 1.25f)); spots.Add((bx, Half - 1.25f)); }
+        foreach (var (cx, cz) in spots)
         {
             var b = new GameObject("Bench").transform; b.SetParent(root, false); b.localPosition = new Vector3(cx, 0f, cz);
             for (int i = 0; i < 3; i++) LocalCube(b, "Plank", new Vector3(0f, BenchSeat, -0.16f + i * 0.16f), new Vector3(BenchLen, 0.05f, 0.14f), wood[i]);
@@ -452,70 +448,10 @@ public class RoomPrototype : MonoBehaviour
                 LocalCube(b, "Rail", new Vector3(sx, BenchSeat - 0.06f, 0f), new Vector3(0.1f, 0.06f, 0.48f), woodDark);
             }
             LocalCube(b, "Stretcher", new Vector3(0f, 0.14f, 0f), new Vector3(1.84f, 0.06f, 0.06f), woodDark);
-            Solid(b, new Vector3(0f, BenchSeat / 2f, 0f), new Vector3(BenchLen, BenchSeat + 0.05f, BenchDepth));   // pour le ballon
+            Solid(b, new Vector3(0f, BenchSeat / 2f, 0f), new Vector3(BenchLen, BenchSeat + 0.05f, BenchDepth));   // collision physique (gouttes, etc.)
             obstacles.Add(new Obstacle { minX = cx - BenchLen / 2f, maxX = cx + BenchLen / 2f, minZ = cz - BenchDepth / 2f, maxZ = cz + BenchDepth / 2f, top = BenchSeat + 0.025f, standable = true });
         }
 
-        // bascule inclinée avec sièges et poignées
-        {
-            float cx = -5.5f, cz = -4.5f, L = 3.4f, pivotY = 0.5f;
-            var b = new GameObject("Seesaw").transform; b.SetParent(root, false); b.localPosition = new Vector3(cx, 0f, cz);
-            LocalCube(b, "Base", new Vector3(0f, 0.18f, 0f), new Vector3(0.34f, 0.36f, 0.5f), woodDark);
-            LocalCube(b, "Axle", new Vector3(0f, pivotY - 0.06f, 0f), new Vector3(0.16f, 0.16f, 0.62f), wood[0]);
-            var plank = new GameObject("Plank").transform; plank.SetParent(b, false);
-            plank.localPosition = new Vector3(0f, pivotY, 0f); plank.localRotation = Quaternion.Euler(0f, 0f, 10f);
-            LocalCube(plank, "Board", new Vector3(0f, 0.035f, 0f), new Vector3(L, 0.07f, 0.34f), wood[2]);
-            foreach (float sx in new[] { -1f, 1f })
-            {
-                LocalCube(plank, "Seat", new Vector3(sx * (L / 2f - 0.3f), 0.1f, 0f), new Vector3(0.4f, 0.06f, 0.36f), wood[1]);
-                LocalCube(plank, "Handle", new Vector3(sx * (L / 2f - 0.62f), 0.24f, -0.12f), new Vector3(0.06f, 0.34f, 0.06f), woodDark);
-                LocalCube(plank, "Handle", new Vector3(sx * (L / 2f - 0.62f), 0.24f, 0.12f), new Vector3(0.06f, 0.34f, 0.06f), woodDark);
-                LocalCube(plank, "Handle bar", new Vector3(sx * (L / 2f - 0.62f), 0.42f, 0f), new Vector3(0.06f, 0.06f, 0.3f), woodDark);
-            }
-            Solid(b, new Vector3(0f, 0.5f, 0f), new Vector3(L, 1f, 0.5f));
-            obstacles.Add(new Obstacle { minX = cx - L / 2f, maxX = cx + L / 2f, minZ = cz - 0.25f, maxZ = cz + 0.25f, top = 99f, standable = false });
-        }
-
-        // marelle à la craie (le « CIEL » vers la fontaine)
-        var hopTex = Resources.Load<Texture2D>("tex_hopscotch");
-        if (hopTex != null)
-        {
-            hopTex.filterMode = FilterMode.Point;
-            var sr = new GameObject("Hopscotch").AddComponent<SpriteRenderer>();
-            sr.sprite = Sprite.Create(hopTex, new Rect(0, 0, hopTex.width, hopTex.height), new Vector2(0.5f, 0.5f), 64f);   // 64 px par mètre
-            sr.transform.SetParent(root, false);
-            sr.transform.localPosition = new Vector3(5.5f, 0.006f, -4.4f);
-            sr.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // à plat, le haut de l'image vers la fontaine
-        }
-
-        // murs invisibles pour le ballon (devant le soubassement)
-        float wl = Half - 0.45f;
-        Solid(root, new Vector3(0f, 1f, wl + 0.5f), new Vector3(Room, 2f, 1f));
-        Solid(root, new Vector3(0f, 1f, -wl - 0.5f), new Vector3(Room, 2f, 1f));
-        Solid(root, new Vector3(wl + 0.5f, 1f, 0f), new Vector3(1f, 2f, Room));
-        Solid(root, new Vector3(-wl - 0.5f, 1f, 0f), new Vector3(1f, 2f, Room));
-        var basin = GameObject.CreatePrimitive(PrimitiveType.Cylinder);            // bord de la fontaine
-        basin.name = "Basin collider"; basin.transform.SetParent(root, false);
-        basin.transform.localPosition = new Vector3(0f, 0.32f, 0f); basin.transform.localScale = new Vector3((BasinOut + 0.1f) * 2f, 0.32f, (BasinOut + 0.1f) * 2f);
-        Destroy(basin.GetComponent<Collider>()); basin.AddComponent<MeshCollider>().convex = true;
-        basin.GetComponent<Renderer>().enabled = false;
-
-        // ballon rayé : roule, rebondit, on le pousse en marchant dessus
-        var bg = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        bg.name = "Ball"; bg.transform.SetParent(root, false);
-        bg.transform.localPosition = new Vector3(-2.5f, BallR, -6f); bg.transform.localScale = Vector3.one * BallR * 2f;
-        var bt = new Texture2D(32, 16) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Repeat };
-        Color32[] stripes = { new Color32(216, 67, 59, 255), new Color32(242, 239, 230, 255), new Color32(59, 111, 216, 255), new Color32(242, 239, 230, 255) };
-        for (int y = 0; y < 16; y++) for (int x = 0; x < 32; x++)
-            bt.SetPixel(x, y, (y < 2 || y > 13) ? (Color)new Color32(246, 210, 74, 255) : (Color)stripes[(x / 4) % 4]);
-        bt.Apply();
-        var bm = bg.GetComponent<Renderer>().material; bm.mainTexture = bt; bm.color = Color.white;
-        var pm = new PhysicMaterial("Ball") { bounciness = 0.55f, dynamicFriction = 0.4f, staticFriction = 0.4f, bounceCombine = PhysicMaterialCombine.Maximum };
-        bg.GetComponent<Collider>().material = pm;
-        ball = bg.AddComponent<Rigidbody>();
-        ball.mass = 0.4f;
-        ball.interpolation = RigidbodyInterpolation.Interpolate;
-        ball.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
     }
 
     // collisionneur invisible (boîte)
@@ -527,22 +463,30 @@ public class RoomPrototype : MonoBehaviour
         go.AddComponent<BoxCollider>().size = size;
     }
 
-    void KickBall(bool moving)
+    void Lantern(Vector3 wallPos, float yRot, float x, bool withLight)
     {
-        kickCooldown -= Time.deltaTime;
-        if (ball == null || kickCooldown > 0f) return;
-        Vector3 d = ball.position - pos; d.y = 0f;
-        float reach = PlayerR + BallR + 0.08f;
-        if (d.magnitude < reach && ball.position.y - BallR < pos.y + 0.6f)
+        var root = new GameObject("Lantern").transform;
+        root.position = wallPos; root.rotation = Quaternion.Euler(0f, yRot, 0f);
+        Color32 iron = new Color32(38, 34, 31, 255);
+        float z0 = PillarOut, y = 2.75f;
+        LocalCube(root, "Bracket", new Vector3(x, y + 0.26f, z0 + 0.18f), new Vector3(0.05f, 0.05f, 0.36f), iron);
+        LocalCube(root, "Bracket", new Vector3(x, y + 0.12f, z0 + 0.02f), new Vector3(0.05f, 0.3f, 0.05f), iron);
+        LocalCube(root, "Lantern base", new Vector3(x, y - 0.16f, z0 + 0.34f), new Vector3(0.2f, 0.03f, 0.2f), iron);
+        LocalCube(root, "Lantern top", new Vector3(x, y + 0.15f, z0 + 0.34f), new Vector3(0.22f, 0.05f, 0.22f), iron);
+        foreach (var (dx, dz) in new[] { (-1f, -1f), (1f, -1f), (-1f, 1f), (1f, 1f) })
+            LocalCube(root, "Post", new Vector3(x + dx * 0.09f, y - 0.02f, z0 + 0.34f + dz * 0.09f), new Vector3(0.025f, 0.3f, 0.025f), iron);
+        var glass = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        Destroy(glass.GetComponent<Collider>());
+        glass.transform.SetParent(root, false);
+        glass.transform.localPosition = new Vector3(x, y - 0.02f, z0 + 0.34f); glass.transform.localScale = new Vector3(0.15f, 0.26f, 0.15f);
+        var gm = glass.GetComponent<Renderer>().material;
+        gm.color = new Color32(255, 197, 110, 255); gm.EnableKeyword("_EMISSION"); gm.SetColor("_EmissionColor", new Color32(255, 170, 80, 255));
+        if (withLight)
         {
-            Vector3 n = d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.forward;
-            Vector3 v = n * (moving ? 6.5f : 2.5f) + Vector3.up * (moving ? 2.6f : 1.2f);
-#if UNITY_6000_0_OR_NEWER
-            ball.linearVelocity = v;
-#else
-            ball.velocity = v;
-#endif
-            kickCooldown = 0.25f;
+            var l = new GameObject("Lantern light").AddComponent<Light>();
+            l.type = LightType.Point; l.color = new Color32(255, 166, 84, 255); l.range = 10f; l.intensity = 1.6f;
+            l.transform.SetParent(root, false); l.transform.localPosition = new Vector3(x, y, z0 + 0.6f);
+            lanterns.Add((l, Random.value * 100f));
         }
     }
 
@@ -706,6 +650,7 @@ public class RoomPrototype : MonoBehaviour
         {
             float sx = i == 0 ? -1f : 1f;
             var hip = Pivot(heroBody, "Hip", new Vector3(sx * 0.11f, 0.5f, 0f));
+            hip.localScale = new Vector3(1f, 1.25f, 1f);   // jambes plus longues (silhouette d'adolescent)
             Prim(hip, PrimitiveType.Cylinder, new Vector3(0f, -0.17f, 0f), new Vector3(0.15f, 0.17f, 0.15f), pants);
             Prim(hip, PrimitiveType.Cube, new Vector3(0f, -0.41f, 0.03f), new Vector3(0.15f, 0.17f, 0.24f), boots);
             Prim(hip, PrimitiveType.Cube, new Vector3(0f, -0.32f, 0f), new Vector3(0.165f, 0.05f, 0.17f), boots);
@@ -732,7 +677,8 @@ public class RoomPrototype : MonoBehaviour
         scarfTail = Pivot(heroBody, "Scarf tail", new Vector3(0.08f, 1.04f, -0.15f));
         Prim(scarfTail, PrimitiveType.Cube, new Vector3(0f, -0.17f, 0f), new Vector3(0.12f, 0.34f, 0.04f), scarfDark);
         // tête : visage, yeux, oreilles, calotte et mèches en épis
-        heroHead = Pivot(heroBody, "Head", new Vector3(0f, 1.3f, 0f));
+        heroHead = Pivot(heroBody, "Head", new Vector3(0f, 1.27f, 0f));
+        heroHead.localScale = Vector3.one * 0.86f;   // tête un peu plus petite
         Prim(heroHead, PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.5f, skin);
         for (int i = 0; i < 2; i++)
         {
@@ -761,6 +707,8 @@ public class RoomPrototype : MonoBehaviour
             var f = Prim(heroHead, PrimitiveType.Cube, new Vector3(x, 0.14f, 0.2f), new Vector3(0.09f, 0.15f, 0.07f), hair);
             f.localRotation = Quaternion.Euler(28f, 0f, rz);
         }
+
+        foreach (Transform c in heroBody) c.localPosition += Vector3.up * 0.13f;   // hanches relevées : les bottes touchent le sol
 
         // ombre ronde au sol (en plus de l'ombre portée)
         var blob = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -910,7 +858,8 @@ public class RoomPrototype : MonoBehaviour
         vy -= Gravity * Time.deltaTime;
         pos.y += vy * Time.deltaTime;
         if (pos.y < ground) { pos.y = ground; vy = 0f; }
-        KickBall(moving);
+        foreach (var (light, seed) in lanterns)   // flammes qui vacillent
+            light.intensity = 1.6f * (0.88f + 0.08f * Mathf.Sin(Time.time * 7.3f + seed) + 0.05f * Mathf.Sin(Time.time * 13.1f + seed * 2f));
         UpdateCameraAndAvatar(moving);
     }
 

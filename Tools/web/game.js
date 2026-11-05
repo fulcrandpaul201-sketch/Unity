@@ -1,17 +1,15 @@
-// Pièce vide en 3D, vue à la 3e personne : l'avatar se déplace par rapport à la caméra,
+// Cour de château en 3D, de nuit, vue à la 3e personne : l'avatar se déplace par rapport à la caméra,
 // qu'on fait tourner autour de lui (souris / doigt / flèches).
 const BRICK_URI = "data:image/png;base64,{{BRICK}}";
 const FLOOR_URI = "data:image/png;base64,{{FLOOR}}";
-const HOPSCOTCH_URI = "data:image/png;base64,{{HOPSCOTCH}}";
 
 // ---------- Réglages ----------
-const ROOM = 20, HALF = ROOM / 2, WALL_H = 10;               // pièce carrée de 20 m, murs très hauts qui se perdent dans le noir
-const LIGHT_H = 3.2;                                         // hauteur de la lampe (à hauteur d'homme)
+const ROOM = 26, HALF = ROOM / 2, WALL_H = 10;               // cour carrée de 26 m, murs hauts qui se fondent dans la nuit
 const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
 const SPEED = 4.2;                                           // m/s
 const JUMP_SPEED = 5.4, GRAVITY = 15;                        // saut : environ 1 m de haut
 const PLAYER_R = 0.3;                                        // rayon de collision de l'avatar
-const COLORS = { bg: 0x07040b };                             // obscurité au-dessus des murs
+const COLORS = { bg: 0x0b1020 };                             // ciel de nuit au-dessus des murs
 
 // ---------- Scène ----------
 const canvas = document.getElementById("c");
@@ -59,22 +57,23 @@ function withHeightFade(mat) {
 const ARCH = { w: 3.0, h: 3.0, depth: 1.4, ring: 0.42, out: 0.2 };   // ouverture 3 m, montants de 3 m, alcôve de 1,4 m
 const AR = ARCH.w / 2;
 const ARCH_X = [0];                                                  // une arche au centre de chaque mur
-const PILLAR_X = [-HALF + 0.35, -3.25, 3.25, HALF - 0.35];           // piliers entre les arches et dans les angles
+const PILLAR_X = [-HALF + 0.35, -9.75, -3.25, 3.25, 9.75, HALF - 0.35];   // piliers réguliers et dans les angles
 const PILLAR = { w: 0.7, out: 0.3, h: 5.0 };
 const PLINTH = { h: 0.32, out: 0.1 }, CORNICE = { y: 5.35, h: 0.26, out: 0.2 };
 const WALL_CLEAR = 0.8;                                              // distance minimale avatar / mur
 // Fenêtres (murs de gauche et de droite) : plein cintre, appui à 1,5 m, sommet à 3,4 m
 const WIN = { w: 1.4, bottom: 1.5, spring: 2.7, depth: 0.45, ring: 0.3, out: 0.16 };
 const WR = WIN.w / 2;
-const WIN_X = [-6.5, 6.5];                                           // entre les piliers, de part et d'autre de l'arche
+const WIN_X = [-11.2, -6.5, 6.5, 11.2];                              // une fenêtre dans chaque travée
 
 const metersBrick = () => tiled(BRICK_URI, 1, 1);                    // UV en mètres -> 1 répétition tous les 2 m
 const wallMat = withHeightFade(surface(metersBrick()));
-const nicheMat = withHeightFade(new THREE.MeshStandardMaterial({ map: metersBrick(), color: 0x8f86a8, roughness: 0.95, side: THREE.BackSide }));
+wallMat.shadowSide = THREE.DoubleSide;                               // les murs (plans) projettent leur ombre au clair de lune
+const nicheMat = withHeightFade(new THREE.MeshStandardMaterial({ map: metersBrick(), color: new THREE.Color(0x7d766d).convertSRGBToLinear(), roughness: 0.95, side: THREE.BackSide }));
 const stoneMat = withHeightFade(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
-const STONES = [0xcfc6df, 0xc5bad8, 0xd6cee5, 0xc2b8d6].map(c => new THREE.Color(c).convertSRGBToLinear());
-const LEAD = -1, LEAD_COLOR = new THREE.Color(0x5e5478).convertSRGBToLinear();   // croisillons des fenêtres
-const glassMat = new THREE.MeshBasicMaterial({ color: 0xa9c2f0 });   // vitrage éclairé par la lune
+const STONES = [0xb9b1a5, 0xafa699, 0xc3bbb0, 0xa79f93].map(c => new THREE.Color(c).convertSRGBToLinear());
+const LEAD = -1, LEAD_COLOR = new THREE.Color(0x2e2a28).convertSRGBToLinear();   // croisillons des fenêtres
+const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffbe63).convertSRGBToLinear() });   // fenêtres éclairées de l'intérieur
 
 function windowShape(cx) {               // contour d'une fenêtre (rectangle + demi-cercle)
   const sh = new THREE.Shape();
@@ -163,16 +162,13 @@ function buildWindow(g, W, cx) {
   boxStone(W, WIN.w + 0.8, 0.16, WIN.out + 0.16, cx, WIN.bottom - 0.08, (WIN.out + 0.16) / 2, 2);   // appui
   boxStone(W, WIN.w + 0.4, 0.14, WIN.out, cx, WIN.bottom - 0.23, WIN.out / 2, 3);                   // sous l'appui
   WIN_VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, WIN.spring, 0)), i));
-  // lumière froide qui entre par la fenêtre
-  const l = new THREE.PointLight(0x9fb6ff, 0.45, 8, 2);
-  l.position.set(cx, WIN.spring, 0.9); g.add(l);
 }
 
 function buildWall(px, pz, ry, windows = false) {
   const g = new THREE.Group(); g.position.set(px, 0, pz); g.rotation.y = ry; scene.add(g);
   g.updateMatrixWorld();
   const W = g.matrixWorld;
-  const wall = new THREE.Mesh(wallGeometry(windows), wallMat); wall.receiveShadow = true; g.add(wall);
+  const wall = new THREE.Mesh(wallGeometry(windows), wallMat); wall.receiveShadow = wall.castShadow = true; g.add(wall);
   if (windows) for (const cx of WIN_X) buildWindow(g, W, cx);
 
   ARCH_X.forEach((cx, ai) => {
@@ -218,7 +214,7 @@ function buildWall(px, pz, ry, windows = false) {
     }
   }
   // corniche : bandeau de pierre au-dessus des arches, sur toute la longueur
-  const cn = 16, cl = ROOM / cn;
+  const cn = Math.round(ROOM / 1.25), cl = ROOM / cn;
   for (let i = 0; i < cn; i++) boxStone(W, cl - 0.035, CORNICE.h, CORNICE.out, -HALF + cl * (i + 0.5), CORNICE.y, CORNICE.out / 2, i);
 }
 
@@ -323,11 +319,11 @@ function updateFountain(dt, now) {
   dropGeo.attributes.position.needsUpdate = true;
 }
 
-// ---------- Cour de récréation : bancs, bascule, marelle, ballon ----------
+// ---------- Mobilier : bancs en chêne le long des murs ----------
 // obstacles en boîtes alignées : l'avatar les contourne, ou monte dessus si « standable » (sauter sur un banc)
 const OBSTACLES = [];
-const WOOD = [0x9a6a3e, 0x8f6038, 0xa47246].map(c => new THREE.Color(c).convertSRGBToLinear());
-const WOOD_DARK = new THREE.Color(0x6a4226).convertSRGBToLinear();
+const WOOD = [0x5e3d26, 0x553722, 0x66442b].map(c => new THREE.Color(c).convertSRGBToLinear());
+const WOOD_DARK = new THREE.Color(0x2f2b2a).convertSRGBToLinear();
 function woodBox(w, h, d, x, y, z, color, rotZ = 0, cx = 0, cz = 0, ry = 0) {
   const m = new THREE.Matrix4().makeTranslation(cx, 0, cz).multiply(new THREE.Matrix4().makeRotationY(ry))
     .multiply(new THREE.Matrix4().makeTranslation(x, y, z)).multiply(new THREE.Matrix4().makeRotationZ(rotZ));
@@ -345,92 +341,58 @@ function bench(cx, cz) {                       // banc en bois le long d'un mur 
   OBSTACLES.push({ minX: cx - BENCH.len / 2, maxX: cx + BENCH.len / 2, minZ: cz - BENCH.depth / 2, maxZ: cz + BENCH.depth / 2,
                    top: BENCH.seat + 0.025, standable: true });
 }
-bench(-6.5, -HALF + 1.25); bench(6.5, -HALF + 1.25); bench(-6.5, HALF - 1.25); bench(6.5, HALF - 1.25);
+for (const x of [-11.2, -6.5, 6.5, 11.2]) { bench(x, -HALF + 1.25); bench(x, HALF - 1.25); }
 
-function seesaw(cx, cz) {                      // bascule en bois inclinée, poignées et sièges
-  const tilt = 0.17, L = 3.4, pivotY = 0.5;
-  woodBox(0.34, 0.36, 0.5, 0, 0.18, 0, WOOD_DARK, 0, cx, cz);                                         // socle
-  woodBox(0.16, 0.16, 0.62, 0, pivotY - 0.06, 0, WOOD[0], 0, cx, cz);                                  // axe
-  const m = new THREE.Matrix4().makeTranslation(cx, pivotY, cz).multiply(new THREE.Matrix4().makeRotationZ(tilt));
-  const part = (w, h, d, x, y, z, c) => stone(new THREE.BoxGeometry(w, h, d), m.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, z)), c);
-  part(L, 0.07, 0.34, 0, 0.035, 0, WOOD[2]);                                                           // planche
-  for (const sx of [-1, 1]) {
-    part(0.4, 0.06, 0.36, sx * (L / 2 - 0.3), 0.1, 0, WOOD[1]);                                        // siège
-    part(0.06, 0.34, 0.06, sx * (L / 2 - 0.62), 0.24, -0.12, WOOD_DARK);                                // poignée
-    part(0.06, 0.34, 0.06, sx * (L / 2 - 0.62), 0.24, 0.12, WOOD_DARK);
-    part(0.06, 0.06, 0.3, sx * (L / 2 - 0.62), 0.42, 0, WOOD_DARK);
-  }
-  OBSTACLES.push({ minX: cx - L / 2, maxX: cx + L / 2, minZ: cz - 0.25, maxZ: cz + 0.25, top: 99, standable: false });
-}
-seesaw(-5.5, 4.5);
-
-// marelle à la craie sur les pavés (le « CIEL » vers la fontaine)
-{
-  const t = loader.load(HOPSCOTCH_URI);
-  t.magFilter = THREE.NearestFilter; t.encoding = THREE.sRGBEncoding;
-  const hop = new THREE.Mesh(new THREE.PlaneGeometry(80 / 64, 272 / 64),
-    new THREE.MeshStandardMaterial({ map: t, transparent: true, alphaTest: 0.1, roughness: 1, depthWrite: false }));
-  hop.rotation.x = -Math.PI / 2; hop.position.set(5.5, 0.006, 4.4); hop.receiveShadow = true; scene.add(hop);
-}
 
 mergeStones();
 
-// ballon : il roule, rebondit et ricoche ; on le pousse en marchant dessus
-const BALL_R = 0.22;
-const ballCanvas = document.createElement("canvas"); ballCanvas.width = 32; ballCanvas.height = 16;
-{
-  const c = ballCanvas.getContext("2d");
-  const cols = ["#d8433b", "#f2efe6", "#3b6fd8", "#f2efe6"];
-  for (let i = 0; i < 8; i++) { c.fillStyle = cols[i % 4]; c.fillRect(i * 4, 0, 4, 16); }
-  c.fillStyle = "#f6d24a"; c.fillRect(0, 0, 32, 2); c.fillRect(0, 14, 32, 2);
+// ---------- Nuit : ciel étoilé, clair de lune, lanternes ----------
+scene.add(new THREE.HemisphereLight(0x8090c0, 0x3a332c, 0.42));
+const moon = new THREE.DirectionalLight(0xc4d2ff, 0.55);
+moon.position.set(9, 22, 7); moon.castShadow = true;
+moon.shadow.mapSize.set(2048, 2048); moon.shadow.bias = -0.0008; moon.shadow.normalBias = 0.03;
+Object.assign(moon.shadow.camera, { left: -HALF - 1, right: HALF + 1, top: HALF + 1, bottom: -HALF - 1, near: 1, far: 50 });
+scene.add(moon);
+{ // étoiles
+  const n = 700, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, e = 0.12 + Math.random() * 1.3, r = 70;
+    pos[i * 3] = Math.cos(a) * Math.cos(e) * r; pos[i * 3 + 1] = 14 + Math.sin(e) * r; pos[i * 3 + 2] = Math.sin(a) * Math.cos(e) * r;
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 0.35, sizeAttenuation: true, fog: false })));
+  const moonDisk = new THREE.Mesh(new THREE.CircleGeometry(3.2, 32), new THREE.MeshBasicMaterial({ color: 0xf2f0e2 }));
+  moonDisk.position.set(27, 52, 21); moonDisk.lookAt(0, 0, 0); scene.add(moonDisk);
 }
-const ballTex = new THREE.CanvasTexture(ballCanvas); ballTex.magFilter = THREE.NearestFilter; ballTex.encoding = THREE.sRGBEncoding;
-const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 20, 14), new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.6 }));
-ballMesh.castShadow = true; scene.add(ballMesh);
-const ball = { x: 2.5, y: BALL_R, z: 6.0, vx: 0, vy: 0, vz: 0, cool: 0 };
-function updateBall(dt) {
-  const b = ball;
-  b.cool -= dt;
-  // coup de pied quand l'avatar touche le ballon
-  const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz), reach = 0.3 + BALL_R + 0.08;
-  if (d < reach && b.y - BALL_R < p.y + 0.6 && b.cool <= 0) {
-    const nx = dx / (d || 1), nz = dz / (d || 1), sp = p.moving ? 6.5 : 2.5;
-    b.vx = nx * sp; b.vz = nz * sp; b.vy = p.moving ? 2.6 : 1.2; b.cool = 0.25;
-    b.x = p.x + nx * reach; b.z = p.z + nz * reach;
+// lanternes en fer forgé sur les piliers : lueur chaude qui vacille
+const IRON = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x26221f).convertSRGBToLinear(), roughness: 0.6, metalness: 0.4 });
+const FLAME = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc56e).convertSRGBToLinear() });
+const lanterns = [];
+function lantern(wallX, wallZ, ry, x, withLight) {
+  const g = new THREE.Group(); g.position.set(wallX, 0, wallZ); g.rotation.y = ry; scene.add(g);
+  const z0 = PILLAR.out, y = 2.75;
+  const add = (geo, mat, px, py, pz) => { const m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = mat === IRON; g.add(m); return m; };
+  add(new THREE.BoxGeometry(0.05, 0.05, 0.36), IRON, x, y + 0.26, z0 + 0.18);          // potence
+  add(new THREE.BoxGeometry(0.05, 0.3, 0.05), IRON, x, y + 0.12, z0 + 0.02);
+  add(new THREE.BoxGeometry(0.2, 0.03, 0.2), IRON, x, y - 0.16, z0 + 0.34);             // fond
+  add(new THREE.BoxGeometry(0.15, 0.26, 0.15), FLAME, x, y - 0.02, z0 + 0.34);          // verre éclairé
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])                           // montants
+    add(new THREE.BoxGeometry(0.025, 0.3, 0.025), IRON, x + dx * 0.09, y - 0.02, z0 + 0.34 + dz * 0.09);
+  const cap = add(new THREE.ConeGeometry(0.16, 0.16, 4), IRON, x, y + 0.2, z0 + 0.34); cap.rotation.y = Math.PI / 4;
+  add(new THREE.TorusGeometry(0.035, 0.012, 4, 8), IRON, x, y + 0.31, z0 + 0.34);       // anneau
+  if (withLight) {
+    const l = new THREE.PointLight(0xffa654, 0.9, 10, 2);
+    l.position.set(x, y, z0 + 0.6); g.add(l);
+    lanterns.push({ l, seed: Math.random() * 100 });
   }
-  b.vy -= GRAVITY * dt;
-  b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
-  if (b.y < BALL_R) { b.y = BALL_R; b.vy = Math.abs(b.vy) > 0.6 ? -b.vy * 0.55 : 0; }
-  if (b.y <= BALL_R + 1e-3) { const f = Math.exp(-1.3 * dt); b.vx *= f; b.vz *= f; }
-  const lim = HALF - 0.45 - BALL_R;                                  // murs (devant le soubassement)
-  if (b.x < -lim) { b.x = -lim; b.vx = Math.abs(b.vx) * 0.7; } if (b.x > lim) { b.x = lim; b.vx = -Math.abs(b.vx) * 0.7; }
-  if (b.z < -lim) { b.z = -lim; b.vz = Math.abs(b.vz) * 0.7; } if (b.z > lim) { b.z = lim; b.vz = -Math.abs(b.vz) * 0.7; }
-  const fr = FOUNT.basinOut + 0.1 + BALL_R, fd = Math.hypot(b.x, b.z);   // bord de la fontaine
-  if (fd < fr && b.y < 0.75) {
-    const nx = b.x / fd, nz = b.z / fd, vn = b.vx * nx + b.vz * nz;
-    b.x = nx * fr; b.z = nz * fr;
-    if (vn < 0) { b.vx -= 1.7 * vn * nx; b.vz -= 1.7 * vn * nz; }
-  }
-  for (const o of OBSTACLES) {                                        // bancs et bascule
-    if (b.y - BALL_R > o.top) continue;
-    const qx = Math.max(o.minX, Math.min(o.maxX, b.x)), qz = Math.max(o.minZ, Math.min(o.maxZ, b.z));
-    const ex = b.x - qx, ez = b.z - qz, ed = Math.hypot(ex, ez);
-    if (ed < BALL_R && ed > 1e-6) {
-      const nx = ex / ed, nz = ez / ed, vn = b.vx * nx + b.vz * nz;
-      b.x = qx + nx * BALL_R; b.z = qz + nz * BALL_R;
-      if (vn < 0) { b.vx -= 1.7 * vn * nx; b.vz -= 1.7 * vn * nz; }
-    }
-  }
-  // rotation visuelle : il roule dans le sens du mouvement
-  const sp = Math.hypot(b.vx, b.vz);
-  if (sp > 1e-3) ballMesh.rotateOnWorldAxis(new THREE.Vector3(b.vz / sp, 0, -b.vx / sp), sp * dt / BALL_R);
-  ballMesh.position.set(b.x, b.y, b.z);
 }
-
-scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.42));
-const lamp = new THREE.PointLight(0xfff1dc, 1.0, 34, 1.5);
-lamp.position.set(0, LIGHT_H + 0.8, 0); lamp.castShadow = true; lamp.shadow.mapSize.set(1024, 1024);
-scene.add(lamp);
+for (const [wx, wz, ry] of [[0, -HALF, 0], [0, HALF, Math.PI], [-HALF, 0, Math.PI / 2], [HALF, 0, -Math.PI / 2]])
+  for (const x of [-9.75, -3.25, 3.25, 9.75]) lantern(wx, wz, ry, x, Math.abs(x) < 5);
+function updateLights(now) {
+  const t = now / 1000;
+  for (const { l, seed } of lanterns)
+    l.intensity = 0.9 * (0.88 + 0.08 * Math.sin(t * 7.3 + seed) + 0.05 * Math.sin(t * 13.1 + seed * 2));
+}
 
 // ---------- Avatar 3D : petit héros low-poly (cheveux en épis, écharpe violette, manteau prune) ----------
 // Origine aux pieds, le personnage regarde vers +z. Les membres pivotent depuis la hanche / l'épaule.
@@ -509,6 +471,11 @@ function makeHero() {
 }
 const H = makeHero();
 scene.add(H.hero);
+{ // proportions plus adultes : jambes et tronc allongés, tête réduite
+  H.legs.forEach(l => { l.scale.y = 1.25; });
+  H.body.children.forEach(c => { c.position.y += 0.13; });   // hanches relevées : les bottes touchent toujours le sol
+  H.head.scale.setScalar(0.86); H.head.position.y -= 0.03;
+}
 const blob = new THREE.Mesh(new THREE.CircleGeometry(0.32, 24), new THREE.MeshBasicMaterial({ color: 0x281838, transparent: true, opacity: 0.25, depthWrite: false }));
 blob.rotation.x = -Math.PI / 2; blob.scale.set(1, 0.7, 1); scene.add(blob);
 let heroYaw = Math.PI, walkPhase = 0;
@@ -667,7 +634,7 @@ function frame(now) {
   blob.position.set(p.x, ground + 0.01, p.z); blob.scale.set(sh, 0.7 * sh, 1); blob.material.opacity = 0.35 * sh;
 
   updateFountain(dt, now);
-  updateBall(dt);
+  updateLights(now);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
