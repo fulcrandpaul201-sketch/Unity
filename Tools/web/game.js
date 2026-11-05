@@ -1,14 +1,17 @@
 // Pièce vide en 3D, vue à la 3e personne : l'avatar se déplace par rapport à la caméra,
 // qu'on fait tourner autour de lui (souris / doigt / flèches).
 const AVATAR_URI = "data:image/png;base64,{{AVATAR}}";
+const BRICK_URI = "data:image/png;base64,{{BRICK}}";
+const FLOOR_URI = "data:image/png;base64,{{FLOOR}}";
 
 // ---------- Réglages ----------
-const ROOM = 20, HALF = ROOM / 2, WALL_H = 4, WALL_T = 0.4;   // pièce carrée de 20 m, murs de 4 m
+const ROOM = 20, HALF = ROOM / 2, WALL_H = 4;                // pièce carrée de 20 m, murs de 4 m
+const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
 const SPEED = 4.2;                                           // m/s
 const AV_H = 1.7;                                            // taille de l'avatar (m)
 const FW = 172, FH = 303, SW = 688, SH = 1212;               // planche : images de 172x303 (voir avatar_sheet.json)
 const ROW = { down: 0, left: 1, right: 2, up: 3 };
-const COLORS = { bg: 0x1d1526, floor: 0xb9b0cf, wall: 0x8778a6, ceiling: 0x4e4168 };
+const COLORS = { bg: 0x1d1526, ceiling: 0x4e4168 };
 
 // ---------- Scène ----------
 const canvas = document.getElementById("c");
@@ -22,16 +25,29 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(COLORS.bg);
 const camera = new THREE.PerspectiveCamera(60, 4 / 3, 0.1, 100);
 
-const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.92, metalness: 0 });
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), mat(COLORS.floor));
+// Texture pixel art répétée en mosaïque : le nombre de répétitions suit la taille de la surface
+const loader = new THREE.TextureLoader();
+function tiled(uri, width, height) {
+  const t = loader.load(uri);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(width / TILE, height / TILE);
+  t.magFilter = THREE.NearestFilter;                 // pixels nets de près
+  t.minFilter = THREE.LinearMipmapLinearFilter;      // pas de scintillement de loin
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+const surface = map => new THREE.MeshStandardMaterial({ map, roughness: 0.95, metalness: 0 });
+
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), surface(tiled(FLOOR_URI, ROOM, ROOM)));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), mat(COLORS.ceiling));
+const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), new THREE.MeshStandardMaterial({ color: COLORS.ceiling, roughness: 1 }));
 ceiling.rotation.x = Math.PI / 2; ceiling.position.y = WALL_H; scene.add(ceiling);
-const wallMat = mat(COLORS.wall);
-for (const [x, z, w, d] of [[0, -HALF - WALL_T / 2, ROOM + WALL_T * 2, WALL_T], [0, HALF + WALL_T / 2, ROOM + WALL_T * 2, WALL_T],
-                            [-HALF - WALL_T / 2, 0, WALL_T, ROOM], [HALF + WALL_T / 2, 0, WALL_T, ROOM]]) {
-  const wall = new THREE.Mesh(new THREE.BoxGeometry(w, WALL_H, d), wallMat);
-  wall.position.set(x, WALL_H / 2, z); wall.receiveShadow = true; scene.add(wall);
+// 4 murs : un plan par mur, tourné vers l'intérieur
+const wallMat = surface(tiled(BRICK_URI, ROOM, WALL_H));
+for (const [x, z, ry] of [[0, -HALF, 0], [0, HALF, Math.PI], [-HALF, 0, Math.PI / 2], [HALF, 0, -Math.PI / 2]]) {
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, WALL_H), wallMat);
+  wall.position.set(x, WALL_H / 2, z); wall.rotation.y = ry; wall.receiveShadow = true; scene.add(wall);
 }
 
 scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.5));

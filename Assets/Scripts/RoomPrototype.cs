@@ -9,7 +9,8 @@ using UnityEngine.InputSystem;
 /// - Souris en maintenant un bouton, flèches ← → (ou stick droit) : tourner la caméra ; molette : zoom
 /// L'avatar est un sprite 2D toujours tourné vers la caméra ; l'image (face / dos / profil) dépend de l'angle de vue.
 /// Se lance tout seul quand on appuie sur Play, dans n'importe quelle scène.
-/// Image attendue : Assets/Resources/avatar_sheet.png (688x1212, images de 172x303).
+/// Images attendues dans Assets/Resources : avatar_sheet.png (688x1212, images de 172x303),
+/// tex_brick.png et tex_floor.png (160x160, raccordables, 1 carreau = 2 m : répétés en mosaïque, jamais étirés).
 /// </summary>
 public class RoomPrototype : MonoBehaviour
 {
@@ -18,6 +19,7 @@ public class RoomPrototype : MonoBehaviour
     // Réglages (mêmes valeurs que Tools/web/game.js)
     const float Room = 20f, Half = Room / 2f, WallH = 4f, WallT = 0.4f;
     const float Speed = 4.2f, AvatarHeight = 1.7f;
+    const float Tile = 2f;          // mètres couverts par une texture
     const int FrameW = 172, FrameH = 303;
     const int RowDown = 0, RowLeft = 1, RowRight = 2, RowUp = 3;
 
@@ -63,12 +65,16 @@ public class RoomPrototype : MonoBehaviour
 
     void BuildRoom()
     {
-        Box("Floor", new Vector3(0f, -0.05f, 0f), new Vector3(Room, 0.1f, Room), FloorColor);
-        Box("Ceiling", new Vector3(0f, WallH + 0.05f, 0f), new Vector3(Room, 0.1f, Room), CeilingColor);
-        Box("Wall N", new Vector3(0f, WallH / 2f, Half + WallT / 2f), new Vector3(Room + WallT * 2f, WallH, WallT), WallColor);
-        Box("Wall S", new Vector3(0f, WallH / 2f, -Half - WallT / 2f), new Vector3(Room + WallT * 2f, WallH, WallT), WallColor);
-        Box("Wall E", new Vector3(Half + WallT / 2f, WallH / 2f, 0f), new Vector3(WallT, WallH, Room), WallColor);
-        Box("Wall W", new Vector3(-Half - WallT / 2f, WallH / 2f, 0f), new Vector3(WallT, WallH, Room), WallColor);
+        var brick = LoadTiled("tex_brick");
+        var paving = LoadTiled("tex_floor");
+        // la mise à l'échelle des textures suit la taille de la face visible : 1 répétition tous les 2 m
+        Box("Floor", new Vector3(0f, -0.05f, 0f), new Vector3(Room, 0.1f, Room), FloorColor, paving, new Vector2(Room / Tile, Room / Tile));
+        Box("Ceiling", new Vector3(0f, WallH + 0.05f, 0f), new Vector3(Room, 0.1f, Room), CeilingColor, null, Vector2.one);
+        var wallTiling = new Vector2(Room / Tile, WallH / Tile);
+        Box("Wall N", new Vector3(0f, WallH / 2f, Half + WallT / 2f), new Vector3(Room, WallH, WallT), WallColor, brick, wallTiling);
+        Box("Wall S", new Vector3(0f, WallH / 2f, -Half - WallT / 2f), new Vector3(Room, WallH, WallT), WallColor, brick, wallTiling);
+        Box("Wall E", new Vector3(Half + WallT / 2f, WallH / 2f, 0f), new Vector3(WallT, WallH, Room), WallColor, brick, wallTiling);
+        Box("Wall W", new Vector3(-Half - WallT / 2f, WallH / 2f, 0f), new Vector3(WallT, WallH, Room), WallColor, brick, wallTiling);
 
         var lamp = new GameObject("Lamp").AddComponent<Light>();
         lamp.type = LightType.Point;
@@ -84,14 +90,30 @@ public class RoomPrototype : MonoBehaviour
         RenderSettings.ambientGroundColor = new Color32(74, 60, 102, 255);
     }
 
-    static void Box(string name, Vector3 center, Vector3 size, Color color)
+    static Texture2D LoadTiled(string name)
+    {
+        var t = Resources.Load<Texture2D>(name);
+        if (t == null) { Debug.LogWarning($"RoomPrototype : texture '{name}' introuvable, couleur unie utilisée."); return null; }
+        t.wrapMode = TextureWrapMode.Repeat;   // répétition en mosaïque
+        t.filterMode = FilterMode.Point;       // pixels nets
+        t.anisoLevel = 8;
+        return t;
+    }
+
+    static void Box(string name, Vector3 center, Vector3 size, Color color, Texture2D tex, Vector2 tiling)
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
         go.name = name;
         go.transform.position = center;
         go.transform.localScale = size;
-        var r = go.GetComponent<Renderer>();
-        r.material.color = color;   // matériau par défaut du pipeline, teinté
+        var m = go.GetComponent<Renderer>().material;   // matériau par défaut du pipeline
+        if (tex != null)
+        {
+            m.color = Color.white;
+            m.mainTexture = tex;
+            m.mainTextureScale = tiling;
+        }
+        else m.color = color;
     }
 
     void BuildAvatar()

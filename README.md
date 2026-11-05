@@ -6,5 +6,6 @@
   sur téléphone, doigt à gauche pour bouger, doigt à droite pour tourner.
 - **Dans Unity** : ouvrir le projet, appuyer sur Play. `Assets/Scripts/RoomPrototype.cs` crée la pièce 3D, la lumière,
   la caméra à la 3e personne et l'avatar (sprite face caméra) à partir de `Assets/Resources/avatar_sheet.png`.
+- **Textures** : `python3 Tools/generate_textures.py` (briques et pavés pixel art raccordables, répétés tous les 2 m).
 - **Avatar** : `python3 Tools/import_avatar.py` découpe la planche `Assets/Art/Source/avatar_source.png`.
 - **Page web** : `python3 Tools/build_web.py` (code du jeu dans `Tools/web/game.js`).
