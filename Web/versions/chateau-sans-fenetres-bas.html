@@ -1,0 +1,821 @@
+<title>Château sans fenêtres basses</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Plein écran sombre, une seule ambiance (jeu) : la vue 3D occupe tout, aide discrète en bas */
+  :root { --bg: #1d1526; --fg: #e9e2f3; --muted: #b3a6c8; --glass: rgba(29, 21, 38, 0.6); color-scheme: dark; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); overflow: hidden; touch-action: none; }
+  body { font-family: system-ui, sans-serif; }
+  main { position: relative; height: 100%; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .help { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100% - 32px); box-sizing: border-box; margin: 0; padding: 6px 12px; border-radius: 8px;
+    background: var(--glass); color: var(--muted); font-size: 13px; text-align: center; pointer-events: none; }
+  .stick { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+  #ring { width: 110px; height: 110px; border: 3px solid rgba(255, 255, 255, 0.35); }
+  #knob { width: 46px; height: 46px; background: rgba(255, 255, 255, 0.4); }
+  #jump { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    width: 76px; height: 76px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.5); background: var(--glass);
+    color: var(--fg); font: 600 14px system-ui, sans-serif; touch-action: none; display: none; }
+  #jump:active { background: rgba(255, 255, 255, 0.3); }
+  #jump:focus-visible { outline: 3px solid #fff; }
+  @media (pointer: coarse) { #jump { display: block; } }
+</style>
+<main>
+  <canvas id="c"></canvas>
+  <div id="ring" class="stick" hidden></div>
+  <div id="knob" class="stick" hidden></div>
+  <button id="jump" type="button">Sauter</button>
+  <p class="help">Ordinateur : ZQSD ou WASD pour bouger, glisser la souris ou ← → pour tourner, molette pour zoomer, Espace pour sauter.
+    Téléphone : doigt à gauche pour bouger, doigt à droite pour tourner, bouton Sauter.</p>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// Cour de château en 3D, de nuit, vue à la 3e personne : l'avatar se déplace par rapport à la caméra,
+// qu'on fait tourner autour de lui (souris / doigt / flèches).
+const BRICK_URI = "data:image/png;base64,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";
+const FLOOR_URI = "data:image/png;base64,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";
+
+// ---------- Réglages ----------
+const ROOM = 26, HALF = ROOM / 2, WALL_H = 15.6;             // cour carrée de 26 m entourée de façades à 3 niveaux
+const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
+const SPEED = 4.2;                                           // m/s
+const JUMP_SPEED = 5.4, GRAVITY = 15;                        // saut : environ 1 m de haut
+const PLAYER_R = 0.3;                                        // rayon de collision de l'avatar
+const COLORS = { bg: 0x0b1020 };                             // ciel de nuit au-dessus des murs
+
+// ---------- Scène ----------
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(COLORS.bg);
+const camera = new THREE.PerspectiveCamera(60, 4 / 3, 0.1, 100);
+
+// Texture pixel art répétée en mosaïque : le nombre de répétitions suit la taille de la surface
+const loader = new THREE.TextureLoader();
+function tiled(uri, width, height) {
+  const t = loader.load(uri);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(width / TILE, height / TILE);
+  t.magFilter = THREE.NearestFilter;                 // pixels nets de près
+  t.minFilter = THREE.LinearMipmapLinearFilter;      // pas de scintillement de loin
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+const surface = map => new THREE.MeshStandardMaterial({ map, roughness: 0.95, metalness: 0 });
+
+// Pénombre en hauteur : les étages restent visibles mais s'assombrissent doucement vers le ciel de nuit
+const FADE_START = 9, FADE_END = 24;
+function withHeightFade(mat) {
+  mat.customProgramCacheKey = () => "heightFade";   // sinon Three.js réutilise le shader du sol, sans le fondu
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.fadeColor = { value: new THREE.Color(COLORS.bg) };
+    sh.vertexShader = "varying float vWorldY;\n" + sh.vertexShader.replace("#include <begin_vertex>",
+      "#include <begin_vertex>\nvWorldY = (modelMatrix * vec4(transformed, 1.0)).y;");
+    sh.fragmentShader = "varying float vWorldY;\nuniform vec3 fadeColor;\n" + sh.fragmentShader.replace("#include <dithering_fragment>",
+      "#include <dithering_fragment>\nfloat fadeT = smoothstep(" + FADE_START.toFixed(2) + ", " + FADE_END.toFixed(2) + ", vWorldY);\n" +
+      "gl_FragColor.rgb = mix(gl_FragColor.rgb, fadeColor, 0.6 * pow(fadeT, 0.8));");
+  };
+  return mat;
+}
+
+// ---------- Architecture : la même structure en pierre sur les 4 murs ----------
+// Repère local d'un mur : x le long du mur, y vers le haut, z vers l'intérieur de la pièce (0 = surface du mur)
+const ARCH = { w: 3.0, h: 3.0, depth: 1.4, ring: 0.42, out: 0.2 };   // ouverture 3 m, montants de 3 m, passage voûté de 1,4 m
+const AR = ARCH.w / 2;
+const ARCH_X = [0];                                                  // une arche au centre de chaque mur
+const PILLAR_X = [-HALF + 0.35, -9.75, -3.25, 3.25, 9.75, HALF - 0.35];   // piliers réguliers et dans les angles
+const PILLAR = { w: 0.7, out: 0.3, h: 5.0 };
+const PLINTH = { h: 0.32, out: 0.1 }, CORNICE = { y: 5.35, h: 0.26, out: 0.2 };
+const WALL_CLEAR = 0.8;                                              // distance minimale avatar / mur
+// Fenêtres (murs de gauche et de droite) : plein cintre, appui à 1,5 m, sommet à 3,4 m
+const WIN = { w: 1.4, bottom: 1.5, spring: 2.7, depth: 0.45, ring: 0.3, out: 0.16 };
+const WR = WIN.w / 2;
+const WIN_X = [];                                                     // pas de fenêtre au rez-de-chaussée (arcades seulement)
+const UPPER_LEVELS = [6.3, 10.5];                                     // appuis des fenêtres des 2 étages
+const UPPER_X = [-6.5, 0, 6.5];                                        // pas de fenêtre trop près des angles
+const STRING_Y = 9.6, TOP_CORNICE_Y = 14.45;                          // bandeau entre les étages, corniche sommitale
+// Salles derrière les arches
+const RW = 12, RD = 10, RH = 5;                                       // largeur, profondeur, hauteur sous plafond
+
+const metersBrick = () => tiled(BRICK_URI, 1, 1);                    // UV en mètres -> 1 répétition tous les 2 m
+const floorMat = (w, d) => surface(tiled(FLOOR_URI, w, d));
+const wallMat = withHeightFade(surface(metersBrick()));
+wallMat.shadowSide = THREE.DoubleSide;                               // les murs (plans) projettent leur ombre au clair de lune
+const nicheMat = withHeightFade(new THREE.MeshStandardMaterial({ map: metersBrick(), color: new THREE.Color(0x7d766d).convertSRGBToLinear(), roughness: 0.95, side: THREE.BackSide }));
+const stoneMat = withHeightFade(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+const STONES = [0xb9b1a5, 0xafa699, 0xc3bbb0, 0xa79f93].map(c => new THREE.Color(c).convertSRGBToLinear());
+const WOOD = [0x5e3d26, 0x553722, 0x66442b].map(c => new THREE.Color(c).convertSRGBToLinear());   // chêne foncé
+const WOOD_DARK = new THREE.Color(0x2f2b2a).convertSRGBToLinear();
+const LEAD = -1, LEAD_COLOR = new THREE.Color(0x2e2a28).convertSRGBToLinear();   // croisillons des fenêtres
+const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffbe63).convertSRGBToLinear() });   // fenêtres éclairées de l'intérieur
+const glassDark = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x283044).convertSRGBToLinear() });  // pièces éteintes
+const glassMoon = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x8fa6d8).convertSRGBToLinear() });  // vue sur la nuit depuis les salles
+const hiddenMat = new THREE.MeshBasicMaterial({ visible: false });
+
+const WIN_H = WIN.spring - WIN.bottom;
+function windowShape(cx, bottom = WIN.bottom) {   // contour d'une fenêtre (rectangle + demi-cercle)
+  const sh = new THREE.Shape(), spring = bottom + WIN_H;
+  sh.moveTo(cx - WR, bottom); sh.lineTo(cx + WR, bottom); sh.lineTo(cx + WR, spring);
+  sh.absarc(cx, spring, WR, 0, Math.PI, false); sh.lineTo(cx - WR, bottom);
+  return sh;
+}
+function wallGeometry(windows) {         // mur entier avec les ouvertures des arches (et des fenêtres) découpées
+  const sh = new THREE.Shape();
+  sh.moveTo(-HALF, 0);
+  for (const c of ARCH_X) {
+    sh.lineTo(c - AR, 0); sh.lineTo(c - AR, ARCH.h);
+    sh.absarc(c, ARCH.h, AR, Math.PI, 0, true);
+    sh.lineTo(c + AR, 0);
+  }
+  sh.lineTo(HALF, 0); sh.lineTo(HALF, WALL_H); sh.lineTo(-HALF, WALL_H); sh.closePath();
+  if (windows) for (const cx of WIN_X) sh.holes.push(windowShape(cx));
+  for (const b of UPPER_LEVELS) for (const cx of UPPER_X) sh.holes.push(windowShape(cx, b));
+  return new THREE.ShapeGeometry(sh, 32);
+}
+function archOpening(r) {                // contour d'une ouverture (rectangle + demi-cercle)
+  const sh = new THREE.Shape();
+  sh.moveTo(-r, 0); sh.lineTo(r, 0); sh.lineTo(r, ARCH.h); sh.absarc(0, ARCH.h, r, 0, Math.PI, false); sh.closePath();
+  return sh;
+}
+
+// Toutes les pierres de la pièce sont fusionnées en un seul maillage (rapide, même sur téléphone)
+const stoneParts = [];
+const tmpM = new THREE.Matrix4();
+function stone(geo, matrix, shade) {
+  const n = STONES.length;
+  const c = shade instanceof THREE.Color ? shade : shade === LEAD ? LEAD_COLOR : STONES[((Math.round(shade) % n) + n) % n];
+  stoneParts.push([geo, matrix.clone(), c]);
+}
+function boxStone(wallM, w, h, d, x, y, z, shade) {
+  stone(new THREE.BoxGeometry(w, h, d), wallM.clone().multiply(tmpM.makeTranslation(x, y, z)), shade);
+}
+function mergeStones() {
+  const pos = [], nor = [], col = [];
+  const nm = new THREE.Matrix3();
+  for (const [g0, m, c] of stoneParts) {
+    const g = g0.index ? g0.toNonIndexed() : g0.clone();   // copie : les formes partagées ne doivent pas être déplacées
+    g.applyMatrix4(m);
+    const P = g.attributes.position, N = g.attributes.normal;
+    for (let i = 0; i < P.count; i++) {
+      pos.push(P.getX(i), P.getY(i), P.getZ(i)); nor.push(N.getX(i), N.getY(i), N.getZ(i)); col.push(c.r, c.g, c.b);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  const mesh = new THREE.Mesh(g, stoneMat); mesh.castShadow = mesh.receiveShadow = true; scene.add(mesh);
+}
+
+// claveaux en éventail (clé de voûte plus grande au milieu) : formes partagées
+function makeVoussoirs(r, ring, out, n, keyExtra) {
+  const list = [], ga = 0.018;
+  for (let i = 0; i < n; i++) {
+    const a0 = Math.PI - i * Math.PI / n - ga, a1 = Math.PI - (i + 1) * Math.PI / n + ga;
+    const key = i === (n - 1) / 2;
+    const sh = new THREE.Shape();
+    sh.absarc(0, 0, r + ring + (key ? keyExtra : 0), a0, a1, true); sh.absarc(0, 0, r, a1, a0, false); sh.closePath();
+    list.push(new THREE.ExtrudeGeometry(sh, { depth: out + (key ? 0.05 : 0), bevelEnabled: false, curveSegments: 6 }));
+  }
+  return list;
+}
+const VOUSSOIRS = makeVoussoirs(AR, ARCH.ring, ARCH.out, 9, 0.16);
+const WIN_VOUSSOIRS = makeVoussoirs(WR, WIN.ring, WIN.out, 7, 0.1);
+
+function buildWindow(g, W, cx, bottom = WIN.bottom, glassM = glassMat) {
+  const B = bottom, S = bottom + WIN_H;
+  // tableau (épaisseur du mur) vu de l'intérieur + vitrage au fond
+  const reveal = new THREE.Mesh(new THREE.ExtrudeGeometry(windowShape(cx, B), { depth: WIN.depth, bevelEnabled: false, curveSegments: 24 }), [hiddenMat, nicheMat]);
+  reveal.position.z = -WIN.depth; reveal.receiveShadow = true; g.add(reveal);
+  const glass = new THREE.Mesh(new THREE.ShapeGeometry(windowShape(cx, B), 24), glassM);
+  glass.position.z = -WIN.depth + 0.02; g.add(glass);
+  // croisillons
+  const top = S + WR, zc = -WIN.depth + 0.05;
+  boxStone(W, 0.07, top - B, 0.05, cx, (B + top) / 2, zc, LEAD);
+  boxStone(W, WIN.w, 0.07, 0.05, cx, S, zc, LEAD);
+  boxStone(W, WIN.w, 0.06, 0.05, cx, (B + S) / 2, zc, LEAD);
+  // encadrement : montants alternés, appui saillant, claveaux et clé
+  const rows = 4, bh = (S - B) / rows, gap = 0.03;
+  for (let i = 0; i < rows; i++) {
+    const wdt = i % 2 ? 0.22 : 0.32;
+    for (const side of [-1, 1]) boxStone(W, wdt, bh - gap, WIN.out, cx + side * (WR + wdt / 2), B + i * bh + bh / 2, WIN.out / 2, i + (side > 0 ? 1 : 0));
+  }
+  boxStone(W, WIN.w + 0.8, 0.16, WIN.out + 0.16, cx, B - 0.08, (WIN.out + 0.16) / 2, 2);   // appui
+  boxStone(W, WIN.w + 0.4, 0.14, WIN.out, cx, B - 0.23, WIN.out / 2, 3);                   // sous l'appui
+  WIN_VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, S, 0)), i));
+}
+
+function buildWall(px, pz, ry, windows = false) {
+  const g = new THREE.Group(); g.position.set(px, 0, pz); g.rotation.y = ry; scene.add(g);
+  g.updateMatrixWorld();
+  const W = g.matrixWorld;
+  const wall = new THREE.Mesh(wallGeometry(windows), wallMat); wall.receiveShadow = wall.castShadow = true; g.add(wall);
+  if (windows) for (const cx of WIN_X) buildWindow(g, W, cx);
+  UPPER_LEVELS.forEach((b, li) => UPPER_X.forEach((cx, i) => {
+    const lit = ((i * 7 + li * 3 + Math.round(px + pz * 3)) % 5) < 3;     // certaines pièces éclairées, d'autres éteintes
+    buildWindow(g, W, cx, b, lit ? glassMat : glassDark);
+  }));
+
+  ARCH_X.forEach((cx, ai) => {
+    // passage voûté à travers le mur (ouvert aux deux bouts) vers la salle de derrière
+    const tunnel = new THREE.Mesh(new THREE.ExtrudeGeometry(archOpening(AR), { depth: ARCH.depth, bevelEnabled: false, curveSegments: 32 }), [hiddenMat, nicheMat]);
+    tunnel.position.set(cx, 0, -ARCH.depth); tunnel.receiveShadow = tunnel.castShadow = true; g.add(tunnel);
+    const tf = new THREE.Mesh(new THREE.PlaneGeometry(ARCH.w, ARCH.depth), floorMat(ARCH.w, ARCH.depth));
+    tf.rotation.x = -Math.PI / 2; tf.position.set(cx, 0.003, -ARCH.depth / 2); tf.receiveShadow = true; g.add(tf);
+    // montants : blocs alternés large / étroit
+    const rows = 6, bh = ARCH.h / rows, gap = 0.035;
+    for (let i = 0; i < rows; i++) {
+      const wdt = i % 2 ? 0.42 : 0.62;
+      for (const side of [-1, 1]) boxStone(W, wdt, bh - gap, ARCH.out, cx + side * (AR + wdt / 2), i * bh + bh / 2, ARCH.out / 2, i + ai + (side > 0 ? 1 : 0));
+    }
+    // claveaux en éventail + clé de voûte
+    VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, ARCH.h, 0)), i + ai));
+    // socles au pied des montants
+    for (const side of [-1, 1]) boxStone(W, 0.78, 0.26, ARCH.out + 0.08, cx + side * (AR + 0.36), 0.13, (ARCH.out + 0.08) / 2, 2);
+  });
+
+  // piliers : blocs empilés en alternance, base et chapiteau plus larges
+  for (const x of PILLAR_X) {
+    const rows = 9, bh = (PILLAR.h - 0.6) / rows, gap = 0.035;
+    boxStone(W, PILLAR.w + 0.22, 0.34, PILLAR.out + 0.1, x, 0.17, (PILLAR.out + 0.1) / 2, 2);              // base
+    for (let i = 0; i < rows; i++) {
+      const wdt = i % 2 ? PILLAR.w - 0.08 : PILLAR.w;
+      boxStone(W, wdt, bh - gap, PILLAR.out, x, 0.34 + i * bh + bh / 2, PILLAR.out / 2, i);
+    }
+    boxStone(W, PILLAR.w + 0.24, 0.26, PILLAR.out + 0.12, x, PILLAR.h - 0.13, (PILLAR.out + 0.12) / 2, 2); // chapiteau
+  }
+
+  // soubassement : rangée de dalles au pied du mur, interrompue par les arches et les piliers
+  const blocked = [...ARCH_X.map(c => [c - AR - 0.75, c + AR + 0.75]), ...PILLAR_X.map(x => [x - 0.46, x + 0.46])];
+  const free = x => !blocked.some(([a, b]) => x > a && x < b);
+  const step = 0.05;
+  let start = null;
+  for (let x = -HALF; x <= HALF + 1e-6; x += step) {
+    const ok = x < HALF - 1e-6 && free(x + step / 2);
+    if (ok && start === null) start = x;
+    if (!ok && start !== null) {
+      const len = x - start, n = Math.max(1, Math.round(len / 1.1)), bl = len / n;
+      for (let i = 0; i < n; i++) boxStone(W, bl - 0.035, PLINTH.h, PLINTH.out, start + bl * (i + 0.5), PLINTH.h / 2, PLINTH.out / 2, i);
+      start = null;
+    }
+  }
+  // corniche : bandeau de pierre au-dessus des arches, sur toute la longueur
+  const cn = Math.round(ROOM / 1.25), cl = ROOM / cn;
+  for (let i = 0; i < cn; i++) boxStone(W, cl - 0.035, CORNICE.h, CORNICE.out, -HALF + cl * (i + 0.5), CORNICE.y, CORNICE.out / 2, i);
+  // étages : pilastres dans l'axe des piliers, bandeau intermédiaire, corniche sommitale et créneaux
+  for (const x of PILLAR_X) {
+    const rows = 12, y0 = CORNICE.y + CORNICE.h / 2, bh = (TOP_CORNICE_Y - y0) / rows;
+    for (let i = 0; i < rows; i++) boxStone(W, i % 2 ? 0.46 : 0.54, bh - 0.03, 0.14, x, y0 + i * bh + bh / 2, 0.07, i);
+  }
+  for (let i = 0; i < cn; i++) {
+    const x = -HALF + cl * (i + 0.5);
+    boxStone(W, cl - 0.035, 0.22, 0.16, x, STRING_Y, 0.08, i + 1);
+    boxStone(W, cl - 0.035, 0.34, 0.32, x, TOP_CORNICE_Y, 0.16, i + 2);
+    boxStone(W, cl - 0.035, 0.18, 0.4, x, TOP_CORNICE_Y + 0.26, 0.05, i);
+  }
+  for (let x = -HALF + 0.55; x < HALF - 0.3; x += 1.6) boxStone(W, 0.9, 0.75, 0.55, x, WALL_H + 0.37, -0.12, Math.round(x));   // merlons
+  boxStone(W, ROOM, 0.5, 0.55, 0, WALL_H - 0.25 + 0.0, -0.12, 3);                                                              // chemin de ronde
+  // gargouilles perchées au-dessus de la corniche, dans l'axe des pilastres
+  for (const x of [-9.75, -3.25, 3.25, 9.75]) gargoyle(W, x, TOP_CORNICE_Y + 0.62);
+  return g;
+}
+
+// ---------- Gargouille en pierre : créature accroupie sur une console, ailes repliées ----------
+const GARG = [0x8d877f, 0x7f7a73, 0x989188].map(c => new THREE.Color(c).convertSRGBToLinear());
+function gargoyle(W, x, y) {
+  const base = W.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, 0)).multiply(new THREE.Matrix4().makeScale(1.8, 1.8, 1.8));   // taille lisible depuis la cour
+  const part = (geo, px, py, pz, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1, c = 0) => {
+    const m = base.clone().multiply(new THREE.Matrix4().compose(new THREE.Vector3(px, py, pz),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz)));
+    stone(geo, m, GARG[c]);
+  };
+  part(new THREE.BoxGeometry(0.56, 0.3, 0.75), 0, -0.2, 0.37, 0, 0, 0, 1, 1, 1, 2);                         // console
+  part(new THREE.BoxGeometry(0.46, 0.12, 0.62), 0, -0.4, 0.28, 0, 0, 0, 1, 1, 1, 1);
+  part(new THREE.IcosahedronGeometry(0.27, 1), 0, 0.17, 0.42, -0.35, 0, 0, 1, 0.82, 1.25, 0);              // corps
+  for (const sx of [-1, 1]) {
+    part(new THREE.IcosahedronGeometry(0.14, 0), sx * 0.17, 0.05, 0.25, 0, 0, 0, 1, 1.1, 1.3, 1);          // cuisses
+    part(new THREE.BoxGeometry(0.08, 0.32, 0.09), sx * 0.13, -0.0, 0.72, 0.25, 0, 0, 1, 1, 1, 1);           // pattes avant
+    part(new THREE.BoxGeometry(0.12, 0.05, 0.13), sx * 0.13, -0.15, 0.78, 0, 0, 0, 1, 1, 1, 0);             // griffes
+    const wing = new THREE.Shape(); wing.moveTo(0, 0); wing.lineTo(0.5, 0.12); wing.lineTo(0.42, 0.34); wing.lineTo(0.3, 0.3);
+    wing.lineTo(0.24, 0.5); wing.lineTo(0.08, 0.42); wing.closePath();
+    part(new THREE.ExtrudeGeometry(wing, { depth: 0.04, bevelEnabled: false }), sx * 0.16, 0.18, 0.2,
+         0.2, sx > 0 ? -1.75 : -1.39, sx * 0.55, sx, 1, 1, 2);                                              // ailes repliées
+    part(new THREE.ConeGeometry(0.045, 0.2, 5), sx * 0.1, 0.62, 0.86, -0.7, 0, sx * -0.35, 1, 1, 1, 2);     // cornes
+    part(new THREE.ConeGeometry(0.035, 0.1, 4), sx * 0.15, 0.52, 0.8, 0, 0, sx * -1.2, 1, 1, 1, 1);         // oreilles pointues
+  }
+  part(new THREE.BoxGeometry(0.3, 0.26, 0.28), 0, 0.42, 0.88, 0.15, 0, 0, 1, 1, 1, 0);                     // tête
+  part(new THREE.BoxGeometry(0.2, 0.1, 0.22), 0, 0.4, 1.07, 0.1, 0, 0, 1, 1, 1, 2);                        // museau
+  part(new THREE.BoxGeometry(0.18, 0.06, 0.2), 0, 0.29, 1.05, -0.25, 0, 0, 1, 1, 1, 1);                   // mâchoire ouverte
+  part(new THREE.BoxGeometry(0.24, 0.05, 0.05), 0, 0.53, 0.99, 0, 0, 0, 1, 1, 1, 1);                       // arcades sourcilières
+}
+
+// sol en dalles
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), floorMat(ROOM, ROOM));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+// ---------- Salles derrière les 4 arches ----------
+// Dans le repère du mur : la salle va de z = -ARCH.depth à z = -ARCH.depth - RD, x de -RW/2 à RW/2
+const roomWallMat = withHeightFade(surface(metersBrick())); roomWallMat.shadowSide = THREE.DoubleSide;
+const ceilingMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2c2017).convertSRGBToLinear(), roughness: 0.9, side: THREE.DoubleSide });
+const WALKABLE = [];                     // zones où l'avatar peut marcher (cour, passages, salles), en coordonnées monde
+const CAM_ZONES = [];                    // volumes où la caméra peut se placer
+function worldRect(g, x0, x1, z0, z1, extra = {}) {
+  const a = g.localToWorld(new THREE.Vector3(x0, 0, z0)), b = g.localToWorld(new THREE.Vector3(x1, 0, z1));
+  return { minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z), ...extra };
+}
+function roomWallGeometry(w, h, arch) {  // mur intérieur, avec ou sans ouverture d'arche en bas au centre (UV en mètres)
+  const sh = new THREE.Shape();
+  sh.moveTo(-w / 2, 0);
+  if (arch) { sh.lineTo(-AR, 0); sh.lineTo(-AR, ARCH.h); sh.absarc(0, ARCH.h, AR, Math.PI, 0, true); sh.lineTo(AR, 0); }
+  sh.lineTo(w / 2, 0); sh.lineTo(w / 2, h); sh.lineTo(-w / 2, h); sh.closePath();
+  return sh;
+}
+const chandeliers = [];
+function buildRoom(g) {
+  const z0 = -ARCH.depth, zc = z0 - RD / 2, zb = z0 - RD;
+  const add = (geo, mat, x, y, z, ry = 0, rx = 0) => {
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); m.receiveShadow = m.castShadow = true; g.add(m); return m;
+  };
+  add(new THREE.PlaneGeometry(RW, RD), floorMat(RW, RD), 0, 0.002, zc, 0, -Math.PI / 2);                       // sol
+  add(new THREE.ShapeGeometry(roomWallGeometry(RW, RH, true), 32), roomWallMat, 0, 0, z0, Math.PI);            // mur côté cour (arche)
+  const back = roomWallGeometry(RW, RH, false); back.holes.push(windowShape(0));
+  add(new THREE.ShapeGeometry(back, 24), roomWallMat, 0, 0, zb);                                              // mur du fond (fenêtre)
+  for (const sx of [-1, 1])                                                                                   // murs latéraux
+    add(new THREE.ShapeGeometry(roomWallGeometry(RD, RH, false)), roomWallMat, sx * RW / 2, 0, zc, -sx * Math.PI / 2);
+  add(new THREE.PlaneGeometry(RW, RD), ceilingMat, 0, RH, zc, 0, Math.PI / 2);                                 // plafond
+  g.updateMatrixWorld();
+  const W = g.matrixWorld;
+  for (let x = -RW / 2 + 1; x < RW / 2; x += 2) boxStone(W, 0.26, 0.32, RD, x, RH - 0.16, zc, WOOD[(x + 7) % 3 | 0]);   // poutres
+  for (const sx of [-1, 1]) boxStone(W, 0.3, 0.36, RD, sx * (RW / 2 - 0.15), RH - 0.18, zc, WOOD_DARK);           // sablières
+  // fenêtre au fond (vue sur la nuit) : construite dans un repère tourné vers l'intérieur de la salle
+  const wg = new THREE.Group(); wg.position.z = zb; g.add(wg); wg.updateMatrixWorld();
+  buildWindow(wg, wg.matrixWorld, 0, WIN.bottom, glassMoon);
+  // plinthe en pierre autour de la salle
+  for (const [w, x, z, ry] of [[RW, 0, zb, 0], [RD, -RW / 2, zc, Math.PI / 2], [RD, RW / 2, zc, -Math.PI / 2], [RW / 2 - AR - 0.2, -(RW / 2 + AR + 0.2) / 2, z0, Math.PI], [RW / 2 - AR - 0.2, (RW / 2 + AR + 0.2) / 2, z0, Math.PI]]) {
+    const m = W.clone().multiply(new THREE.Matrix4().makeTranslation(x, 0, z)).multiply(new THREE.Matrix4().makeRotationY(ry))
+      .multiply(new THREE.Matrix4().makeTranslation(0, 0.16, 0.05));
+    stone(new THREE.BoxGeometry(w, 0.32, 0.1), m, 3);
+  }
+  // lustre en fer forgé avec bougies, au centre de la salle
+  const cy = RH - 1.4;
+  const ring = add(new THREE.TorusGeometry(0.55, 0.035, 6, 24), IRON, 0, cy, zc, 0, Math.PI / 2);
+  add(new THREE.CylinderGeometry(0.02, 0.02, RH - cy, 6), IRON, 0, cy + (RH - cy) / 2, zc);
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2, x = Math.cos(a) * 0.55, z = zc + Math.sin(a) * 0.55;
+    add(new THREE.CylinderGeometry(0.03, 0.03, 0.14, 6), CANDLE, x, cy + 0.09, z);
+    add(new THREE.ConeGeometry(0.025, 0.07, 5), FLAME, x, cy + 0.2, z).castShadow = false;
+  }
+  const l = new THREE.PointLight(0xffb260, 1.3, 16, 2); l.position.set(0, cy - 0.1, zc); g.add(l);
+  chandeliers.push({ l, seed: Math.random() * 100 });
+  // zones praticables : passage et salle
+  WALKABLE.push(worldRect(g, -AR, AR, z0 - 0.6, 2.0));     // chevauche la cour et la salle pour passer de l'une à l'autre
+  WALKABLE.push(worldRect(g, -RW / 2 + 0.2, RW / 2 - 0.2, zb + 0.2, z0));
+  CAM_ZONES.push(worldRect(g, -AR + 0.15, AR - 0.15, z0 - 0.3, 0.6, { maxY: ARCH.h + AR - 0.3 }));
+  CAM_ZONES.push(worldRect(g, -RW / 2 + 0.3, RW / 2 - 0.3, zb + 0.3, z0 - 0.3, { maxY: RH - 0.5 }));
+}
+const IRON = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x26221f).convertSRGBToLinear(), roughness: 0.6, metalness: 0.4 });
+const FLAME = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc56e).convertSRGBToLinear() });
+const CANDLE = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xe9e0cc).convertSRGBToLinear(), roughness: 0.7 });
+
+WALKABLE.push({ minX: -HALF + 0.5, maxX: HALF - 0.5, minZ: -HALF + 0.5, maxZ: HALF - 0.5, court: true });   // la cour
+CAM_ZONES.push({ minX: -HALF + 0.45, maxX: HALF - 0.45, minZ: -HALF + 0.45, maxZ: HALF - 0.45, maxY: 40 });
+for (const [px, pz, ry, win] of [[0, -HALF, 0, false], [0, HALF, Math.PI, false], [-HALF, 0, Math.PI / 2, true], [HALF, 0, -Math.PI / 2, true]])
+  buildRoom(buildWall(px, pz, ry, win));      // fenêtres du rez-de-chaussée sur les deux murs parallèles de gauche et de droite
+// ---------- Fontaine au centre : 3 niveaux en pierre, eau animée, gazon fleuri ----------
+const FOUNT = { basinIn: 1.6, basinOut: 1.95, basinH: 0.55, water0: 0.42, grassOut: 2.9, collide: 2.3 };
+const BOWL1 = { y: 1.25, r: 0.98, water: 1.42 }, BOWL2 = { y: 1.95, r: 0.48, water: 2.07 }, SPOUT_Y = 2.38;
+
+// bloc en secteur d'anneau, posé à plat (extrudé vers le haut)
+function ringBlock(r1, r2, a0, a1, y, h, shade) {
+  const sh = new THREE.Shape();
+  sh.absarc(0, 0, r2, a0, a1, false); sh.absarc(0, 0, r1, a1, a0, true); sh.closePath();
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false, curveSegments: 4 });
+  stone(geo, new THREE.Matrix4().makeTranslation(0, y, 0).multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2)), shade);
+}
+function stoneRing(r1, r2, y, h, n, shade0, offset = 0) {
+  const ga = 0.012;
+  for (let i = 0; i < n; i++) {
+    const a0 = (i + offset) * Math.PI * 2 / n + ga, a1 = (i + 1 + offset) * Math.PI * 2 / n - ga;
+    ringBlock(r1, r2, a0, a1, y, h, i + shade0);
+  }
+}
+function lathe(points, y, shade) {
+  const geo = new THREE.LatheGeometry(points.map(([r, h]) => new THREE.Vector2(r, h)), 32);
+  stone(geo, new THREE.Matrix4().makeTranslation(0, y, 0), shade);
+}
+// grand bassin : socle, deux rangées de pierres décalées, margelle
+stoneRing(FOUNT.basinIn - 0.05, FOUNT.basinOut + 0.12, 0, 0.12, 16, 3);
+stoneRing(FOUNT.basinIn, FOUNT.basinOut, 0.12, 0.2, 14, 0);
+stoneRing(FOUNT.basinIn, FOUNT.basinOut, 0.32, 0.2, 14, 1, 0.5);
+stoneRing(FOUNT.basinIn - 0.06, FOUNT.basinOut + 0.06, 0.52, 0.11, 12, 2);
+lathe([[0, 0], [FOUNT.basinIn, 0], [FOUNT.basinIn, 0.3], [0, 0.3]], 0.0, 3);           // fond du bassin
+// colonne et vasque du milieu
+lathe([[0, 0], [0.42, 0], [0.42, 0.14], [0.3, 0.2], [0.3, 0.75], [0.36, 0.82], [0.36, 0.9], [0, 0.9]], 0.3, 0);
+lathe([[0.1, -0.12], [0.45, -0.08], [0.85, 0.04], [BOWL1.r, 0.14], [BOWL1.r, 0.22], [BOWL1.r - 0.1, 0.22], [0.8, 0.12], [0, 0.1]], BOWL1.y, 2);
+// colonne et vasque du haut, fleuron
+lathe([[0, 0], [0.2, 0], [0.16, 0.08], [0.16, 0.5], [0.22, 0.58], [0, 0.58]], BOWL1.y + 0.12, 1);
+lathe([[0.06, -0.08], [0.25, -0.05], [0.42, 0.04], [BOWL2.r, 0.11], [BOWL2.r, 0.16], [BOWL2.r - 0.07, 0.16], [0.38, 0.08], [0, 0.07]], BOWL2.y, 0);
+lathe([[0, 0], [0.09, 0], [0.06, 0.12], [0.1, 0.2], [0.04, 0.3], [0, 0.34]], BOWL2.y + 0.05, 2);
+
+// eau : texture pixel art qui défile
+const waterCanvas = document.createElement("canvas"); waterCanvas.width = waterCanvas.height = 64;
+{
+  const c = waterCanvas.getContext("2d");
+  c.fillStyle = "#3f7fd6"; c.fillRect(0, 0, 64, 64);
+  const shades = ["#5a98e6", "#7ab4f2", "#2f69c0", "#a8d4ff"];
+  for (let i = 0; i < 90; i++) {
+    const x = Math.floor(Math.random() * 64), y = Math.floor(Math.random() * 64), w = 2 + Math.floor(Math.random() * 6);
+    c.fillStyle = shades[i % shades.length]; c.fillRect(x, y, w, 1); if (x + w > 64) c.fillRect(0, y, x + w - 64, 1);
+  }
+}
+const waterTex = new THREE.CanvasTexture(waterCanvas);
+waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping; waterTex.magFilter = THREE.NearestFilter; waterTex.encoding = THREE.sRGBEncoding;
+waterTex.repeat.set(3, 3);
+const waterMat = new THREE.MeshStandardMaterial({ map: waterTex, emissive: 0x16407e, emissiveIntensity: 0.6, roughness: 0.25, transparent: true, opacity: 0.92 });
+for (const [r, y] of [[FOUNT.basinIn, FOUNT.water0], [BOWL1.r - 0.1, BOWL1.water], [BOWL2.r - 0.07, BOWL2.water]]) {
+  const w = new THREE.Mesh(new THREE.CircleGeometry(r, 40), waterMat);
+  w.rotation.x = -Math.PI / 2; w.position.y = y; scene.add(w);
+}
+
+// gouttes : jet au sommet, cascades depuis les deux vasques
+const DROPS = 700;
+const dropPos = new Float32Array(DROPS * 3), drops = [];
+const dropGeo = new THREE.BufferGeometry(); dropGeo.setAttribute("position", new THREE.BufferAttribute(dropPos, 3));
+const dropPts = new THREE.Points(dropGeo, new THREE.PointsMaterial({ color: 0xcfe8ff, size: 0.055, transparent: true, opacity: 0.85, depthWrite: false }));
+scene.add(dropPts);
+function spawnDrop(d) {
+  const a = Math.random() * Math.PI * 2, kind = d.kind;
+  if (kind === 0) {        // jet : monte puis retombe dans la vasque du haut
+    d.x = 0; d.y = SPOUT_Y; d.z = 0;
+    const out = 0.25 + Math.random() * 0.25;
+    d.vx = Math.cos(a) * out; d.vz = Math.sin(a) * out; d.vy = 1.5 + Math.random() * 0.5; d.floor = BOWL2.water;
+  } else {                 // cascade : déborde du bord d'une vasque
+    const r = kind === 1 ? BOWL2.r : BOWL1.r, y = kind === 1 ? BOWL2.y + 0.16 : BOWL1.y + 0.22;
+    d.x = Math.cos(a) * r; d.y = y; d.z = Math.sin(a) * r;
+    const out = 0.25 + Math.random() * 0.15;
+    d.vx = Math.cos(a) * out; d.vz = Math.sin(a) * out; d.vy = -Math.random() * 0.2;
+    d.floor = kind === 1 ? BOWL1.water : FOUNT.water0;
+  }
+}
+for (let i = 0; i < DROPS; i++) {
+  const d = { kind: i < 120 ? 0 : i < 330 ? 1 : 2 };
+  spawnDrop(d);
+  for (let k = Math.random() * 60; k > 0; k--) { d.vy -= 9.8 / 60; d.x += d.vx / 60; d.y += d.vy / 60; d.z += d.vz / 60; if (d.y < d.floor) spawnDrop(d); }
+  drops.push(d);
+}
+function updateFountain(dt, now) {
+  waterTex.offset.set(now * 0.00004, now * 0.00007);
+  for (let i = 0; i < DROPS; i++) {
+    const d = drops[i];
+    d.vy -= 9.8 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
+    if (d.y < d.floor) spawnDrop(d);
+    dropPos[i * 3] = d.x; dropPos[i * 3 + 1] = d.y; dropPos[i * 3 + 2] = d.z;
+  }
+  dropGeo.attributes.position.needsUpdate = true;
+}
+
+// ---------- Mobilier : bancs en chêne le long des murs ----------
+// obstacles en boîtes alignées : l'avatar les contourne, ou monte dessus si « standable » (sauter sur un banc)
+const OBSTACLES = [];
+function woodBox(w, h, d, x, y, z, color, rotZ = 0, cx = 0, cz = 0, ry = 0) {
+  const m = new THREE.Matrix4().makeTranslation(cx, 0, cz).multiply(new THREE.Matrix4().makeRotationY(ry))
+    .multiply(new THREE.Matrix4().makeTranslation(x, y, z)).multiply(new THREE.Matrix4().makeRotationZ(rotZ));
+  stone(new THREE.BoxGeometry(w, h, d), m, color);
+}
+const BENCH = { len: 2.2, seat: 0.45, depth: 0.46 };
+function bench(cx, cz) {                       // banc en bois le long d'un mur (axe x)
+  for (let i = 0; i < 3; i++)                  // 3 planches d'assise
+    woodBox(BENCH.len, 0.05, 0.14, 0, BENCH.seat, -0.16 + i * 0.16, WOOD[i], 0, cx, cz);
+  for (const sx of [-0.92, 0.92]) {
+    woodBox(0.09, BENCH.seat - 0.025, 0.4, sx, (BENCH.seat - 0.025) / 2, 0, WOOD_DARK, 0, cx, cz);   // pieds
+    woodBox(0.1, 0.06, 0.48, sx, BENCH.seat - 0.06, 0, WOOD_DARK, 0, cx, cz);                         // traverse sous l'assise
+  }
+  woodBox(1.84, 0.06, 0.06, 0, 0.14, 0, WOOD_DARK, 0, cx, cz);                                        // entretoise
+  OBSTACLES.push({ minX: cx - BENCH.len / 2, maxX: cx + BENCH.len / 2, minZ: cz - BENCH.depth / 2, maxZ: cz + BENCH.depth / 2,
+                   top: BENCH.seat + 0.025, standable: true });
+}
+for (const x of [-11.2, -6.5, 6.5, 11.2]) { bench(x, -HALF + 1.25); bench(x, HALF - 1.25); }
+
+
+mergeStones();
+
+// ---------- Nuit : ciel étoilé, clair de lune, lanternes ----------
+scene.add(new THREE.HemisphereLight(0x8090c0, 0x3a332c, 0.42));
+const moon = new THREE.DirectionalLight(0xc4d2ff, 0.55);
+moon.position.set(18, 44, 14); moon.castShadow = true;
+moon.shadow.mapSize.set(2048, 2048); moon.shadow.bias = -0.0008; moon.shadow.normalBias = 0.03;
+Object.assign(moon.shadow.camera, { left: -HALF - 13, right: HALF + 13, top: HALF + 13, bottom: -HALF - 13, near: 1, far: 90 });
+scene.add(moon);
+{ // étoiles
+  const n = 700, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, e = 0.12 + Math.random() * 1.3, r = 70;
+    pos[i * 3] = Math.cos(a) * Math.cos(e) * r; pos[i * 3 + 1] = 20 + Math.sin(e) * r; pos[i * 3 + 2] = Math.sin(a) * Math.cos(e) * r;
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 0.35, sizeAttenuation: true, fog: false })));
+  const moonDisk = new THREE.Mesh(new THREE.CircleGeometry(3.2, 32), new THREE.MeshBasicMaterial({ color: 0xf2f0e2 }));
+  moonDisk.position.set(27, 52, 21); moonDisk.lookAt(0, 0, 0); scene.add(moonDisk);
+}
+// lanternes en fer forgé sur les piliers : lueur chaude qui vacille
+const lanterns = [];
+function lantern(wallX, wallZ, ry, x, withLight) {
+  const g = new THREE.Group(); g.position.set(wallX, 0, wallZ); g.rotation.y = ry; scene.add(g);
+  const z0 = PILLAR.out, y = 2.75;
+  const add = (geo, mat, px, py, pz) => { const m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = mat === IRON; g.add(m); return m; };
+  add(new THREE.BoxGeometry(0.05, 0.05, 0.36), IRON, x, y + 0.26, z0 + 0.18);          // potence
+  add(new THREE.BoxGeometry(0.05, 0.3, 0.05), IRON, x, y + 0.12, z0 + 0.02);
+  add(new THREE.BoxGeometry(0.2, 0.03, 0.2), IRON, x, y - 0.16, z0 + 0.34);             // fond
+  add(new THREE.BoxGeometry(0.15, 0.26, 0.15), FLAME, x, y - 0.02, z0 + 0.34);          // verre éclairé
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])                           // montants
+    add(new THREE.BoxGeometry(0.025, 0.3, 0.025), IRON, x + dx * 0.09, y - 0.02, z0 + 0.34 + dz * 0.09);
+  const cap = add(new THREE.ConeGeometry(0.16, 0.16, 4), IRON, x, y + 0.2, z0 + 0.34); cap.rotation.y = Math.PI / 4;
+  add(new THREE.TorusGeometry(0.035, 0.012, 4, 8), IRON, x, y + 0.31, z0 + 0.34);       // anneau
+  if (withLight) {
+    const l = new THREE.PointLight(0xffa654, 0.9, 10, 2);
+    l.position.set(x, y, z0 + 0.6); g.add(l);
+    lanterns.push({ l, seed: Math.random() * 100 });
+  }
+}
+for (const [wx, wz, ry] of [[0, -HALF, 0], [0, HALF, Math.PI], [-HALF, 0, Math.PI / 2], [HALF, 0, -Math.PI / 2]])
+  for (const x of [-9.75, -3.25, 3.25, 9.75]) lantern(wx, wz, ry, x, Math.abs(x) < 5);
+function updateLights(now) {
+  const t = now / 1000;
+  for (const { l, seed } of [...lanterns, ...chandeliers])
+    l.intensity = 0.9 * (0.88 + 0.08 * Math.sin(t * 7.3 + seed) + 0.05 * Math.sin(t * 13.1 + seed * 2));
+}
+
+// ---------- Avatar 3D : petit héros low-poly (cheveux en épis, écharpe violette, manteau prune) ----------
+// Origine aux pieds, le personnage regarde vers +z. Les membres pivotent depuis la hanche / l'épaule.
+const HERO_COL = { skin: 0xf2c29b, hair: 0x6b3a22, hairLight: 0x86502e, coat: 0x40243a, coatLight: 0x553049, trim: 0xd1a64e,
+                   belt: 0x5b3a22, scarf: 0x6c3aa6, scarfDark: 0x55288a, pants: 0x2b2232, boots: 0x7a4a2a, eye: 0x2b1a24 };
+const heroMat = {};
+for (const [k, c] of Object.entries(HERO_COL))      // couleurs données en sRGB, converties pour l'éclairage
+  heroMat[k] = new THREE.MeshStandardMaterial({ color: new THREE.Color(c).convertSRGBToLinear(), roughness: 0.8, flatShading: true });
+heroMat.eyeShine = new THREE.MeshBasicMaterial({ color: 0xffffff });
+function part(geo, mat, x, y, z, parent) {
+  const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m;
+}
+function makeHero() {
+  const hero = new THREE.Group(), body = new THREE.Group();
+  hero.add(body);                                                   // « body » rebondit pendant la marche
+  const limb = (r1, r2, h, mat, seg = 7) => { const g = new THREE.CylinderGeometry(r1, r2, h, seg); g.translate(0, -h / 2, 0); return [g, mat]; };
+
+  // jambes (pivot à la hanche) avec bottes
+  const legs = [];
+  for (const sx of [-1, 1]) {
+    const hip = new THREE.Group(); hip.position.set(sx * 0.11, 0.5, 0); body.add(hip);
+    part(...limb(0.075, 0.07, 0.34, heroMat.pants), 0, 0, 0, hip);
+    const boot = part(new THREE.BoxGeometry(0.15, 0.17, 0.24), heroMat.boots, 0, -0.41, 0.03, hip);
+    part(new THREE.BoxGeometry(0.165, 0.05, 0.17), heroMat.boots, 0, -0.32, 0, hip);   // revers de botte
+    legs.push(hip);
+  }
+  // manteau : tronc évasé + pans, bordures dorées, ceinture
+  part(new THREE.CylinderGeometry(0.2, 0.27, 0.5, 8), heroMat.coat, 0, 0.78, 0, body);
+  part(new THREE.CylinderGeometry(0.275, 0.29, 0.06, 8), heroMat.trim, 0, 0.53, 0, body);          // ourlet doré
+  part(new THREE.CylinderGeometry(0.23, 0.235, 0.06, 8), heroMat.belt, 0, 0.74, 0, body);          // ceinture
+  part(new THREE.BoxGeometry(0.06, 0.06, 0.03), heroMat.trim, 0, 0.74, 0.235, body);               // boucle
+  part(new THREE.BoxGeometry(0.035, 0.42, 0.02), heroMat.trim, 0, 0.79, 0.255, body);              // bordure avant
+  part(new THREE.BoxGeometry(0.08, 0.1, 0.02), heroMat.trim, 0, 0.92, 0.215, body);                // broche
+  // bras (pivot à l'épaule) avec manchette dorée et main
+  const arms = [];
+  for (const sx of [-1, 1]) {
+    const sh = new THREE.Group(); sh.position.set(sx * 0.25, 0.98, 0); body.add(sh);
+    part(...limb(0.065, 0.06, 0.32, heroMat.coatLight), 0, 0, 0, sh);
+    part(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 7), heroMat.trim, 0, -0.3, 0, sh);
+    part(new THREE.IcosahedronGeometry(0.06, 0), heroMat.skin, 0, -0.37, 0, sh);
+    arms.push(sh);
+  }
+  // écharpe : tour du cou + pan qui flotte dans le dos
+  part(new THREE.TorusGeometry(0.15, 0.065, 6, 12), heroMat.scarf, 0, 1.06, 0, body).rotation.x = Math.PI / 2;
+  const tail = new THREE.Group(); tail.position.set(0.08, 1.04, -0.13); body.add(tail);
+  const tg = new THREE.BoxGeometry(0.12, 0.34, 0.04); tg.translate(0, -0.17, 0);
+  part(tg, heroMat.scarfDark, 0, 0, 0, tail);
+  // tête : visage, yeux, cheveux en épis
+  const head = new THREE.Group(); head.position.set(0, 1.3, 0); body.add(head);
+  part(new THREE.IcosahedronGeometry(0.25, 1), heroMat.skin, 0, 0, 0, head);
+  for (const sx of [-1, 1]) {
+    part(new THREE.BoxGeometry(0.06, 0.09, 0.02), heroMat.eye, sx * 0.09, -0.01, 0.235, head);
+    part(new THREE.BoxGeometry(0.022, 0.022, 0.01), heroMat.eyeShine, sx * 0.09 - 0.012, 0.015, 0.247, head);
+    part(new THREE.IcosahedronGeometry(0.045, 0), heroMat.skin, sx * 0.25, -0.02, 0, head);      // oreilles
+  }
+  part(new THREE.IcosahedronGeometry(0.27, 1), heroMat.hair, 0, 0.07, -0.04, head).scale.set(1.02, 0.85, 1.0);   // calotte
+  // mèches en épis : courtes et larges, inclinées vers l'extérieur, tout autour de la calotte
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const tufts = [];
+  for (let i = 0; i < 9; i++) tufts.push([i / 9 * Math.PI * 2, 0.55]);             // couronne
+  for (let i = 0; i < 5; i++) tufts.push([i / 5 * Math.PI * 2 + 0.3, 0.2]);         // sommet
+  for (let i = 0; i < 4; i++) tufts.push([Math.PI + (i - 1.5) * 0.45, 0.95]);       // nuque
+  for (const [az, el] of tufts) {
+    const dir = new THREE.Vector3(Math.sin(az) * Math.sin(el), Math.cos(el), Math.cos(az) * Math.sin(el));
+    if (dir.z > 0.55 && el > 0.5) continue;                                        // dégager le visage
+    const sp = part(new THREE.ConeGeometry(0.1 + rnd() * 0.03, 0.17 + rnd() * 0.06, 5), rnd() > 0.65 ? heroMat.hairLight : heroMat.hair,
+                    dir.x * 0.22, 0.07 + dir.y * 0.2, -0.04 + dir.z * 0.22, head);
+    sp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.add(new THREE.Vector3(0, 0.35, 0)).normalize());
+  }
+  // frange : mèches qui retombent sur le front
+  for (const [x, rz] of [[-0.12, 0.5], [-0.03, 0.15], [0.07, -0.2], [0.15, -0.55]]) {
+    const f = part(new THREE.ConeGeometry(0.07, 0.17, 5), heroMat.hair, x, 0.13, 0.2, head);
+    f.rotation.set(Math.PI - 0.5, 0, rz);
+  }
+  return { hero, body, legs, arms, head, tail };
+}
+const H = makeHero();
+scene.add(H.hero);
+{ // proportions plus adultes : jambes et tronc allongés, tête réduite
+  H.legs.forEach(l => { l.scale.y = 1.25; });
+  H.body.children.forEach(c => { c.position.y += 0.13; });   // hanches relevées : les bottes touchent toujours le sol
+  H.head.scale.setScalar(0.86); H.head.position.y -= 0.03;
+}
+const blob = new THREE.Mesh(new THREE.CircleGeometry(0.32, 24), new THREE.MeshBasicMaterial({ color: 0x281838, transparent: true, opacity: 0.25, depthWrite: false }));
+blob.rotation.x = -Math.PI / 2; blob.scale.set(1, 0.7, 1); scene.add(blob);
+let heroYaw = Math.PI, walkPhase = 0;
+function animateHero(dt, now, airborne) {
+  // rotation fluide vers la direction de marche
+  let d = p.facing - heroYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+  heroYaw += d * Math.min(1, dt * 12);
+  H.hero.rotation.y = heroYaw;
+  H.hero.position.set(p.x, p.y, p.z);
+  const t = now / 1000;
+  if (airborne) {                                 // pose de saut : genoux pliés, bras levés
+    H.legs[0].rotation.x = -0.6; H.legs[1].rotation.x = 0.35;
+    H.arms[0].rotation.set(-0.4, 0, -0.9); H.arms[1].rotation.set(-0.4, 0, 0.9);
+    H.body.position.y = 0; H.tail.rotation.x = -0.9;
+  } else if (p.moving) {                          // marche : balancement opposé bras / jambes, petit rebond
+    walkPhase += dt * 11;
+    const sw = Math.sin(walkPhase);
+    H.legs[0].rotation.x = sw * 0.7; H.legs[1].rotation.x = -sw * 0.7;
+    H.arms[0].rotation.set(-sw * 0.6, 0, -0.12); H.arms[1].rotation.set(sw * 0.6, 0, 0.12);
+    H.body.position.y = Math.abs(Math.cos(walkPhase)) * 0.045;
+    H.tail.rotation.x = -0.5 - Math.abs(sw) * 0.3;
+    H.head.rotation.z = sw * 0.04;
+  } else {                                        // repos : respiration légère
+    const br = Math.sin(t * 2.2);
+    for (const l of H.legs) l.rotation.x *= 0.8;
+    H.arms[0].rotation.set(0, 0, -0.1 - br * 0.02); H.arms[1].rotation.set(0, 0, 0.1 + br * 0.02);
+    H.body.position.y = br * 0.008;
+    H.tail.rotation.x = -0.15 + br * 0.04;
+    H.head.rotation.z *= 0.9;
+  }
+}
+
+// ---------- État ----------
+let jumpRequested = false;
+const p = { x: 0, y: 0, vy: 0, z: 5, facing: Math.PI, t: 0, moving: false };   // facing : angle de la direction regardée
+const cam = { yaw: 0, pitch: 0.35, dist: 5.5 };
+
+// ---------- Entrées ----------
+const keys = new Set();
+addEventListener("keydown", e => {
+  keys.add(e.code);
+  if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault();
+  if (e.code === "Space" && !e.repeat) jumpRequested = true;
+});
+const jumpBtn = document.getElementById("jump");
+jumpBtn.addEventListener("pointerdown", e => { e.preventDefault(); jumpRequested = true; });
+addEventListener("keyup", e => keys.delete(e.code));
+addEventListener("blur", () => keys.clear());
+
+let stick = null, look = null;
+const knob = document.getElementById("knob"), ring = document.getElementById("ring");
+canvas.addEventListener("pointerdown", e => {
+  canvas.setPointerCapture(e.pointerId);
+  const r = canvas.getBoundingClientRect();
+  if (e.pointerType !== "mouse" && e.clientX - r.left < r.width / 2 && !stick) {
+    stick = { id: e.pointerId, ox: e.clientX, oy: e.clientY, dx: 0, dy: 0 };
+    ring.hidden = knob.hidden = false;
+    ring.style.left = knob.style.left = (e.clientX - r.left) + "px";
+    ring.style.top = knob.style.top = (e.clientY - r.top) + "px";
+  } else if (!look) look = { id: e.pointerId, x: e.clientX, y: e.clientY };
+});
+canvas.addEventListener("pointermove", e => {
+  if (stick && e.pointerId === stick.id) {
+    const r = canvas.getBoundingClientRect();
+    let dx = e.clientX - stick.ox, dy = e.clientY - stick.oy; const d = Math.hypot(dx, dy);
+    if (d > 50) { dx *= 50 / d; dy *= 50 / d; }
+    stick.dx = dx / 50; stick.dy = dy / 50;
+    knob.style.left = (stick.ox - r.left + dx) + "px"; knob.style.top = (stick.oy - r.top + dy) + "px";
+  } else if (look && e.pointerId === look.id) {
+    cam.yaw -= (e.clientX - look.x) * 0.006;
+    cam.pitch = Math.max(-0.45, Math.min(1.25, cam.pitch + (e.clientY - look.y) * 0.004));   // vers le bas : on regarde les étages
+    look.x = e.clientX; look.y = e.clientY;
+  }
+});
+const release = e => {
+  if (stick && e.pointerId === stick.id) { stick = null; ring.hidden = knob.hidden = true; }
+  if (look && e.pointerId === look.id) look = null;
+};
+canvas.addEventListener("pointerup", release); canvas.addEventListener("pointercancel", release);
+canvas.addEventListener("wheel", e => { e.preventDefault(); cam.dist = Math.max(2.5, Math.min(10, cam.dist * (1 + e.deltaY * 0.001))); }, { passive: false });
+
+function readMove() {
+  let f = 0, s = 0;
+  const k = c => keys.has(c);
+  if (k("KeyW") || k("ArrowUp")) f += 1;        // Z sur AZERTY
+  if (k("KeyS") || k("ArrowDown")) f -= 1;
+  if (k("KeyA")) s -= 1;                        // Q sur AZERTY
+  if (k("KeyD")) s += 1;
+  if (stick) { f = -stick.dy; s = stick.dx; }
+  const len = Math.hypot(f, s);
+  if (len > 1) { f /= len; s /= len; }
+  return [f, s];
+}
+
+// ---------- Collisions avec le décor ----------
+const COURT_CLEAR = WALL_CLEAR - 0.5;    // dans la cour : rester devant piliers et soubassement
+function canStand(x, z) {
+  return WALKABLE.some(r => {
+    const m = r.court ? PLAYER_R + COURT_CLEAR : PLAYER_R;
+    return x >= r.minX + m && x <= r.maxX - m && z >= r.minZ + m && z <= r.maxZ - m;
+  });
+}
+function camOk(x, y, z) {
+  return y > 0.25 && CAM_ZONES.some(r => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ && y <= r.maxY);
+}
+
+// ---------- Boucle ----------
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * renderer.getPixelRatio()) || canvas.height !== Math.round(h * renderer.getPixelRatio())) {
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  resize();
+  if (keys.has("ArrowLeft")) cam.yaw += 2.2 * dt;
+  if (keys.has("ArrowRight")) cam.yaw -= 2.2 * dt;
+
+  const [f, s] = readMove();
+  p.moving = Math.hypot(f, s) > 0.05;
+  if (p.moving) {
+    // avant = direction de la caméra (à plat), droite = perpendiculaire
+    const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
+    const mx = fx * f + rx * s, mz = fz * f + rz * s;
+    // déplacement limité aux zones praticables (cour, passages sous les arches, salles)
+    const nx = p.x + mx * SPEED * dt, nz = p.z + mz * SPEED * dt;
+    if (canStand(nx, nz)) { p.x = nx; p.z = nz; }
+    else if (canStand(nx, p.z)) p.x = nx;
+    else if (canStand(p.x, nz)) p.z = nz;
+    // on fait le tour de la fontaine sans la traverser
+    const fd = Math.hypot(p.x, p.z);
+    if (fd < FOUNT.collide) { const k = FOUNT.collide / (fd || 1); p.x *= k; p.z *= k; }
+    for (const o of OBSTACLES) {                         // contourner les bancs (sauf si on est dessus) et la bascule
+      if (o.standable && p.y >= o.top - 0.12) continue;
+      const x0 = o.minX - PLAYER_R, x1 = o.maxX + PLAYER_R, z0 = o.minZ - PLAYER_R, z1 = o.maxZ + PLAYER_R;
+      if (p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1) {
+        const pen = [p.x - x0, x1 - p.x, p.z - z0, z1 - p.z], i = pen.indexOf(Math.min(...pen));
+        if (i === 0) p.x = x0; else if (i === 1) p.x = x1; else if (i === 2) p.z = z0; else p.z = z1;
+      }
+    }
+    p.facing = Math.atan2(mx, mz);
+    p.t += dt;
+  } else p.t = 0;
+
+  // hauteur du sol sous l'avatar : pavés, ou dessus d'un banc
+  let ground = 0;
+  for (const o of OBSTACLES)
+    if (o.standable && p.x > o.minX - 0.1 && p.x < o.maxX + 0.1 && p.z > o.minZ - 0.1 && p.z < o.maxZ + 0.1 && p.y >= o.top - 0.12) ground = Math.max(ground, o.top);
+  // saut : impulsion vers le haut si l'avatar touche le sol, puis gravité
+  if (jumpRequested && p.y <= ground + 1e-3) p.vy = JUMP_SPEED;
+  jumpRequested = false;
+  p.vy -= GRAVITY * dt; p.y += p.vy * dt;
+  if (p.y < ground) { p.y = ground; p.vy = 0; }
+  const airborne = p.y > ground + 1e-3;
+
+  // caméra en orbite autour de l'avatar, gardée à l'intérieur de la pièce
+  const tx = p.x, ty = 1.1 + p.y * 0.5, tz = p.z;      // la caméra suit un peu le saut
+  let cx = tx + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
+  let cy = ty + Math.sin(cam.pitch) * cam.dist;
+  let cz = tz + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
+  // la caméra se rapproche si un mur s'interpose (on avance le long du segment avatar -> caméra)
+  cy = Math.max(0.3, cy);
+  let k = 1;
+  for (let i = 1; i <= 24; i++) {
+    const t = i / 24;
+    if (!camOk(tx + (cx - tx) * t, ty + (cy - ty) * t, tz + (cz - tz) * t)) { k = (i - 1) / 24; break; }
+  }
+  k = Math.max(k, 0.12);
+  camera.position.set(tx + (cx - tx) * k, ty + (cy - ty) * k, tz + (cz - tz) * k); camera.lookAt(tx, ty, tz);
+
+  animateHero(dt, now, airborne);
+  const sh = 1 / (1 + (p.y - ground) * 0.7);            // l'ombre rétrécit et pâlit en hauteur
+  blob.position.set(p.x, ground + 0.01, p.z); blob.scale.set(sh, 0.7 * sh, 1); blob.material.opacity = 0.35 * sh;
+
+  updateFountain(dt, now);
+  updateLights(now);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+
+</script>

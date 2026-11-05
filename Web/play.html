@@ -558,117 +558,295 @@ function updateLights(now) {
     l.intensity = 0.9 * (0.88 + 0.08 * Math.sin(t * 7.3 + seed) + 0.05 * Math.sin(t * 13.1 + seed * 2));
 }
 
-// ---------- Avatar 3D : petit héros low-poly (cheveux en épis, écharpe violette, manteau prune) ----------
-// Origine aux pieds, le personnage regarde vers +z. Les membres pivotent depuis la hanche / l'épaule.
-const HERO_COL = { skin: 0xf2c29b, hair: 0x6b3a22, hairLight: 0x86502e, coat: 0x40243a, coatLight: 0x553049, trim: 0xd1a64e,
-                   belt: 0x5b3a22, scarf: 0x6c3aa6, scarfDark: 0x55288a, pants: 0x2b2232, boots: 0x7a4a2a, eye: 0x2b1a24 };
-const heroMat = {};
-for (const [k, c] of Object.entries(HERO_COL))      // couleurs données en sRGB, converties pour l'éclairage
-  heroMat[k] = new THREE.MeshStandardMaterial({ color: new THREE.Color(c).convertSRGBToLinear(), roughness: 0.8, flatShading: true });
-heroMat.eyeShine = new THREE.MeshBasicMaterial({ color: 0xffffff });
-function part(geo, mat, x, y, z, parent) {
-  const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m;
+// ---------- Personnages réalistes (héros et PNJ) ----------
+// Proportions d'un adolescent / jeune adulte (≈ 7,5 têtes). Origine aux pieds, regard vers +z.
+// Squelette : bassin -> hanches -> genoux -> chevilles ; bassin -> buste -> épaules -> coudes ; buste -> cou -> tête.
+const matCache = new Map(), geoCache = new Map();
+function mat(color, rough = 0.75, side = THREE.FrontSide) {
+  const key = color + "|" + rough + "|" + side;
+  if (!matCache.has(key)) matCache.set(key, new THREE.MeshStandardMaterial({ color: new THREE.Color(color).convertSRGBToLinear(), roughness: rough, side }));
+  return matCache.get(key);
 }
-function makeHero() {
-  const hero = new THREE.Group(), body = new THREE.Group();
-  hero.add(body);                                                   // « body » rebondit pendant la marche
-  const limb = (r1, r2, h, mat, seg = 7) => { const g = new THREE.CylinderGeometry(r1, r2, h, seg); g.translate(0, -h / 2, 0); return [g, mat]; };
+const cached = (key, make) => { if (!geoCache.has(key)) geoCache.set(key, make()); return geoCache.get(key); };
+// membre arrondi et effilé : part de l'articulation (y = 0) et descend sur « len »
+function limbGeo(rTop, rBot, len) {
+  return cached(`limb${rTop}|${rBot}|${len}`, () => {
+    const pts = [];
+    for (let i = 0; i <= 5; i++) { const a = -Math.PI / 2 + i / 5 * Math.PI / 2; pts.push(new THREE.Vector2(Math.max(1e-4, Math.cos(a) * rBot), -len + Math.sin(a) * rBot)); }
+    for (let i = 1; i <= 5; i++) { const a = i / 5 * Math.PI / 2; pts.push(new THREE.Vector2(Math.max(1e-4, Math.cos(a) * rTop), Math.sin(a) * rTop)); }
+    return new THREE.LatheGeometry(pts, 14);
+  });
+}
+const lathe2 = (key, pts, seg = 20, phiStart = 0, phiLen = Math.PI * 2) =>
+  cached(key, () => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg, phiStart, phiLen));
+function mesh(geo, m, parent, x = 0, y = 0, z = 0, shadow = true) {
+  const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = shadow; o.receiveShadow = true; parent.add(o); return o;
+}
+const grp = (parent, x = 0, y = 0, z = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
+const sphere = r => cached("sph" + r, () => new THREE.SphereGeometry(r, 18, 14));
 
-  // jambes (pivot à la hanche) avec bottes
-  const legs = [];
+function makeHuman(o) {
+  const H = { root: new THREE.Group() };
+  const s = o.height / 1.74; H.root.scale.setScalar(s);
+  const pelvis = H.pelvis = grp(H.root, 0, 0.88, 0);
+  const chest = H.chest = grp(pelvis, 0, 0.0, 0);
+  const pantsM = mat(o.pants, 0.85), shoeM = mat(o.shoes, 0.55), skinM = mat(o.skin, 0.62), coatM = mat(o.coat, 0.8, THREE.DoubleSide);
+  const sleeveM = mat(o.coat, 0.8), trimM = mat(o.trim, 0.45), shirtM = mat(o.shirt, 0.8), hairM = mat(o.hair, 0.7, THREE.DoubleSide);
+
+  // jambes
+  H.hips = []; H.knees = [];
   for (const sx of [-1, 1]) {
-    const hip = new THREE.Group(); hip.position.set(sx * 0.11, 0.5, 0); body.add(hip);
-    part(...limb(0.075, 0.07, 0.34, heroMat.pants), 0, 0, 0, hip);
-    const boot = part(new THREE.BoxGeometry(0.15, 0.17, 0.24), heroMat.boots, 0, -0.41, 0.03, hip);
-    part(new THREE.BoxGeometry(0.165, 0.05, 0.17), heroMat.boots, 0, -0.32, 0, hip);   // revers de botte
-    legs.push(hip);
+    const hip = grp(pelvis, sx * 0.09, 0, 0);
+    mesh(limbGeo(0.078, 0.056, 0.4), pantsM, hip);
+    const knee = grp(hip, 0, -0.4, 0);
+    mesh(limbGeo(0.056, 0.042, 0.36), o.highBoots ? shoeM : pantsM, knee);
+    const shoe = mesh(cached("shoe", () => { const g = new THREE.SphereGeometry(0.06, 14, 10); g.scale(0.85, 0.62, 2.0); return g; }), shoeM, knee, 0, -0.415, 0.05);
+    mesh(cached("sole", () => new THREE.BoxGeometry(0.1, 0.025, 0.25)), mat(0x1a1716, 0.9), knee, 0, -0.448, 0.045, false);
+    if (o.highBoots) mesh(cached("cuff", () => new THREE.CylinderGeometry(0.06, 0.058, 0.05, 14)), shoeM, knee, 0, -0.04, 0);
+    H.hips.push(hip); H.knees.push(knee);
   }
-  // manteau : tronc évasé + pans, bordures dorées, ceinture
-  part(new THREE.CylinderGeometry(0.2, 0.27, 0.5, 8), heroMat.coat, 0, 0.78, 0, body);
-  part(new THREE.CylinderGeometry(0.275, 0.29, 0.06, 8), heroMat.trim, 0, 0.53, 0, body);          // ourlet doré
-  part(new THREE.CylinderGeometry(0.23, 0.235, 0.06, 8), heroMat.belt, 0, 0.74, 0, body);          // ceinture
-  part(new THREE.BoxGeometry(0.06, 0.06, 0.03), heroMat.trim, 0, 0.74, 0.235, body);               // boucle
-  part(new THREE.BoxGeometry(0.035, 0.42, 0.02), heroMat.trim, 0, 0.79, 0.255, body);              // bordure avant
-  part(new THREE.BoxGeometry(0.08, 0.1, 0.02), heroMat.trim, 0, 0.92, 0.215, body);                // broche
-  // bras (pivot à l'épaule) avec manchette dorée et main
-  const arms = [];
+  // buste (chemise ou tunique), ceinture
+  mesh(lathe2("torso", [[0.001, -0.06], [0.14, -0.05], [0.155, 0.05], [0.135, 0.2], [0.15, 0.32], [0.168, 0.42], [0.162, 0.5], [0.11, 0.56], [0.055, 0.59], [0.001, 0.6]]), shirtM, chest)
+    .scale.set(1 * o.build, 1, 0.64);
+  mesh(lathe2("belt", [[0.142, 0.12], [0.146, 0.16]]), mat(0x2a1d16, 0.6), chest).scale.set(o.build, 1, 0.68);
+  if (o.tie) {   // col blanc et cravate
+    mesh(cached("tie", () => { const g = new THREE.BoxGeometry(0.045, 0.26, 0.012); g.translate(0, -0.13, 0); return g; }), mat(o.tie, 0.6), chest, 0, 0.55, 0.1, false).rotation.x = -0.12;
+    mesh(cached("knot", () => new THREE.BoxGeometry(0.04, 0.035, 0.02)), mat(o.tie, 0.6), chest, 0, 0.555, 0.098, false);
+  }
+  // robe / manteau ouvert sur le devant (lathe sans la part avant), jusqu'aux genoux
+  mesh(lathe2("coat", [[0.06, 0.6], [0.12, 0.575], [0.188, 0.5], [0.186, 0.4], [0.17, 0.22], [0.178, 0.05], [0.2, -0.12], [0.23, -0.3], [0.255, -0.46]], 24, 0.42, Math.PI * 2 - 0.84), coatM, chest)
+    .scale.set(o.build, 1, 0.7);
+  mesh(lathe2("hem", [[0.255, -0.47], [0.26, -0.43]], 24, 0.42, Math.PI * 2 - 0.84), mat(o.trim, 0.45, THREE.DoubleSide), chest, 0, 0, 0, false).scale.set(o.build * 1.01, 1, 0.71);
+  if (o.hood !== false) mesh(lathe2("collar", [[0.13, 0.55], [0.15, 0.6], [0.12, 0.64]], 20, 0.6, Math.PI * 2 - 1.2), coatM, chest).scale.set(o.build, 1, 0.75);
+  // bras
+  H.shoulders = []; H.elbows = [];
   for (const sx of [-1, 1]) {
-    const sh = new THREE.Group(); sh.position.set(sx * 0.25, 0.98, 0); body.add(sh);
-    part(...limb(0.065, 0.06, 0.32, heroMat.coatLight), 0, 0, 0, sh);
-    part(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 7), heroMat.trim, 0, -0.3, 0, sh);
-    part(new THREE.IcosahedronGeometry(0.06, 0), heroMat.skin, 0, -0.37, 0, sh);
-    arms.push(sh);
+    const sh = grp(chest, sx * 0.19 * o.build, 0.5, 0);
+    mesh(sphere(0.05), sleeveM, sh, 0, -0.01, 0);
+    mesh(limbGeo(0.055, 0.046, 0.27), sleeveM, sh);
+    const el = grp(sh, 0, -0.27, 0);
+    mesh(limbGeo(0.046, 0.04, 0.22), sleeveM, el);
+    mesh(cached("sleeveEnd", () => new THREE.CylinderGeometry(0.052, 0.056, 0.05, 14)), trimM, el, 0, -0.2, 0, false);
+    const hand = mesh(cached("hand", () => { const g = new THREE.SphereGeometry(0.042, 12, 10); g.scale(0.75, 1.25, 0.5); return g; }), skinM, el, 0, -0.27, 0.005);
+    mesh(cached("thumb", () => { const g = new THREE.SphereGeometry(0.015, 8, 6); g.scale(1, 1.8, 1); return g; }), skinM, el, sx * -0.022, -0.25, 0.02, false);
+    sh.rotation.z = sx * 0.07; H.shoulders.push(sh); H.elbows.push(el);
   }
-  // écharpe : tour du cou + pan qui flotte dans le dos
-  part(new THREE.TorusGeometry(0.15, 0.065, 6, 12), heroMat.scarf, 0, 1.06, 0, body).rotation.x = Math.PI / 2;
-  const tail = new THREE.Group(); tail.position.set(0.08, 1.04, -0.13); body.add(tail);
-  const tg = new THREE.BoxGeometry(0.12, 0.34, 0.04); tg.translate(0, -0.17, 0);
-  part(tg, heroMat.scarfDark, 0, 0, 0, tail);
-  // tête : visage, yeux, cheveux en épis
-  const head = new THREE.Group(); head.position.set(0, 1.3, 0); body.add(head);
-  part(new THREE.IcosahedronGeometry(0.25, 1), heroMat.skin, 0, 0, 0, head);
+  // cou et tête
+  mesh(limbGeo(0.046, 0.05, 0.08), skinM, chest, 0, 0.66, 0);
+  const head = H.head = grp(chest, 0, 0.74, 0.005);
+  mesh(cached("skull", () => { const g = new THREE.SphereGeometry(0.104, 24, 18); g.scale(0.9, 1.1, 1.0); return g; }), skinM, head);
+  mesh(cached("jaw", () => { const g = new THREE.SphereGeometry(0.082, 18, 12); g.scale(0.88, 0.8, 0.95); return g; }), skinM, head, 0, -0.05, 0.018);
+  const nose = mesh(cached("nose", () => new THREE.ConeGeometry(0.016, 0.045, 8)), skinM, head, 0, -0.008, 0.103, false); nose.rotation.x = Math.PI / 2 - 0.25;
+  mesh(cached("lips", () => { const g = new THREE.SphereGeometry(0.02, 10, 6); g.scale(1.3, 0.35, 0.5); return g; }), mat(o.lips, 0.5), head, 0, -0.056, 0.09, false);
   for (const sx of [-1, 1]) {
-    part(new THREE.BoxGeometry(0.06, 0.09, 0.02), heroMat.eye, sx * 0.09, -0.01, 0.235, head);
-    part(new THREE.BoxGeometry(0.022, 0.022, 0.01), heroMat.eyeShine, sx * 0.09 - 0.012, 0.015, 0.247, head);
-    part(new THREE.IcosahedronGeometry(0.045, 0), heroMat.skin, sx * 0.25, -0.02, 0, head);      // oreilles
+    mesh(cached("eyeW", () => { const g = new THREE.SphereGeometry(0.016, 12, 10); g.scale(1.2, 0.85, 0.6); return g; }), mat(0xf2efe8, 0.3), head, sx * 0.037, 0.018, 0.089, false);
+    mesh(sphere(0.0085), mat(o.eyes, 0.25), head, sx * 0.037, 0.018, 0.097, false);
+    mesh(sphere(0.0035), mat(0x050505, 0.2), head, sx * 0.037, 0.018, 0.1045, false);
+    const brow = mesh(cached("brow", () => new THREE.BoxGeometry(0.038, 0.007, 0.012)), mat(o.hair, 0.8), head, sx * 0.038, 0.043, 0.094, false); brow.rotation.z = sx * -0.12;
+    mesh(cached("ear", () => { const g = new THREE.SphereGeometry(0.026, 10, 8); g.scale(0.4, 1, 0.7); return g; }), skinM, head, sx * 0.093, 0.0, -0.005, false);
   }
-  part(new THREE.IcosahedronGeometry(0.27, 1), heroMat.hair, 0, 0.07, -0.04, head).scale.set(1.02, 0.85, 1.0);   // calotte
-  // mèches en épis : courtes et larges, inclinées vers l'extérieur, tout autour de la calotte
-  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const tufts = [];
-  for (let i = 0; i < 9; i++) tufts.push([i / 9 * Math.PI * 2, 0.55]);             // couronne
-  for (let i = 0; i < 5; i++) tufts.push([i / 5 * Math.PI * 2 + 0.3, 0.2]);         // sommet
-  for (let i = 0; i < 4; i++) tufts.push([Math.PI + (i - 1.5) * 0.45, 0.95]);       // nuque
-  for (const [az, el] of tufts) {
-    const dir = new THREE.Vector3(Math.sin(az) * Math.sin(el), Math.cos(el), Math.cos(az) * Math.sin(el));
-    if (dir.z > 0.55 && el > 0.5) continue;                                        // dégager le visage
-    const sp = part(new THREE.ConeGeometry(0.1 + rnd() * 0.03, 0.17 + rnd() * 0.06, 5), rnd() > 0.65 ? heroMat.hairLight : heroMat.hair,
-                    dir.x * 0.22, 0.07 + dir.y * 0.2, -0.04 + dir.z * 0.22, head);
-    sp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.add(new THREE.Vector3(0, 0.35, 0)).normalize());
+  // cheveux : calotte + style
+  mesh(cached("hairCap", () => { const g = new THREE.SphereGeometry(0.112, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.36); g.scale(0.94, 1.08, 1.04); return g; }), hairM, head, 0, 0.012, -0.008);
+  mesh(cached("hairBack", () => { const g = new THREE.SphereGeometry(0.109, 20, 12, Math.PI * 1.08, Math.PI * 0.84, Math.PI * 0.2, Math.PI * 0.5); g.scale(0.95, 1.1, 1.05); return g; }), hairM, head, 0, -0.005, -0.01);
+  if (o.hairStyle === "messy") {
+    let seed = 5; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 16; i++) {
+      const a = r() * Math.PI * 2, e = 0.15 + r() * 0.9;
+      const t = mesh(cached("tuft", () => { const g = new THREE.ConeGeometry(0.028, 0.07, 6); g.translate(0, 0.03, 0); return g; }), hairM, head,
+        Math.sin(a) * Math.sin(e) * 0.105, 0.02 + Math.cos(e) * 0.115, Math.cos(a) * Math.sin(e) * 0.11 - 0.01, false);
+      t.lookAt(t.position.clone().multiplyScalar(3).add(head.position)); t.rotateX(Math.PI / 2);
+    }
+    for (const [x, rz] of [[-0.05, 0.4], [-0.015, 0.15], [0.025, -0.15], [0.06, -0.45]]) {   // mèches sur le front
+      const f = mesh(cached("fringe", () => { const g = new THREE.ConeGeometry(0.022, 0.07, 6); g.translate(0, -0.035, 0); return g; }), hairM, head, x, 0.085, 0.085, false);
+      f.rotation.set(0.35, 0, rz);
+    }
+  } else if (o.hairStyle === "long") {
+    mesh(cached("hairLong", () => new THREE.CylinderGeometry(0.1, 0.125, 0.3, 18, 1, true, Math.PI * 0.55, Math.PI * 0.9)), hairM, head, 0, -0.11, -0.012);
+    mesh(cached("bangs", () => { const g = new THREE.SphereGeometry(0.113, 20, 8, Math.PI * 0.18, Math.PI * 0.64, Math.PI * 0.2, Math.PI * 0.16); g.scale(0.94, 1.08, 1.04); return g; }), hairM, head, 0, 0.012, -0.008, false);
+  } else if (o.hairStyle === "bun") {
+    mesh(sphere(0.05), hairM, head, 0, 0.07, -0.1);
   }
-  // frange : mèches qui retombent sur le front
-  for (const [x, rz] of [[-0.12, 0.5], [-0.03, 0.15], [0.07, -0.2], [0.15, -0.55]]) {
-    const f = part(new THREE.ConeGeometry(0.07, 0.17, 5), heroMat.hair, x, 0.13, 0.2, head);
-    f.rotation.set(Math.PI - 0.5, 0, rz);
+  // écharpe (héros)
+  if (o.scarf) {
+    const sm = mat(o.scarf, 0.9);
+    mesh(cached("scarfRing", () => { const g = new THREE.TorusGeometry(0.075, 0.032, 10, 20); g.rotateX(Math.PI / 2); g.scale(1.25, 1, 1); return g; }), sm, chest, 0, 0.6, 0.005);
+    H.scarfTail = grp(chest, 0.05, 0.6, 0.085);
+    mesh(cached("scarfTail", () => { const g = new THREE.BoxGeometry(0.075, 0.34, 0.022); g.translate(0, -0.17, 0); return g; }), sm, H.scarfTail);
+    mesh(cached("fringeEnd", () => new THREE.BoxGeometry(0.075, 0.03, 0.024)), mat(o.trim, 0.6), H.scarfTail, 0, -0.34, 0, false);
   }
-  return { hero, body, legs, arms, head, tail };
+  H.phase = Math.random() * 6; H.look = 0;
+  return H;
 }
-const H = makeHero();
-scene.add(H.hero);
-{ // proportions plus adultes : jambes et tronc allongés, tête réduite
-  H.legs.forEach(l => { l.scale.y = 1.25; });
-  H.body.children.forEach(c => { c.position.y += 0.13; });   // hanches relevées : les bottes touchent toujours le sol
-  H.head.scale.setScalar(0.86); H.head.position.y -= 0.03;
+
+// Poses : marche / course (amp 0..1), repos, saut, assis
+function poseWalk(H, amp, dt, t) {
+  const s = Math.sin(H.phase), c = Math.cos(H.phase);
+  for (let i = 0; i < 2; i++) {
+    const k = i === 0 ? 1 : -1;
+    H.hips[i].rotation.set(-k * s * 0.5 * amp, 0, 0);
+    H.knees[i].rotation.x = 0.08 + Math.max(0, k * c) * 1.05 * amp;
+    H.shoulders[i].rotation.set(k * s * 0.42 * amp, 0, (i === 0 ? -1 : 1) * 0.07);
+    H.elbows[i].rotation.x = -(0.2 + 0.45 * amp * (1 + k * s) / 2);
+  }
+  H.pelvis.position.y = 0.88 + amp * 0.03 * (Math.abs(c) - 0.6);
+  H.pelvis.rotation.y = s * 0.1 * amp;
+  H.chest.rotation.set(0.04 + 0.1 * amp * amp, -s * 0.18 * amp, 0);
+  H.head.rotation.set(-0.04 - 0.08 * amp * amp, s * 0.08 * amp + H.look, 0);
+  if (H.scarfTail) H.scarfTail.rotation.x = -0.15 - 0.5 * amp - 0.1 * Math.abs(s) * amp;
 }
-const blob = new THREE.Mesh(new THREE.CircleGeometry(0.32, 24), new THREE.MeshBasicMaterial({ color: 0x281838, transparent: true, opacity: 0.25, depthWrite: false }));
+function poseIdle(H, t) {
+  const br = Math.sin(t * 1.9 + H.phase), sway = Math.sin(t * 0.5 + H.phase);
+  for (let i = 0; i < 2; i++) {
+    const k = i === 0 ? -1 : 1;
+    H.hips[i].rotation.set(0, 0, k * 0.02);
+    H.knees[i].rotation.x = 0.04 + (i === 0 ? 0.04 * (1 + sway) : 0);
+    H.shoulders[i].rotation.set(0.04 + br * 0.015, 0, k * (0.08 + br * 0.01));
+    H.elbows[i].rotation.x = -0.18;
+  }
+  H.pelvis.position.y = 0.88 - 0.006 * (1 + sway); H.pelvis.rotation.set(0, 0, sway * 0.02);
+  H.chest.rotation.set(0.02 + br * 0.012, 0, -sway * 0.02);
+  H.head.rotation.set(0, H.look, 0);
+  if (H.scarfTail) H.scarfTail.rotation.x = -0.1 + br * 0.03;
+}
+function poseJump(H) {
+  [-0.75, -0.2].forEach((a, i) => { H.hips[i].rotation.set(a, 0, 0); H.knees[i].rotation.x = i === 0 ? 1.0 : 0.55; });
+  H.shoulders[0].rotation.set(-0.4, 0, -0.55); H.shoulders[1].rotation.set(-0.2, 0, 0.55);
+  H.elbows.forEach(e => e.rotation.x = -0.5);
+  H.pelvis.position.y = 0.88; H.chest.rotation.set(0.12, 0, 0); H.head.rotation.set(-0.1, 0, 0);
+  if (H.scarfTail) H.scarfTail.rotation.x = -1.0;
+}
+function poseSit(H, t) {
+  H.hips.forEach(h => h.rotation.set(-1.52, 0, 0)); H.knees.forEach(k => k.rotation.x = 1.5);
+  H.shoulders.forEach((sh, i) => sh.rotation.set(-0.45, 0, (i ? 1 : -1) * 0.12)); H.elbows.forEach(e => e.rotation.x = -0.75);
+  H.pelvis.position.y = 0.53 / H.root.scale.y; H.pelvis.rotation.set(0, 0, 0);
+  H.chest.rotation.set(0.06 + Math.sin(t * 1.9 + H.phase) * 0.01, 0, 0);
+  H.head.rotation.set(0.05, H.look, 0);
+}
+
+// ---------- Héros ----------
+const HERO = makeHuman({ height: 1.72, build: 1.0, skin: 0xe0ad8a, lips: 0xb9776a, eyes: 0x5a3b22, hair: 0x4a2a18, hairStyle: "messy",
+  shirt: 0x2c2430, coat: 0x3b2233, trim: 0xc8a050, pants: 0x25222a, shoes: 0x5a3a24, highBoots: true, scarf: 0x5c2f8f, hood: true });
+scene.add(HERO.root);
+const H = HERO;
+const blobGeo = new THREE.CircleGeometry(0.3, 24), blobMat = new THREE.MeshBasicMaterial({ color: 0x14100c, transparent: true, opacity: 0.3, depthWrite: false });
+const blob = new THREE.Mesh(blobGeo, blobMat.clone());
 blob.rotation.x = -Math.PI / 2; blob.scale.set(1, 0.7, 1); scene.add(blob);
 let heroYaw = Math.PI, walkPhase = 0;
 function animateHero(dt, now, airborne) {
-  // rotation fluide vers la direction de marche
   let d = p.facing - heroYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
   heroYaw += d * Math.min(1, dt * 12);
-  H.hero.rotation.y = heroYaw;
-  H.hero.position.set(p.x, p.y, p.z);
+  H.root.rotation.y = heroYaw;
+  H.root.position.set(p.x, p.y, p.z);
   const t = now / 1000;
-  if (airborne) {                                 // pose de saut : genoux pliés, bras levés
-    H.legs[0].rotation.x = -0.6; H.legs[1].rotation.x = 0.35;
-    H.arms[0].rotation.set(-0.4, 0, -0.9); H.arms[1].rotation.set(-0.4, 0, 0.9);
-    H.body.position.y = 0; H.tail.rotation.x = -0.9;
-  } else if (p.moving) {                          // marche : balancement opposé bras / jambes, petit rebond
-    walkPhase += dt * 11;
-    const sw = Math.sin(walkPhase);
-    H.legs[0].rotation.x = sw * 0.7; H.legs[1].rotation.x = -sw * 0.7;
-    H.arms[0].rotation.set(-sw * 0.6, 0, -0.12); H.arms[1].rotation.set(sw * 0.6, 0, 0.12);
-    H.body.position.y = Math.abs(Math.cos(walkPhase)) * 0.045;
-    H.tail.rotation.x = -0.5 - Math.abs(sw) * 0.3;
-    H.head.rotation.z = sw * 0.04;
-  } else {                                        // repos : respiration légère
-    const br = Math.sin(t * 2.2);
-    for (const l of H.legs) l.rotation.x *= 0.8;
-    H.arms[0].rotation.set(0, 0, -0.1 - br * 0.02); H.arms[1].rotation.set(0, 0, 0.1 + br * 0.02);
-    H.body.position.y = br * 0.008;
-    H.tail.rotation.x = -0.15 + br * 0.04;
-    H.head.rotation.z *= 0.9;
+  if (airborne) poseJump(H);
+  else if (p.moving) { H.phase += dt * SPEED * 3.9; poseWalk(H, 1, dt, t); }
+  else poseIdle(H, t);
+}
+
+// ---------- PNJ : élèves qui se promènent, discutent, s'assoient ----------
+const NPC_LOOKS = {
+  skin: [[0xf1c7a8, 0xc98f80], [0xe0ad8a, 0xb9776a], [0xc68863, 0x9c5f50], [0x9a6440, 0x7a4636], [0x6e4529, 0x55301f], [0xf5d3bd, 0xd29a8c]],
+  hair: [0x17120f, 0x3b2416, 0x6b4426, 0xb98a4e, 0x7a2e1a, 0xd8c08a, 0x2a2420],
+  eyes: [0x3a2a1c, 0x4a6a8a, 0x5a6a3a, 0x2a1c14],
+  robe: [0x1e2028, 0x1c2236, 0x1f2e24, 0x3a1c22, 0x2b2420],
+  trim: [0x9aa0a8, 0xb08a4a, 0x8a6a4a],
+  tie: [0x6a1f24, 0x1f3a6a, 0x24502c, 0x8a7a2a, 0x444448],
+};
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const rnd = (a, b) => a + Math.random() * (b - a);
+function makeStudent() {
+  const [skin, lips] = pick(NPC_LOOKS.skin);
+  return makeHuman({ height: rnd(1.58, 1.86), build: rnd(0.9, 1.08), skin, lips, eyes: pick(NPC_LOOKS.eyes), hair: pick(NPC_LOOKS.hair),
+    hairStyle: pick(["short", "short", "messy", "long", "bun"]), shirt: 0xe6e2da, tie: pick(NPC_LOOKS.tie),
+    coat: pick(NPC_LOOKS.robe), trim: pick(NPC_LOOKS.trim), pants: 0x22222a, shoes: 0x1a1816, highBoots: false });
+}
+const NPCS = [];
+const WALL_DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];     // vers les 4 salles
+function randomCourtPoint() {
+  for (let i = 0; i < 60; i++) {
+    const x = rnd(-HALF + 2.3, HALF - 2.3), z = rnd(-HALF + 2.3, HALF - 2.3);
+    if (Math.hypot(x, z) > FOUNT.collide + 1.0 && canStand(x, z)) return [x, z];
+  }
+  return [0, 7];
+}
+function roomTrip() {                                    // aller dans une salle par son arche
+  const [dx, dz] = pick(WALL_DIRS), px = -dz, pz = dx;
+  const depth = HALF + ARCH.depth, off = rnd(-3.5, 3.5), far = rnd(2.5, RD - 1.5);
+  return { path: [[dx * (HALF - 2), dz * (HALF - 2)], [dx * (depth + 0.6), dz * (depth + 0.6)], [dx * (depth + far) + px * off, dz * (depth + far) + pz * off]],
+           back: [[dx * (depth + 0.6), dz * (depth + 0.6)], [dx * (HALF - 2), dz * (HALF - 2)]] };
+}
+function planNext(n) {
+  if (n.back) { n.path = n.back.concat([randomCourtPoint()]); n.back = null; return; }
+  if (Math.random() < 0.25) { const tr = roomTrip(); n.path = tr.path; n.back = tr.back; }
+  else n.path = [randomCourtPoint()];
+}
+function spawnNpcs() {
+  for (let i = 0; i < 10; i++) {
+    const H = makeStudent(), [x, z] = randomCourtPoint();
+    const shadow = new THREE.Mesh(blobGeo, blobMat); shadow.rotation.x = -Math.PI / 2; shadow.scale.set(1, 0.7, 1); scene.add(shadow);
+    const n = { H, x, z, yaw: Math.random() * 6.28, speed: rnd(1.1, 1.5), wait: rnd(0, 4), path: [], back: null, stuck: 0, shadow };
+    scene.add(H.root); NPCS.push(n);
+  }
+  // deux élèves assis sur des bancs
+  for (const [x, z, yaw] of [[-6.5, -HALF + 1.17, 0], [6.5, HALF - 1.17, Math.PI]]) {
+    const H = makeStudent(); H.root.position.set(x, 0, z); H.root.rotation.y = yaw; scene.add(H.root);
+    NPCS.push({ H, x, z, yaw, seated: true });
+  }
+}
+function updateNpcs(dt, now) {
+  const t = now / 1000;
+  for (const n of NPCS) {
+    const H = n.H;
+    // tourner la tête vers le joueur s'il passe tout près
+    const pdx = p.x - n.x, pdz = p.z - n.z, pd = Math.hypot(pdx, pdz);
+    let look = 0;
+    if (pd < 3.5) { let a = Math.atan2(pdx, pdz) - n.yaw; a = Math.atan2(Math.sin(a), Math.cos(a)); if (Math.abs(a) < 1.6) look = Math.max(-0.9, Math.min(0.9, a)); }
+    H.look += (look - H.look) * Math.min(1, dt * 4);
+    if (n.seated) { poseSit(H, t); continue; }
+
+    let moving = false;
+    if (n.wait > 0) {
+      n.wait -= dt;
+      // en pause : se tourner vers un élève proche, comme pour discuter
+      let best = null, bd = 2.2;
+      for (const m of NPCS) if (m !== n && !m.seated) { const d = Math.hypot(m.x - n.x, m.z - n.z); if (d < bd) { bd = d; best = m; } }
+      if (best) { const a = Math.atan2(best.x - n.x, best.z - n.z); let d = a - n.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); n.yaw += d * Math.min(1, dt * 3); }
+      if (n.wait <= 0) planNext(n);
+    } else {
+      if (!n.path.length) planNext(n);
+      const [tx, tz] = n.path[0];
+      let dx = tx - n.x, dz = tz - n.z; const d = Math.hypot(dx, dz);
+      if (d < 0.45) {
+        n.path.shift();
+        if (!n.path.length) n.wait = n.back ? rnd(2, 5) : rnd(1.5, 7);
+      } else {
+        let vx = dx / d, vz = dz / d;
+        // contourner la fontaine par le côté le plus court
+        const fr = Math.hypot(n.x, n.z), R = FOUNT.collide + 1.0;
+        if (fr < R + 1.5 && fr > 1e-3) {
+          const rx = n.x / fr, rz = n.z / fr;
+          if (vx * rx + vz * rz < 0.2) {
+            let tnx = -rz, tnz = rx; if (tnx * vx + tnz * vz < 0) { tnx = -tnx; tnz = -tnz; }
+            const w = Math.min(1, (R + 1.5 - fr) / 1.5);
+            vx = vx * (1 - w) + (tnx + rx * 0.4) * w; vz = vz * (1 - w) + (tnz + rz * 0.4) * w;
+          }
+        }
+        // garder ses distances avec les autres élèves et avec le joueur
+        for (const m of [...NPCS, { x: p.x, z: p.z }]) {
+          if (m === n || m.seated) continue;
+          const ex = n.x - m.x, ez = n.z - m.z, ed = Math.hypot(ex, ez);
+          if (ed < 1.0 && ed > 1e-3) { const w = (1.0 - ed) * 1.6; vx += ex / ed * w; vz += ez / ed * w; }
+        }
+        const vl = Math.hypot(vx, vz) || 1; vx /= vl; vz /= vl;
+        const nx = n.x + vx * n.speed * dt, nz = n.z + vz * n.speed * dt;
+        if (canStand(nx, nz) && Math.hypot(nx, nz) > FOUNT.collide - 0.1) { n.x = nx; n.z = nz; n.stuck = 0; moving = true; }
+        else if ((n.stuck += dt) > 1.5) { n.path = []; n.back = null; n.wait = 0.5; }
+        let a = Math.atan2(vx, vz) - n.yaw; a = Math.atan2(Math.sin(a), Math.cos(a)); n.yaw += a * Math.min(1, dt * 6);
+      }
+    }
+    if (moving) { H.phase += dt * n.speed * 4.5; poseWalk(H, 0.6, dt, t); } else poseIdle(H, t);
+    H.root.position.set(n.x, 0, n.z); H.root.rotation.y = n.yaw;
+    n.shadow.position.set(n.x, 0.012, n.z);
   }
 }
 
@@ -746,6 +924,8 @@ function camOk(x, y, z) {
   return y > 0.25 && CAM_ZONES.some(r => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ && y <= r.maxY);
 }
 
+spawnNpcs();
+
 // ---------- Boucle ----------
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -783,6 +963,10 @@ function frame(now) {
         if (i === 0) p.x = x0; else if (i === 1) p.x = x1; else if (i === 2) p.z = z0; else p.z = z1;
       }
     }
+    for (const n of NPCS) {                              // on ne traverse pas les élèves
+      const ex = p.x - n.x, ez = p.z - n.z, ed = Math.hypot(ex, ez), min = n.seated ? 0 : 0.55;
+      if (ed < min && ed > 1e-4) { p.x = n.x + ex / ed * min; p.z = n.z + ez / ed * min; }
+    }
     p.facing = Math.atan2(mx, mz);
     p.t += dt;
   } else p.t = 0;
@@ -815,10 +999,11 @@ function frame(now) {
 
   animateHero(dt, now, airborne);
   const sh = 1 / (1 + (p.y - ground) * 0.7);            // l'ombre rétrécit et pâlit en hauteur
-  blob.position.set(p.x, ground + 0.01, p.z); blob.scale.set(sh, 0.7 * sh, 1); blob.material.opacity = 0.35 * sh;
+  blob.position.set(p.x, ground + 0.01, p.z); blob.scale.set(sh, 0.7 * sh, 1); blob.material.opacity = 0.3 * sh;
 
   updateFountain(dt, now);
   updateLights(now);
+  updateNpcs(dt, now);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
