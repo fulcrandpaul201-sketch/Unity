@@ -8,7 +8,6 @@ using UnityEngine.InputSystem;
 /// Se lance tout seul quand on appuie sur Play, dans n'importe quelle scène.
 /// Images attendues dans Assets/Resources : room_empty.png (1860x720) et avatar_sheet.png (688x1212, images de 172x303).
 /// La salle mesure 1240x480 unités Unity ; la caméra, rapprochée, suit l'avatar.
-/// Brouillard : la salle est noire au départ, l'avatar éclaire autour de lui et les zones visitées restent en pénombre.
 /// </summary>
 public class RoomPrototype : MonoBehaviour
 {
@@ -23,8 +22,6 @@ public class RoomPrototype : MonoBehaviour
     const float MinZ = 135f, MaxZ = 294f, Margin = 14f;
     const int FrameW = 172, FrameH = 303;   // voir Assets/Resources/avatar_sheet.json
     const float ViewH = 360f;       // hauteur visible (caméra rapprochée)
-    const int FogCell = 4;          // taille d'une case du brouillard (unités)
-    const float DarkUnseen = 0.97f, DarkSeen = 0.5f;
 
     enum Dir { Down = 0, Left = 1, Right = 2, Up = 3 }
 
@@ -33,10 +30,6 @@ public class RoomPrototype : MonoBehaviour
     Transform player;
     float wx = 620f, z = 200f, animT;
     Camera cam;
-    Texture2D fogTex;
-    Color32[] fogPx;
-    float[] explored;
-    int fogW, fogH;
     Dir dir = Dir.Down;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -87,15 +80,6 @@ public class RoomPrototype : MonoBehaviour
         shadow.sprite = MakeShadowSprite();
         shadow.sortingOrder = 9;
 
-        // Brouillard : une texture basse résolution posée sur toute la salle, lissée à l'affichage
-        fogW = (int)RoomW / FogCell; fogH = (int)RoomH / FogCell;
-        fogTex = new Texture2D(fogW, fogH, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
-        fogPx = new Color32[fogW * fogH];
-        explored = new float[fogW * fogH];
-        var fog = new GameObject("Fog").AddComponent<SpriteRenderer>();
-        fog.sprite = Sprite.Create(fogTex, new Rect(0, 0, fogW, fogH), new Vector2(0.5f, 0.5f), 1f / FogCell);
-        fog.sortingOrder = 50;
-
         UpdateVisual(false);
         SnapCamera();
     }
@@ -117,29 +101,6 @@ public class RoomPrototype : MonoBehaviour
 
     float BodyOffset() => AvatarHeight * (Foc / z) * 0.45f;
 
-    // lx, ly : centre de la lumière en coordonnées image (origine en haut à gauche) ; k : perspective
-    void UpdateFog(float lx, float ly, float k)
-    {
-        float rx = 95f * k, ry = 78f * k;
-        for (int j = 0; j < fogH; j++)
-        {
-            float py = RoomH - (j + 0.5f) * FogCell;      // la ligne 0 de la texture est en bas
-            float dy = (py - ly) / ry;
-            for (int i = 0; i < fogW; i++)
-            {
-                float dx = ((i + 0.5f) * FogCell - lx) / rx;
-                float r = Mathf.Sqrt(dx * dx + dy * dy);
-                float light = Mathf.Clamp01((1f - r) / 0.45f);
-                light = light * light * (3f - 2f * light);
-                int n = j * fogW + i;
-                if (light > explored[n]) explored[n] = light;
-                float a = Mathf.Lerp(DarkUnseen, DarkSeen, explored[n]) * (1f - light);
-                fogPx[n] = new Color32(14, 9, 22, (byte)(a * 255f));
-            }
-        }
-        fogTex.SetPixels32(fogPx);
-        fogTex.Apply(false);
-    }
 
     static Texture2D Load(string name)
     {
@@ -221,7 +182,6 @@ public class RoomPrototype : MonoBehaviour
             float f = Mathf.Min(1f, Time.deltaTime * 6f);
             cam.transform.position = new Vector3(Mathf.Lerp(cp.x, t.x, f), Mathf.Lerp(cp.y, t.y, f), cp.z);
         }
-        if (fogTex != null) UpdateFog(sx, sy - BodyOffset(), k);
 
         int col = moving ? Mathf.FloorToInt(animT * 8f) % 4 : 0;
         body.sprite = frames[(int)dir, col];
