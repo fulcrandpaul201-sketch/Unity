@@ -8,9 +8,10 @@ using UnityEngine.InputSystem;
 /// avec alcôve sur chaque mur, piliers, soubassement et corniche, lumière) et avatar vu à la 3e personne.
 /// - ZQSD / WASD (ou stick gauche) : se déplacer par rapport à la caméra
 /// - Souris en maintenant un bouton, flèches ← → (ou stick droit) : tourner la caméra ; molette : zoom
-/// L'avatar est un sprite 2D toujours tourné vers la caméra ; l'image (face / dos / profil) dépend de l'angle de vue.
+/// - Espace (ou bouton A) : sauter
+/// L'avatar est un petit héros 3D low-poly construit en code (bras et jambes animés, rotation vers la marche).
 /// Se lance tout seul quand on appuie sur Play, dans n'importe quelle scène.
-/// Images attendues dans Assets/Resources : avatar_sheet.png (688x1212, images de 172x303),
+/// Images attendues dans Assets/Resources : tex_hopscotch.png (marelle),
 /// tex_brick.png et tex_floor.png (160x160, raccordables, 1 carreau = 2 m : répétés en mosaïque, jamais étirés).
 /// </summary>
 public class RoomPrototype : MonoBehaviour
@@ -45,16 +46,16 @@ public class RoomPrototype : MonoBehaviour
     // Fenêtres sur les murs de gauche et de droite : plein cintre, appui à 1,5 m, sommet à 3,4 m
     const float WinW = 1.4f, WinBottom = 1.5f, WinSpring = 2.7f, WinDepth = 0.45f, WinRing = 0.3f, WinOut = 0.16f, WR = WinW / 2f;
     static readonly float[] WinX = { -6.5f, 6.5f };
-    const int FrameW = 172, FrameH = 303;
-    const int RowDown = 0, RowLeft = 1, RowRight = 2, RowUp = 3;
 
     static readonly Color FloorColor = new Color32(185, 176, 207, 255);
     static readonly Color WallColor = new Color32(135, 120, 166, 255);
     static readonly Color BgColor = new Color32(7, 4, 11, 255);   // obscurité au-dessus des murs
 
-    Sprite[,] frames = new Sprite[4, 4];
-    Transform player, billboard;
-    SpriteRenderer body;
+    Transform player;
+    // avatar 3D : pivots animés
+    Transform heroModel, heroBody, heroHead, scarfTail;
+    Transform[] heroLegs = new Transform[2], heroArms = new Transform[2];
+    float heroYaw, walkPhase;
     Camera cam;
     Vector3 pos = new Vector3(0f, 0f, -5f);
     float facing;                 // angle (degrés) de la direction regardée, autour de Y
@@ -689,25 +690,79 @@ public class RoomPrototype : MonoBehaviour
         else m.color = color;
     }
 
+    // ---------- Avatar 3D : petit héros low-poly (cheveux en épis, écharpe violette, manteau prune) ----------
     void BuildAvatar()
     {
-        var sheetTex = Resources.Load<Texture2D>("avatar_sheet");
-        if (sheetTex == null) { Debug.LogError("RoomPrototype : image 'avatar_sheet' introuvable dans Assets/Resources."); enabled = false; return; }
-        sheetTex.filterMode = FilterMode.Bilinear;
-        float ppu = (FrameH - 2) / AvatarHeight;          // l'avatar mesure AvatarHeight mètres
-        for (int row = 0; row < 4; row++)
-            for (int col = 0; col < 4; col++)
-            {
-                var r = new Rect(col * FrameW + 1, sheetTex.height - (row + 1) * FrameH + 1, FrameW - 2, FrameH - 2);
-                frames[row, col] = Sprite.Create(sheetTex, r, new Vector2(0.5f, 0f), ppu);
-            }
+        Color32 skin = new Color32(242, 194, 155, 255), hair = new Color32(107, 58, 34, 255), hairLight = new Color32(134, 80, 46, 255);
+        Color32 coat = new Color32(64, 36, 58, 255), coatLight = new Color32(85, 48, 73, 255), trim = new Color32(209, 166, 78, 255);
+        Color32 belt = new Color32(91, 58, 34, 255), scarf = new Color32(108, 58, 166, 255), scarfDark = new Color32(85, 40, 138, 255);
+        Color32 pants = new Color32(43, 34, 50, 255), boots = new Color32(122, 74, 42, 255), eye = new Color32(43, 26, 36, 255);
 
         player = new GameObject("Player").transform;
-        billboard = new GameObject("Sprite").transform;
-        billboard.SetParent(player, false);
-        body = billboard.gameObject.AddComponent<SpriteRenderer>();
+        heroModel = new GameObject("Hero").transform; heroModel.SetParent(player, false);     // regarde vers +z
+        heroBody = Pivot(heroModel, "Body", Vector3.zero);                                    // rebondit en marchant
 
-        // ombre ronde au sol
+        for (int i = 0; i < 2; i++)                                                           // jambes (pivot à la hanche)
+        {
+            float sx = i == 0 ? -1f : 1f;
+            var hip = Pivot(heroBody, "Hip", new Vector3(sx * 0.11f, 0.5f, 0f));
+            Prim(hip, PrimitiveType.Cylinder, new Vector3(0f, -0.17f, 0f), new Vector3(0.15f, 0.17f, 0.15f), pants);
+            Prim(hip, PrimitiveType.Cube, new Vector3(0f, -0.41f, 0.03f), new Vector3(0.15f, 0.17f, 0.24f), boots);
+            Prim(hip, PrimitiveType.Cube, new Vector3(0f, -0.32f, 0f), new Vector3(0.165f, 0.05f, 0.17f), boots);
+            heroLegs[i] = hip;
+        }
+        // manteau, ourlet doré, ceinture et boucle, bordure avant, broche
+        Prim(heroBody, PrimitiveType.Cylinder, new Vector3(0f, 0.78f, 0f), new Vector3(0.5f, 0.25f, 0.46f), coat);
+        Prim(heroBody, PrimitiveType.Cylinder, new Vector3(0f, 0.55f, 0f), new Vector3(0.56f, 0.03f, 0.52f), trim);
+        Prim(heroBody, PrimitiveType.Cylinder, new Vector3(0f, 0.74f, 0f), new Vector3(0.48f, 0.03f, 0.47f), belt);
+        Prim(heroBody, PrimitiveType.Cube, new Vector3(0f, 0.74f, 0.235f), new Vector3(0.06f, 0.06f, 0.03f), trim);
+        Prim(heroBody, PrimitiveType.Cube, new Vector3(0f, 0.79f, 0.24f), new Vector3(0.035f, 0.42f, 0.02f), trim);
+        Prim(heroBody, PrimitiveType.Cube, new Vector3(0f, 0.92f, 0.22f), new Vector3(0.08f, 0.1f, 0.02f), trim);
+        for (int i = 0; i < 2; i++)                                                           // bras (pivot à l'épaule)
+        {
+            float sx = i == 0 ? -1f : 1f;
+            var sh = Pivot(heroBody, "Shoulder", new Vector3(sx * 0.25f, 0.98f, 0f));
+            Prim(sh, PrimitiveType.Cylinder, new Vector3(0f, -0.16f, 0f), new Vector3(0.13f, 0.16f, 0.13f), coatLight);
+            Prim(sh, PrimitiveType.Cylinder, new Vector3(0f, -0.3f, 0f), new Vector3(0.14f, 0.025f, 0.14f), trim);
+            Prim(sh, PrimitiveType.Sphere, new Vector3(0f, -0.37f, 0f), Vector3.one * 0.12f, skin);
+            heroArms[i] = sh;
+        }
+        // écharpe : tour du cou + pan dans le dos
+        Prim(heroBody, PrimitiveType.Cylinder, new Vector3(0f, 1.06f, 0f), new Vector3(0.42f, 0.065f, 0.42f), scarf);
+        scarfTail = Pivot(heroBody, "Scarf tail", new Vector3(0.08f, 1.04f, -0.15f));
+        Prim(scarfTail, PrimitiveType.Cube, new Vector3(0f, -0.17f, 0f), new Vector3(0.12f, 0.34f, 0.04f), scarfDark);
+        // tête : visage, yeux, oreilles, calotte et mèches en épis
+        heroHead = Pivot(heroBody, "Head", new Vector3(0f, 1.3f, 0f));
+        Prim(heroHead, PrimitiveType.Sphere, Vector3.zero, Vector3.one * 0.5f, skin);
+        for (int i = 0; i < 2; i++)
+        {
+            float sx = i == 0 ? -1f : 1f;
+            Prim(heroHead, PrimitiveType.Cube, new Vector3(sx * 0.09f, -0.01f, 0.235f), new Vector3(0.06f, 0.09f, 0.02f), eye);
+            Prim(heroHead, PrimitiveType.Cube, new Vector3(sx * 0.09f - 0.012f, 0.015f, 0.247f), new Vector3(0.022f, 0.022f, 0.01f), Color.white);
+            Prim(heroHead, PrimitiveType.Sphere, new Vector3(sx * 0.25f, -0.02f, 0f), Vector3.one * 0.09f, skin);
+        }
+        Prim(heroHead, PrimitiveType.Sphere, new Vector3(0f, 0.07f, -0.04f), new Vector3(0.55f, 0.46f, 0.54f), hair);
+        var rnd = new System.Random(11);
+        var tufts = new System.Collections.Generic.List<Vector2>();
+        for (int i = 0; i < 9; i++) tufts.Add(new Vector2(i / 9f * Mathf.PI * 2f, 0.55f));
+        for (int i = 0; i < 5; i++) tufts.Add(new Vector2(i / 5f * Mathf.PI * 2f + 0.3f, 0.2f));
+        for (int i = 0; i < 4; i++) tufts.Add(new Vector2(Mathf.PI + (i - 1.5f) * 0.45f, 0.95f));
+        foreach (var t in tufts)
+        {
+            Vector3 dir = new Vector3(Mathf.Sin(t.x) * Mathf.Sin(t.y), Mathf.Cos(t.y), Mathf.Cos(t.x) * Mathf.Sin(t.y));
+            if (dir.z > 0.55f && t.y > 0.5f) continue;                                         // dégager le visage
+            float w = 0.2f + (float)rnd.NextDouble() * 0.06f, h = 0.17f + (float)rnd.NextDouble() * 0.06f;
+            var tuft = Prim(heroHead, PrimitiveType.Cube, new Vector3(dir.x * 0.22f, 0.07f + dir.y * 0.2f, -0.04f + dir.z * 0.22f),
+                            new Vector3(w * 0.6f, h, w * 0.6f), rnd.NextDouble() > 0.65 ? hairLight : hair);
+            tuft.localRotation = Quaternion.FromToRotation(Vector3.up, (dir + new Vector3(0f, 0.35f, 0f)).normalized) * Quaternion.Euler(0f, 45f, 0f);
+        }
+        foreach (var (x, rz) in new[] { (-0.12f, 30f), (-0.03f, 9f), (0.07f, -12f), (0.15f, -32f) })   // frange
+        {
+            var f = Prim(heroHead, PrimitiveType.Cube, new Vector3(x, 0.14f, 0.2f), new Vector3(0.09f, 0.15f, 0.07f), hair);
+            f.localRotation = Quaternion.Euler(28f, 0f, rz);
+        }
+
+        // ombre ronde au sol (en plus de l'ombre portée)
         var blob = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         blob.name = "Shadow";
         Destroy(blob.GetComponent<Collider>());
@@ -718,6 +773,57 @@ public class RoomPrototype : MonoBehaviour
         var br = blob.GetComponent<Renderer>();
         br.material.color = new Color32(40, 24, 56, 255);
         br.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+    }
+
+    static Transform Pivot(Transform parent, string name, Vector3 localPos)
+    {
+        var t = new GameObject(name).transform;
+        t.SetParent(parent, false);
+        t.localPosition = localPos;
+        return t;
+    }
+
+    static Transform Prim(Transform parent, PrimitiveType type, Vector3 localPos, Vector3 scale, Color color)
+    {
+        var go = GameObject.CreatePrimitive(type);
+        Destroy(go.GetComponent<Collider>());
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = localPos;
+        go.transform.localScale = scale;
+        go.GetComponent<Renderer>().material.color = color;
+        return go.transform;
+    }
+
+    void AnimateHero(bool moving, bool airborne)
+    {
+        heroYaw = Mathf.LerpAngle(heroYaw, facing, Mathf.Min(1f, Time.deltaTime * 12f));     // rotation fluide
+        heroModel.localRotation = Quaternion.Euler(0f, heroYaw, 0f);
+        if (airborne)                                   // pose de saut : genoux pliés, bras levés
+        {
+            heroLegs[0].localRotation = Quaternion.Euler(-34f, 0f, 0f); heroLegs[1].localRotation = Quaternion.Euler(20f, 0f, 0f);
+            heroArms[0].localRotation = Quaternion.Euler(-23f, 0f, -52f); heroArms[1].localRotation = Quaternion.Euler(-23f, 0f, 52f);
+            heroBody.localPosition = Vector3.zero;
+            scarfTail.localRotation = Quaternion.Euler(-52f, 0f, 0f);
+        }
+        else if (moving)                                // marche : bras et jambes opposés, petit rebond
+        {
+            walkPhase += Time.deltaTime * 11f;
+            float sw = Mathf.Sin(walkPhase);
+            heroLegs[0].localRotation = Quaternion.Euler(sw * 40f, 0f, 0f); heroLegs[1].localRotation = Quaternion.Euler(-sw * 40f, 0f, 0f);
+            heroArms[0].localRotation = Quaternion.Euler(-sw * 34f, 0f, -7f); heroArms[1].localRotation = Quaternion.Euler(sw * 34f, 0f, 7f);
+            heroBody.localPosition = new Vector3(0f, Mathf.Abs(Mathf.Cos(walkPhase)) * 0.045f, 0f);
+            scarfTail.localRotation = Quaternion.Euler(-29f - Mathf.Abs(sw) * 17f, 0f, 0f);
+            heroHead.localRotation = Quaternion.Euler(0f, 0f, sw * 2.3f);
+        }
+        else                                            // repos : respiration légère
+        {
+            float br = Mathf.Sin(Time.time * 2.2f);
+            foreach (var l in heroLegs) l.localRotation = Quaternion.Slerp(l.localRotation, Quaternion.identity, 0.2f);
+            heroArms[0].localRotation = Quaternion.Euler(0f, 0f, -6f - br); heroArms[1].localRotation = Quaternion.Euler(0f, 0f, 6f + br);
+            heroBody.localPosition = new Vector3(0f, br * 0.008f, 0f);
+            scarfTail.localRotation = Quaternion.Euler(-9f + br * 2f, 0f, 0f);
+            heroHead.localRotation = Quaternion.Slerp(heroHead.localRotation, Quaternion.identity, 0.1f);
+        }
     }
 
     void ReadInput(out Vector2 move, out Vector2 look, out float zoom, out bool jump)
@@ -823,24 +929,13 @@ public class RoomPrototype : MonoBehaviour
         cam.transform.position = camPos;
         cam.transform.LookAt(target);
 
-        // le sprite fait face à la caméra (rotation autour de Y seulement)
-        Vector3 view = pos - camPos; view.y = 0f;
-        if (view.sqrMagnitude > 0.0001f) billboard.rotation = Quaternion.LookRotation(view.normalized, Vector3.up);
-
-        // image selon l'angle entre la direction de l'avatar et la caméra
-        Vector3 f = Quaternion.Euler(0f, facing, 0f) * Vector3.forward;
-        Vector3 v = view.normalized;
-        float dot = Vector3.Dot(f, v);
-        float side = Vector3.Dot(f, Vector3.Cross(Vector3.up, v));   // > 0 : regarde vers la droite de l'écran
-        int row = dot < -0.7f ? RowDown : dot > 0.7f ? RowUp : side > 0f ? RowRight : RowLeft;
         bool airborne = pos.y > ground + 1e-3f;
-        int col = airborne ? 1 : moving ? Mathf.FloorToInt(animT * 8f) % 4 : 0;   // en l'air : jambes écartées
+        AnimateHero(moving, airborne);
         if (shadowBlob != null)   // l'ombre reste au sol et rétrécit en hauteur
         {
             float sh = 1f / (1f + (pos.y - ground) * 0.7f);
             shadowBlob.localPosition = new Vector3(0f, ground + 0.005f - pos.y, 0f);
             shadowBlob.localScale = new Vector3(0.64f * sh, 0.002f, 0.45f * sh);
         }
-        body.sprite = frames[row, col];
     }
 }

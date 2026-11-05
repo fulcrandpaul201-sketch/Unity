@@ -1,6 +1,5 @@
 // Pièce vide en 3D, vue à la 3e personne : l'avatar se déplace par rapport à la caméra,
 // qu'on fait tourner autour de lui (souris / doigt / flèches).
-const AVATAR_URI = "data:image/png;base64,{{AVATAR}}";
 const BRICK_URI = "data:image/png;base64,{{BRICK}}";
 const FLOOR_URI = "data:image/png;base64,{{FLOOR}}";
 const HOPSCOTCH_URI = "data:image/png;base64,{{HOPSCOTCH}}";
@@ -12,9 +11,6 @@ const TILE = 2;                                              // une texture couv
 const SPEED = 4.2;                                           // m/s
 const JUMP_SPEED = 5.4, GRAVITY = 15;                        // saut : environ 1 m de haut
 const PLAYER_R = 0.3;                                        // rayon de collision de l'avatar
-const AV_H = 1.7;                                            // taille de l'avatar (m)
-const FW = 172, FH = 303, SW = 688, SH = 1212;               // planche : images de 172x303 (voir avatar_sheet.json)
-const ROW = { down: 0, left: 1, right: 2, up: 3 };
 const COLORS = { bg: 0x07040b };                             // obscurité au-dessus des murs
 
 // ---------- Scène ----------
@@ -436,20 +432,113 @@ const lamp = new THREE.PointLight(0xfff1dc, 1.0, 34, 1.5);
 lamp.position.set(0, LIGHT_H + 0.8, 0); lamp.castShadow = true; lamp.shadow.mapSize.set(1024, 1024);
 scene.add(lamp);
 
-// ---------- Avatar (sprite toujours face à la caméra) ----------
-const tex = new THREE.Texture();
-tex.encoding = THREE.sRGBEncoding;
-tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false;
-tex.repeat.set((FW - 2) / SW, (FH - 2) / SH);
-const avatar = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, alphaTest: 0.3 }));
-avatar.center.set(0.5, 0);
-avatar.scale.set(AV_H * FW / FH, AV_H, 1);
-scene.add(avatar);
-const blob = new THREE.Mesh(new THREE.CircleGeometry(0.32, 24), new THREE.MeshBasicMaterial({ color: 0x281838, transparent: true, opacity: 0.35, depthWrite: false }));
-blob.rotation.x = -Math.PI / 2; blob.scale.set(1, 0.7, 1); scene.add(blob);
+// ---------- Avatar 3D : petit héros low-poly (cheveux en épis, écharpe violette, manteau prune) ----------
+// Origine aux pieds, le personnage regarde vers +z. Les membres pivotent depuis la hanche / l'épaule.
+const HERO_COL = { skin: 0xf2c29b, hair: 0x6b3a22, hairLight: 0x86502e, coat: 0x40243a, coatLight: 0x553049, trim: 0xd1a64e,
+                   belt: 0x5b3a22, scarf: 0x6c3aa6, scarfDark: 0x55288a, pants: 0x2b2232, boots: 0x7a4a2a, eye: 0x2b1a24 };
+const heroMat = {};
+for (const [k, c] of Object.entries(HERO_COL))      // couleurs données en sRGB, converties pour l'éclairage
+  heroMat[k] = new THREE.MeshStandardMaterial({ color: new THREE.Color(c).convertSRGBToLinear(), roughness: 0.8, flatShading: true });
+heroMat.eyeShine = new THREE.MeshBasicMaterial({ color: 0xffffff });
+function part(geo, mat, x, y, z, parent) {
+  const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m;
+}
+function makeHero() {
+  const hero = new THREE.Group(), body = new THREE.Group();
+  hero.add(body);                                                   // « body » rebondit pendant la marche
+  const limb = (r1, r2, h, mat, seg = 7) => { const g = new THREE.CylinderGeometry(r1, r2, h, seg); g.translate(0, -h / 2, 0); return [g, mat]; };
 
-function setFrame(row, col) {
-  tex.offset.set((col * FW + 1) / SW, 1 - ((row + 1) * FH - 1) / SH);
+  // jambes (pivot à la hanche) avec bottes
+  const legs = [];
+  for (const sx of [-1, 1]) {
+    const hip = new THREE.Group(); hip.position.set(sx * 0.11, 0.5, 0); body.add(hip);
+    part(...limb(0.075, 0.07, 0.34, heroMat.pants), 0, 0, 0, hip);
+    const boot = part(new THREE.BoxGeometry(0.15, 0.17, 0.24), heroMat.boots, 0, -0.41, 0.03, hip);
+    part(new THREE.BoxGeometry(0.165, 0.05, 0.17), heroMat.boots, 0, -0.32, 0, hip);   // revers de botte
+    legs.push(hip);
+  }
+  // manteau : tronc évasé + pans, bordures dorées, ceinture
+  part(new THREE.CylinderGeometry(0.2, 0.27, 0.5, 8), heroMat.coat, 0, 0.78, 0, body);
+  part(new THREE.CylinderGeometry(0.275, 0.29, 0.06, 8), heroMat.trim, 0, 0.53, 0, body);          // ourlet doré
+  part(new THREE.CylinderGeometry(0.23, 0.235, 0.06, 8), heroMat.belt, 0, 0.74, 0, body);          // ceinture
+  part(new THREE.BoxGeometry(0.06, 0.06, 0.03), heroMat.trim, 0, 0.74, 0.235, body);               // boucle
+  part(new THREE.BoxGeometry(0.035, 0.42, 0.02), heroMat.trim, 0, 0.79, 0.255, body);              // bordure avant
+  part(new THREE.BoxGeometry(0.08, 0.1, 0.02), heroMat.trim, 0, 0.92, 0.215, body);                // broche
+  // bras (pivot à l'épaule) avec manchette dorée et main
+  const arms = [];
+  for (const sx of [-1, 1]) {
+    const sh = new THREE.Group(); sh.position.set(sx * 0.25, 0.98, 0); body.add(sh);
+    part(...limb(0.065, 0.06, 0.32, heroMat.coatLight), 0, 0, 0, sh);
+    part(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 7), heroMat.trim, 0, -0.3, 0, sh);
+    part(new THREE.IcosahedronGeometry(0.06, 0), heroMat.skin, 0, -0.37, 0, sh);
+    arms.push(sh);
+  }
+  // écharpe : tour du cou + pan qui flotte dans le dos
+  part(new THREE.TorusGeometry(0.15, 0.065, 6, 12), heroMat.scarf, 0, 1.06, 0, body).rotation.x = Math.PI / 2;
+  const tail = new THREE.Group(); tail.position.set(0.08, 1.04, -0.13); body.add(tail);
+  const tg = new THREE.BoxGeometry(0.12, 0.34, 0.04); tg.translate(0, -0.17, 0);
+  part(tg, heroMat.scarfDark, 0, 0, 0, tail);
+  // tête : visage, yeux, cheveux en épis
+  const head = new THREE.Group(); head.position.set(0, 1.3, 0); body.add(head);
+  part(new THREE.IcosahedronGeometry(0.25, 1), heroMat.skin, 0, 0, 0, head);
+  for (const sx of [-1, 1]) {
+    part(new THREE.BoxGeometry(0.06, 0.09, 0.02), heroMat.eye, sx * 0.09, -0.01, 0.235, head);
+    part(new THREE.BoxGeometry(0.022, 0.022, 0.01), heroMat.eyeShine, sx * 0.09 - 0.012, 0.015, 0.247, head);
+    part(new THREE.IcosahedronGeometry(0.045, 0), heroMat.skin, sx * 0.25, -0.02, 0, head);      // oreilles
+  }
+  part(new THREE.IcosahedronGeometry(0.27, 1), heroMat.hair, 0, 0.07, -0.04, head).scale.set(1.02, 0.85, 1.0);   // calotte
+  // mèches en épis : courtes et larges, inclinées vers l'extérieur, tout autour de la calotte
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const tufts = [];
+  for (let i = 0; i < 9; i++) tufts.push([i / 9 * Math.PI * 2, 0.55]);             // couronne
+  for (let i = 0; i < 5; i++) tufts.push([i / 5 * Math.PI * 2 + 0.3, 0.2]);         // sommet
+  for (let i = 0; i < 4; i++) tufts.push([Math.PI + (i - 1.5) * 0.45, 0.95]);       // nuque
+  for (const [az, el] of tufts) {
+    const dir = new THREE.Vector3(Math.sin(az) * Math.sin(el), Math.cos(el), Math.cos(az) * Math.sin(el));
+    if (dir.z > 0.55 && el > 0.5) continue;                                        // dégager le visage
+    const sp = part(new THREE.ConeGeometry(0.1 + rnd() * 0.03, 0.17 + rnd() * 0.06, 5), rnd() > 0.65 ? heroMat.hairLight : heroMat.hair,
+                    dir.x * 0.22, 0.07 + dir.y * 0.2, -0.04 + dir.z * 0.22, head);
+    sp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.add(new THREE.Vector3(0, 0.35, 0)).normalize());
+  }
+  // frange : mèches qui retombent sur le front
+  for (const [x, rz] of [[-0.12, 0.5], [-0.03, 0.15], [0.07, -0.2], [0.15, -0.55]]) {
+    const f = part(new THREE.ConeGeometry(0.07, 0.17, 5), heroMat.hair, x, 0.13, 0.2, head);
+    f.rotation.set(Math.PI - 0.5, 0, rz);
+  }
+  return { hero, body, legs, arms, head, tail };
+}
+const H = makeHero();
+scene.add(H.hero);
+const blob = new THREE.Mesh(new THREE.CircleGeometry(0.32, 24), new THREE.MeshBasicMaterial({ color: 0x281838, transparent: true, opacity: 0.25, depthWrite: false }));
+blob.rotation.x = -Math.PI / 2; blob.scale.set(1, 0.7, 1); scene.add(blob);
+let heroYaw = Math.PI, walkPhase = 0;
+function animateHero(dt, now, airborne) {
+  // rotation fluide vers la direction de marche
+  let d = p.facing - heroYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+  heroYaw += d * Math.min(1, dt * 12);
+  H.hero.rotation.y = heroYaw;
+  H.hero.position.set(p.x, p.y, p.z);
+  const t = now / 1000;
+  if (airborne) {                                 // pose de saut : genoux pliés, bras levés
+    H.legs[0].rotation.x = -0.6; H.legs[1].rotation.x = 0.35;
+    H.arms[0].rotation.set(-0.4, 0, -0.9); H.arms[1].rotation.set(-0.4, 0, 0.9);
+    H.body.position.y = 0; H.tail.rotation.x = -0.9;
+  } else if (p.moving) {                          // marche : balancement opposé bras / jambes, petit rebond
+    walkPhase += dt * 11;
+    const sw = Math.sin(walkPhase);
+    H.legs[0].rotation.x = sw * 0.7; H.legs[1].rotation.x = -sw * 0.7;
+    H.arms[0].rotation.set(-sw * 0.6, 0, -0.12); H.arms[1].rotation.set(sw * 0.6, 0, 0.12);
+    H.body.position.y = Math.abs(Math.cos(walkPhase)) * 0.045;
+    H.tail.rotation.x = -0.5 - Math.abs(sw) * 0.3;
+    H.head.rotation.z = sw * 0.04;
+  } else {                                        // repos : respiration légère
+    const br = Math.sin(t * 2.2);
+    for (const l of H.legs) l.rotation.x *= 0.8;
+    H.arms[0].rotation.set(0, 0, -0.1 - br * 0.02); H.arms[1].rotation.set(0, 0, 0.1 + br * 0.02);
+    H.body.position.y = br * 0.008;
+    H.tail.rotation.x = -0.15 + br * 0.04;
+    H.head.rotation.z *= 0.9;
+  }
 }
 
 // ---------- État ----------
@@ -573,13 +662,7 @@ function frame(now) {
   cx = Math.max(-m, Math.min(m, cx)); cz = Math.max(-m, Math.min(m, cz)); cy = Math.max(0.3, Math.min(WALL_H - 0.25, cy));
   camera.position.set(cx, cy, cz); camera.lookAt(tx, ty, tz);
 
-  // image de l'avatar selon l'angle entre sa direction et la caméra
-  const vx = p.x - cx, vz = p.z - cz, vl = Math.hypot(vx, vz) || 1;
-  const dfx = Math.sin(p.facing), dfz = Math.cos(p.facing);
-  const dot = (dfx * vx + dfz * vz) / vl, side = (dfx * -vz + dfz * vx) / vl;
-  const row = dot < -0.7 ? ROW.down : dot > 0.7 ? ROW.up : side > 0 ? ROW.right : ROW.left;
-  setFrame(row, airborne ? 1 : p.moving ? Math.floor(p.t * 8) % 4 : 0);   // en l'air : jambes écartées
-  avatar.position.set(p.x, p.y, p.z);
+  animateHero(dt, now, airborne);
   const sh = 1 / (1 + (p.y - ground) * 0.7);            // l'ombre rétrécit et pâlit en hauteur
   blob.position.set(p.x, ground + 0.01, p.z); blob.scale.set(sh, 0.7 * sh, 1); blob.material.opacity = 0.35 * sh;
 
@@ -589,6 +672,4 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-const img = new Image();
-img.onload = () => { tex.image = img; tex.needsUpdate = true; requestAnimationFrame(frame); };
-img.src = AVATAR_URI;
+requestAnimationFrame(frame);
