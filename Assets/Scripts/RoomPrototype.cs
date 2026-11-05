@@ -4,41 +4,35 @@ using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Prototype : salle carrée vue de dessus, sans texture, et un avatar qui se déplace librement
-/// (haut / bas / gauche / droite) avec les flèches, ZQSD ou une manette.
+/// Prototype 3D : pièce carrée vide (sol, 4 murs, plafond, lumière) et avatar vu à la 3e personne.
+/// - ZQSD / WASD (ou stick gauche) : se déplacer par rapport à la caméra
+/// - Souris en maintenant un bouton, flèches ← → (ou stick droit) : tourner la caméra ; molette : zoom
+/// L'avatar est un sprite 2D toujours tourné vers la caméra ; l'image (face / dos / profil) dépend de l'angle de vue.
 /// Se lance tout seul quand on appuie sur Play, dans n'importe quelle scène.
 /// Image attendue : Assets/Resources/avatar_sheet.png (688x1212, images de 172x303).
-/// 1 unité Unity = 1 pixel de la page web de référence (écran de 960x720).
 /// </summary>
 public class RoomPrototype : MonoBehaviour
 {
     public static bool AutoStart = true;
 
-    // Dimensions (mêmes valeurs que Tools/web/game.js)
-    const float ScreenW = 960f, ScreenH = 720f;
-    const float Floor = 560f;                           // côté du sol carré
-    const float Side = 40f, Top = 120f, Bottom = 40f;   // épaisseur des murs
-    const float Face = 64f;                             // face visible du mur du haut
-    const float AvatarHeight = 120f;
-    const float FootW = 22f, FootH = 24f;               // zone de collision aux pieds
-    const float Speed = 230f;
-    const int FrameW = 172, FrameH = 303;               // voir Assets/Resources/avatar_sheet.json
+    // Réglages (mêmes valeurs que Tools/web/game.js)
+    const float Room = 20f, Half = Room / 2f, WallH = 4f, WallT = 0.4f;
+    const float Speed = 4.2f, AvatarHeight = 1.7f;
+    const int FrameW = 172, FrameH = 303;
+    const int RowDown = 0, RowLeft = 1, RowRight = 2, RowUp = 3;
 
-    static readonly Color32 BgColor = new Color32(42, 32, 56, 255);
-    static readonly Color32 WallTopColor = new Color32(91, 76, 120, 255);
-    static readonly Color32 WallFaceColor = new Color32(135, 120, 166, 255);
-    static readonly Color32 FloorColor = new Color32(185, 176, 207, 255);
-    static readonly Color32 ShadeColor = new Color32(40, 28, 60, 41);
-
-    enum Dir { Down = 0, Left = 1, Right = 2, Up = 3 }
+    static readonly Color FloorColor = new Color32(185, 176, 207, 255);
+    static readonly Color WallColor = new Color32(135, 120, 166, 255);
+    static readonly Color CeilingColor = new Color32(78, 65, 104, 255);
+    static readonly Color BgColor = new Color32(29, 21, 38, 255);
 
     Sprite[,] frames = new Sprite[4, 4];
+    Transform player, billboard;
     SpriteRenderer body;
-    Transform player;
-    Vector2 pos = new Vector2(Floor / 2f, Floor / 2f + 60f);   // pieds, en pixels depuis le coin haut-gauche du sol
-    float animT;
-    Dir dir = Dir.Down;
-    Sprite white;
+    Camera cam;
+    Vector3 pos = new Vector3(0f, 0f, -3f);
+    float facing;                 // angle (degrés) de la direction regardée, autour de Y
+    float yaw = 0f, pitch = 20f, dist = 5.5f, animT;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
@@ -52,117 +46,169 @@ public class RoomPrototype : MonoBehaviour
         new GameObject("RoomPrototype").AddComponent<RoomPrototype>();
     }
 
-    // Convertit un point « écran de référence » (origine en haut à gauche) en position Unity
-    static Vector3 ToWorld(float x, float y, float zOrder = 0f) => new Vector3(x - ScreenW / 2f, ScreenH / 2f - y, zOrder);
-
     void Start()
     {
-        var cam = Camera.main;
+        cam = Camera.main;
         if (cam == null) cam = new GameObject("Main Camera").AddComponent<Camera>();
-        cam.orthographic = true;
-        cam.orthographicSize = ScreenH / 2f;
-        cam.transform.position = new Vector3(0f, 0f, -10f);
-        cam.backgroundColor = BgColor;
+        cam.orthographic = false;
+        cam.fieldOfView = 60f;
+        cam.nearClipPlane = 0.1f;
         cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = BgColor;
 
-        var tex = Texture2D.whiteTexture;
-        white = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0f, 1f), tex.width);   // 1x1 unité, pivot en haut à gauche
+        BuildRoom();
+        BuildAvatar();
+        UpdateCameraAndAvatar(false);
+    }
 
-        float rx = (ScreenW - Floor) / 2f, ry = Top;
-        Rect("WallTop", rx - Side, 0f, Floor + Side * 2f, Top + Floor + Bottom, WallTopColor, -30);
-        Rect("WallFace", rx, Top - Face, Floor, Face, WallFaceColor, -20);
-        Rect("Floor", rx, ry, Floor, Floor, FloorColor, -10);
-        Rect("Shade", rx, ry, Floor, 14f, ShadeColor, -5);
+    void BuildRoom()
+    {
+        Box("Floor", new Vector3(0f, -0.05f, 0f), new Vector3(Room, 0.1f, Room), FloorColor);
+        Box("Ceiling", new Vector3(0f, WallH + 0.05f, 0f), new Vector3(Room, 0.1f, Room), CeilingColor);
+        Box("Wall N", new Vector3(0f, WallH / 2f, Half + WallT / 2f), new Vector3(Room + WallT * 2f, WallH, WallT), WallColor);
+        Box("Wall S", new Vector3(0f, WallH / 2f, -Half - WallT / 2f), new Vector3(Room + WallT * 2f, WallH, WallT), WallColor);
+        Box("Wall E", new Vector3(Half + WallT / 2f, WallH / 2f, 0f), new Vector3(WallT, WallH, Room), WallColor);
+        Box("Wall W", new Vector3(-Half - WallT / 2f, WallH / 2f, 0f), new Vector3(WallT, WallH, Room), WallColor);
 
+        var lamp = new GameObject("Lamp").AddComponent<Light>();
+        lamp.type = LightType.Point;
+        lamp.color = new Color32(255, 241, 220, 255);
+        lamp.range = 30f;
+        lamp.intensity = 2.2f;
+        lamp.shadows = LightShadows.Soft;
+        lamp.transform.position = new Vector3(0f, WallH - 0.4f, 0f);
+
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+        RenderSettings.ambientSkyColor = new Color32(150, 140, 175, 255);
+        RenderSettings.ambientEquatorColor = new Color32(120, 108, 150, 255);
+        RenderSettings.ambientGroundColor = new Color32(74, 60, 102, 255);
+    }
+
+    static void Box(string name, Vector3 center, Vector3 size, Color color)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = name;
+        go.transform.position = center;
+        go.transform.localScale = size;
+        var r = go.GetComponent<Renderer>();
+        r.material.color = color;   // matériau par défaut du pipeline, teinté
+    }
+
+    void BuildAvatar()
+    {
         var sheetTex = Resources.Load<Texture2D>("avatar_sheet");
         if (sheetTex == null) { Debug.LogError("RoomPrototype : image 'avatar_sheet' introuvable dans Assets/Resources."); enabled = false; return; }
         sheetTex.filterMode = FilterMode.Bilinear;
-        // ligne 0 (en haut de l'image) = bas, 1 = gauche, 2 = droite, 3 = haut ; marge de 1 px entre les images
+        float ppu = (FrameH - 2) / AvatarHeight;          // l'avatar mesure AvatarHeight mètres
         for (int row = 0; row < 4; row++)
             for (int col = 0; col < 4; col++)
             {
                 var r = new Rect(col * FrameW + 1, sheetTex.height - (row + 1) * FrameH + 1, FrameW - 2, FrameH - 2);
-                frames[row, col] = Sprite.Create(sheetTex, r, new Vector2(0.5f, 0f), (FrameH - 2) / AvatarHeight);
+                frames[row, col] = Sprite.Create(sheetTex, r, new Vector2(0.5f, 0f), ppu);
             }
 
         player = new GameObject("Player").transform;
-        body = player.gameObject.AddComponent<SpriteRenderer>();
-        body.sortingOrder = 10;
+        billboard = new GameObject("Sprite").transform;
+        billboard.SetParent(player, false);
+        body = billboard.gameObject.AddComponent<SpriteRenderer>();
 
-        var shadow = new GameObject("Shadow").AddComponent<SpriteRenderer>();
-        shadow.transform.SetParent(player, false);
-        shadow.sprite = MakeShadowSprite(AvatarHeight * FrameW / FrameH);
-        shadow.sortingOrder = 9;
-
-        UpdateVisual(false);
+        // ombre ronde au sol
+        var blob = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        blob.name = "Shadow";
+        Destroy(blob.GetComponent<Collider>());
+        blob.transform.SetParent(player, false);
+        blob.transform.localPosition = new Vector3(0f, 0.005f, 0f);
+        blob.transform.localScale = new Vector3(0.64f, 0.002f, 0.45f);
+        var br = blob.GetComponent<Renderer>();
+        br.material.color = new Color32(40, 24, 56, 255);
+        br.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
     }
 
-    void Rect(string name, float x, float y, float w, float h, Color32 color, int order)
+    void ReadInput(out Vector2 move, out Vector2 look, out float zoom)
     {
-        var sr = new GameObject(name).AddComponent<SpriteRenderer>();
-        sr.sprite = white;
-        sr.color = color;
-        sr.sortingOrder = order;
-        sr.transform.position = ToWorld(x, y);
-        sr.transform.localScale = new Vector3(w, h, 1f);
-    }
-
-    static Sprite MakeShadowSprite(float avatarW)
-    {
-        int w = Mathf.RoundToInt(avatarW * 0.6f), h = Mathf.RoundToInt(avatarW * 0.2f);
-        var t = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-            {
-                float dx = (x + 0.5f - w / 2f) / (w / 2f), dy = (y + 0.5f - h / 2f) / (h / 2f);
-                t.SetPixel(x, y, dx * dx + dy * dy <= 1f ? new Color(0.16f, 0.09f, 0.22f, 0.25f) : Color.clear);
-            }
-        t.Apply();
-        return Sprite.Create(t, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 1f);
-    }
-
-    Vector2 ReadInput()
-    {
-        Vector2 v = Vector2.zero;
+        move = Vector2.zero; look = Vector2.zero; zoom = 0f;
 #if ENABLE_INPUT_SYSTEM
         var kb = Keyboard.current;   // touches physiques : W/A/S/D = Z/Q/S/D sur AZERTY
         if (kb != null)
         {
-            if (kb.leftArrowKey.isPressed || kb.aKey.isPressed) v.x -= 1;
-            if (kb.rightArrowKey.isPressed || kb.dKey.isPressed) v.x += 1;
-            if (kb.upArrowKey.isPressed || kb.wKey.isPressed) v.y += 1;
-            if (kb.downArrowKey.isPressed || kb.sKey.isPressed) v.y -= 1;
+            if (kb.wKey.isPressed || kb.upArrowKey.isPressed) move.y += 1;
+            if (kb.sKey.isPressed || kb.downArrowKey.isPressed) move.y -= 1;
+            if (kb.aKey.isPressed) move.x -= 1;
+            if (kb.dKey.isPressed) move.x += 1;
+            if (kb.leftArrowKey.isPressed) look.x -= 130f * Time.deltaTime;
+            if (kb.rightArrowKey.isPressed) look.x += 130f * Time.deltaTime;
         }
-        if (Gamepad.current != null) v += Gamepad.current.leftStick.ReadValue();
+        var mouse = Mouse.current;
+        if (mouse != null)
+        {
+            if (mouse.leftButton.isPressed || mouse.rightButton.isPressed) look += mouse.delta.ReadValue() * 0.25f;
+            zoom = mouse.scroll.ReadValue().y * 0.002f;
+        }
+        var pad = Gamepad.current;
+        if (pad != null)
+        {
+            move += pad.leftStick.ReadValue();
+            look += pad.rightStick.ReadValue() * 150f * Time.deltaTime;
+        }
 #else
-        v = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+        move = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+        if (Input.GetMouseButton(0) || Input.GetMouseButton(1))
+            look = new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y")) * 4f;
+        zoom = Input.mouseScrollDelta.y * 0.2f;
 #endif
-        return Vector2.ClampMagnitude(v, 1f);
+        move = Vector2.ClampMagnitude(move, 1f);
     }
 
     void Update()
     {
         if (player == null) return;
-        var v = ReadInput();
-        bool moving = v.sqrMagnitude > 0.01f;
+        ReadInput(out var move, out var look, out var zoom);
+        yaw += look.x;
+        pitch = Mathf.Clamp(pitch - look.y, 3f, 70f);
+        dist = Mathf.Clamp(dist * (1f - zoom), 2.5f, 10f);
+
+        bool moving = move.sqrMagnitude > 0.0025f;
         if (moving)
         {
-            // y de l'écran de référence vers le bas, y Unity vers le haut
-            pos.x = Mathf.Clamp(pos.x + v.x * Speed * Time.deltaTime, FootW, Floor - FootW);
-            pos.y = Mathf.Clamp(pos.y - v.y * Speed * Time.deltaTime, FootH, Floor);
-            if (Mathf.Abs(v.x) > Mathf.Abs(v.y)) dir = v.x < 0 ? Dir.Left : Dir.Right;
-            else if (Mathf.Abs(v.y) > Mathf.Abs(v.x)) dir = v.y > 0 ? Dir.Up : Dir.Down;
+            // avant = direction de la caméra à plat
+            var rot = Quaternion.Euler(0f, yaw, 0f);
+            Vector3 dir = rot * new Vector3(move.x, 0f, move.y);
+            float lim = Half - 0.35f;
+            pos.x = Mathf.Clamp(pos.x + dir.x * Speed * Time.deltaTime, -lim, lim);
+            pos.z = Mathf.Clamp(pos.z + dir.z * Speed * Time.deltaTime, -lim, lim);
+            facing = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
             animT += Time.deltaTime;
         }
         else animT = 0f;
-        UpdateVisual(moving);
+        UpdateCameraAndAvatar(moving);
     }
 
-    void UpdateVisual(bool moving)
+    void UpdateCameraAndAvatar(bool moving)
     {
-        float rx = (ScreenW - Floor) / 2f, ry = Top;
-        player.position = ToWorld(rx + pos.x, ry + pos.y);
+        if (player == null) return;
+        player.position = pos;
+
+        // caméra en orbite autour de l'avatar, gardée dans la pièce
+        Vector3 target = pos + Vector3.up * 1.1f;
+        Vector3 camPos = target + Quaternion.Euler(pitch, yaw, 0f) * new Vector3(0f, 0f, -dist);
+        float m = Half - 0.25f;
+        camPos.x = Mathf.Clamp(camPos.x, -m, m);
+        camPos.z = Mathf.Clamp(camPos.z, -m, m);
+        camPos.y = Mathf.Clamp(camPos.y, 0.3f, WallH - 0.25f);
+        cam.transform.position = camPos;
+        cam.transform.LookAt(target);
+
+        // le sprite fait face à la caméra (rotation autour de Y seulement)
+        Vector3 view = pos - camPos; view.y = 0f;
+        if (view.sqrMagnitude > 0.0001f) billboard.rotation = Quaternion.LookRotation(view.normalized, Vector3.up);
+
+        // image selon l'angle entre la direction de l'avatar et la caméra
+        Vector3 f = Quaternion.Euler(0f, facing, 0f) * Vector3.forward;
+        Vector3 v = view.normalized;
+        float dot = Vector3.Dot(f, v);
+        float side = Vector3.Dot(f, Vector3.Cross(Vector3.up, v));   // > 0 : regarde vers la droite de l'écran
+        int row = dot < -0.7f ? RowDown : dot > 0.7f ? RowUp : side > 0f ? RowRight : RowLeft;
         int col = moving ? Mathf.FloorToInt(animT * 8f) % 4 : 0;
-        body.sprite = frames[(int)dir, col];
+        body.sprite = frames[row, col];
     }
 }
