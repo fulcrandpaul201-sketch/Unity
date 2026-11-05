@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Prototype 3D : pièce carrée (sol, 4 murs très hauts qui se perdent dans le noir, 3 arches en pierre
+/// Prototype 3D : pièce carrée (sol, 4 murs très hauts qui se perdent dans le noir, une arche en pierre
 /// avec alcôve sur chaque mur, piliers, soubassement et corniche, lumière) et avatar vu à la 3e personne.
 /// - ZQSD / WASD (ou stick gauche) : se déplacer par rapport à la caméra
 /// - Souris en maintenant un bouton, flèches ← → (ou stick droit) : tourner la caméra ; molette : zoom
@@ -25,8 +25,8 @@ public class RoomPrototype : MonoBehaviour
     const float Tile = 2f;          // mètres couverts par une texture
     // Arches des murs de côté : ouverture 3 m, montants 3 m, alcôve 1,4 m, encadrement qui dépasse de 0,2 m
     const float ArchW = 3f, ArchH = 3f, ArchDepth = 1.4f, ArchRing = 0.42f, ArchOut = 0.2f, AR = ArchW / 2f;
-    // Même structure sur les 4 murs : 3 arches, piliers entre elles et dans les angles, soubassement et corniche
-    static readonly float[] ArchX = { -6.5f, 0f, 6.5f };
+    // Même structure sur les 4 murs : une arche centrale, piliers entre elles et dans les angles, soubassement et corniche
+    static readonly float[] ArchX = { 0f };   // une arche au centre de chaque mur
     static readonly float[] PillarX = { -Half + 0.35f, -3.25f, 3.25f, Half - 0.35f };
     const float PillarW = 0.7f, PillarOut = 0.3f, PillarH = 5f;
     const float PlinthH = 0.32f, PlinthOut = 0.1f, CorniceY = 5.35f, CorniceH = 0.26f, CorniceOut = 0.2f;

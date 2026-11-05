@@ -59,7 +59,7 @@ function withHeightFade(mat) {
 // Repère local d'un mur : x le long du mur, y vers le haut, z vers l'intérieur de la pièce (0 = surface du mur)
 const ARCH = { w: 3.0, h: 3.0, depth: 1.4, ring: 0.42, out: 0.2 };   // ouverture 3 m, montants de 3 m, alcôve de 1,4 m
 const AR = ARCH.w / 2;
-const ARCH_X = [-6.5, 0, 6.5];                                       // 3 arches par mur
+const ARCH_X = [0];                                                  // une arche au centre de chaque mur
 const PILLAR_X = [-HALF + 0.35, -3.25, 3.25, HALF - 0.35];           // piliers entre les arches et dans les angles
 const PILLAR = { w: 0.7, out: 0.3, h: 5.0 };
 const PLINTH = { h: 0.32, out: 0.1 }, CORNICE = { y: 5.35, h: 0.26, out: 0.2 };
