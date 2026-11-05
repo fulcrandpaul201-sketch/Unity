@@ -22,6 +22,7 @@ public class RoomPrototype : MonoBehaviour
     const float LightH = 3.2f;      // lampe à hauteur d'homme
     const float FadeStart = 2.2f, FadeEnd = 7.7f;   // les murs se perdent dans le noir entre ces hauteurs
     const float Speed = 4.2f, AvatarHeight = 1.7f;
+    const float JumpSpeed = 5.4f, Gravity = 15f;   // saut d'environ 1 m
     const float Tile = 2f;          // mètres couverts par une texture
     // Arches des murs de côté : ouverture 3 m, montants 3 m, alcôve 1,4 m, encadrement qui dépasse de 0,2 m
     const float ArchW = 3f, ArchH = 3f, ArchDepth = 1.4f, ArchRing = 0.42f, ArchOut = 0.2f, AR = ArchW / 2f;
@@ -31,8 +32,8 @@ public class RoomPrototype : MonoBehaviour
     const float PillarW = 0.7f, PillarOut = 0.3f, PillarH = 5f;
     const float PlinthH = 0.32f, PlinthOut = 0.1f, CorniceY = 5.35f, CorniceH = 0.26f, CorniceOut = 0.2f;
     const float WallClear = 0.8f;   // distance minimale avatar / mur
-    // Fontaine au centre : grand bassin, vasque du milieu, vasque du haut, gazon fleuri
-    const float BasinIn = 1.6f, BasinOut = 1.95f, Water0 = 0.42f, GrassOut = 2.9f, FountainCollide = 2.3f;
+    // Fontaine au centre : grand bassin, vasque du milieu, vasque du haut
+    const float BasinIn = 1.6f, BasinOut = 1.95f, Water0 = 0.42f, FountainCollide = 2.3f;
     const float Bowl1Y = 1.25f, Bowl1R = 0.98f, Bowl2Y = 1.95f, Bowl2R = 0.48f, SpoutY = 2.38f;
     // Fenêtres sur les murs de gauche et de droite : plein cintre, appui à 1,5 m, sommet à 3,4 m
     const float WinW = 1.4f, WinBottom = 1.5f, WinSpring = 2.7f, WinDepth = 0.45f, WinRing = 0.3f, WinOut = 0.16f, WR = WinW / 2f;
@@ -51,6 +52,8 @@ public class RoomPrototype : MonoBehaviour
     Vector3 pos = new Vector3(0f, 0f, -5f);
     float facing;                 // angle (degrés) de la direction regardée, autour de Y
     float yaw = 0f, pitch = 20f, dist = 5.5f, animT;
+    float vy;                     // vitesse verticale (saut)
+    Transform shadowBlob;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
@@ -365,18 +368,6 @@ public class RoomPrototype : MonoBehaviour
         foreach (var (r, y) in new[] { (BasinIn, Water0), (Bowl1R - 0.1f, Bowl1Y + 0.23f), (Bowl2R - 0.07f, Bowl2Y + 0.17f) })
             Disk(root, "Water", r, y - 0.01f, y, Color.white).GetComponent<Renderer>().sharedMaterial = water;
 
-        // gazon fleuri autour du bassin
-        Disk(root, "Grass", GrassOut, 0f, 0.012f, new Color32(79, 138, 60, 255));
-        Color32[] flowers = { new Color32(243, 166, 212, 255), new Color32(255, 255, 255, 255), new Color32(247, 214, 90, 255), new Color32(217, 138, 232, 255) };
-        var rnd = new System.Random(7);
-        for (int i = 0; i < 140; i++)
-        {
-            float a = (float)rnd.NextDouble() * Mathf.PI * 2f, r = BasinOut + 0.22f + (float)rnd.NextDouble() * (GrassOut - BasinOut - 0.35f);
-            var leafPos = new Vector3(Mathf.Cos(a) * r, 0.06f, Mathf.Sin(a) * r);
-            LocalPrimitive(root, PrimitiveType.Sphere, "Leaf", leafPos, new Vector3(0.14f, 0.12f, 0.14f), new Color32(70, 124, 53, 255));
-            if (i % 2 == 0) LocalPrimitive(root, PrimitiveType.Sphere, "Flower", leafPos + new Vector3(0.03f, 0.1f, 0f), Vector3.one * 0.12f, flowers[i % flowers.Length]);
-        }
-
         // gouttes : jet au sommet qui retombe dans les vasques
         var ps = new GameObject("Fountain water").AddComponent<ParticleSystem>();
         ps.transform.SetParent(root, false);
@@ -598,6 +589,7 @@ public class RoomPrototype : MonoBehaviour
         blob.name = "Shadow";
         Destroy(blob.GetComponent<Collider>());
         blob.transform.SetParent(player, false);
+        shadowBlob = blob.transform;
         blob.transform.localPosition = new Vector3(0f, 0.005f, 0f);
         blob.transform.localScale = new Vector3(0.64f, 0.002f, 0.45f);
         var br = blob.GetComponent<Renderer>();
@@ -605,9 +597,9 @@ public class RoomPrototype : MonoBehaviour
         br.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
     }
 
-    void ReadInput(out Vector2 move, out Vector2 look, out float zoom)
+    void ReadInput(out Vector2 move, out Vector2 look, out float zoom, out bool jump)
     {
-        move = Vector2.zero; look = Vector2.zero; zoom = 0f;
+        move = Vector2.zero; look = Vector2.zero; zoom = 0f; jump = false;
 #if ENABLE_INPUT_SYSTEM
         var kb = Keyboard.current;   // touches physiques : W/A/S/D = Z/Q/S/D sur AZERTY
         if (kb != null)
@@ -618,6 +610,7 @@ public class RoomPrototype : MonoBehaviour
             if (kb.dKey.isPressed) move.x += 1;
             if (kb.leftArrowKey.isPressed) look.x -= 130f * Time.deltaTime;
             if (kb.rightArrowKey.isPressed) look.x += 130f * Time.deltaTime;
+            if (kb.spaceKey.wasPressedThisFrame) jump = true;
         }
         var mouse = Mouse.current;
         if (mouse != null)
@@ -629,6 +622,7 @@ public class RoomPrototype : MonoBehaviour
         if (pad != null)
         {
             move += pad.leftStick.ReadValue();
+            if (pad.buttonSouth.wasPressedThisFrame) jump = true;
             look += pad.rightStick.ReadValue() * 150f * Time.deltaTime;
         }
 #else
@@ -636,6 +630,7 @@ public class RoomPrototype : MonoBehaviour
         if (Input.GetMouseButton(0) || Input.GetMouseButton(1))
             look = new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y")) * 4f;
         zoom = Input.mouseScrollDelta.y * 0.2f;
+        jump = Input.GetKeyDown(KeyCode.Space) || Input.GetButtonDown("Jump");
 #endif
         move = Vector2.ClampMagnitude(move, 1f);
     }
@@ -643,7 +638,7 @@ public class RoomPrototype : MonoBehaviour
     void Update()
     {
         if (player == null) return;
-        ReadInput(out var move, out var look, out var zoom);
+        ReadInput(out var move, out var look, out var zoom, out var jump);
         yaw += look.x;
         pitch = Mathf.Clamp(pitch - look.y, 3f, 70f);
         dist = Mathf.Clamp(dist * (1f - zoom), 2.5f, 10f);
@@ -664,6 +659,12 @@ public class RoomPrototype : MonoBehaviour
             animT += Time.deltaTime;
         }
         else animT = 0f;
+
+        // saut : impulsion si l'avatar touche le sol, puis gravité
+        if (jump && pos.y <= 0f) vy = JumpSpeed;
+        vy -= Gravity * Time.deltaTime;
+        pos.y += vy * Time.deltaTime;
+        if (pos.y < 0f) { pos.y = 0f; vy = 0f; }
         UpdateCameraAndAvatar(moving);
     }
 
@@ -673,7 +674,7 @@ public class RoomPrototype : MonoBehaviour
         player.position = pos;
 
         // caméra en orbite autour de l'avatar, gardée dans la pièce
-        Vector3 target = pos + Vector3.up * 1.1f;
+        Vector3 target = new Vector3(pos.x, 1.1f + pos.y * 0.5f, pos.z);   // la caméra suit un peu le saut
         Vector3 camPos = target + Quaternion.Euler(pitch, yaw, 0f) * new Vector3(0f, 0f, -dist);
         float m = Half - 0.45f;   // la caméra ne rentre pas dans les piliers
         camPos.x = Mathf.Clamp(camPos.x, -m, m);
@@ -692,7 +693,14 @@ public class RoomPrototype : MonoBehaviour
         float dot = Vector3.Dot(f, v);
         float side = Vector3.Dot(f, Vector3.Cross(Vector3.up, v));   // > 0 : regarde vers la droite de l'écran
         int row = dot < -0.7f ? RowDown : dot > 0.7f ? RowUp : side > 0f ? RowRight : RowLeft;
-        int col = moving ? Mathf.FloorToInt(animT * 8f) % 4 : 0;
+        bool airborne = pos.y > 0f;
+        int col = airborne ? 1 : moving ? Mathf.FloorToInt(animT * 8f) % 4 : 0;   // en l'air : jambes écartées
+        if (shadowBlob != null)   // l'ombre reste au sol et rétrécit en hauteur
+        {
+            float sh = 1f / (1f + pos.y * 0.7f);
+            shadowBlob.localPosition = new Vector3(0f, 0.005f - pos.y, 0f);
+            shadowBlob.localScale = new Vector3(0.64f * sh, 0.002f, 0.45f * sh);
+        }
         body.sprite = frames[row, col];
     }
 }

@@ -9,6 +9,7 @@ const ROOM = 20, HALF = ROOM / 2, WALL_H = 10;               // pièce carrée d
 const LIGHT_H = 3.2;                                         // hauteur de la lampe (à hauteur d'homme)
 const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
 const SPEED = 4.2;                                           // m/s
+const JUMP_SPEED = 5.4, GRAVITY = 15;                        // saut : environ 1 m de haut
 const AV_H = 1.7;                                            // taille de l'avatar (m)
 const FW = 172, FH = 303, SW = 688, SH = 1212;               // planche : images de 172x303 (voir avatar_sheet.json)
 const ROW = { down: 0, left: 1, right: 2, up: 3 };
@@ -284,24 +285,6 @@ for (const [r, y] of [[FOUNT.basinIn, FOUNT.water0], [BOWL1.r - 0.1, BOWL1.water
   w.rotation.x = -Math.PI / 2; w.position.y = y; scene.add(w);
 }
 
-// gazon fleuri autour du bassin
-const grass = new THREE.Mesh(new THREE.RingGeometry(FOUNT.basinOut + 0.1, FOUNT.grassOut, 48),
-  new THREE.MeshStandardMaterial({ color: 0x4f8a3c, roughness: 1 }));
-grass.rotation.x = -Math.PI / 2; grass.position.y = 0.012; grass.receiveShadow = true; scene.add(grass);
-{
-  const flowerGeo = new THREE.IcosahedronGeometry(0.07, 0);
-  const cols = [0xf3a6d4, 0xffffff, 0xf7d65a, 0xd98ae8, 0xffc0e0].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }));
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x467c35, roughness: 1 });
-  const leafGeo = new THREE.ConeGeometry(0.09, 0.16, 5);
-  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < 140; i++) {
-    const a = rnd() * Math.PI * 2, r = FOUNT.basinOut + 0.22 + rnd() * (FOUNT.grassOut - FOUNT.basinOut - 0.35);
-    const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.set(x, 0.08, z); scene.add(leaf);
-    if (i % 2 === 0) { const f = new THREE.Mesh(flowerGeo, cols[i % cols.length]); f.position.set(x + 0.03, 0.18, z); scene.add(f); }
-  }
-}
-
 // gouttes : jet au sommet, cascades depuis les deux vasques
 const DROPS = 700;
 const dropPos = new Float32Array(DROPS * 3), drops = [];
@@ -363,12 +346,19 @@ function setFrame(row, col) {
 }
 
 // ---------- État ----------
-const p = { x: 0, z: 5, facing: Math.PI, t: 0, moving: false };   // facing : angle de la direction regardée
+let jumpRequested = false;
+const p = { x: 0, y: 0, vy: 0, z: 5, facing: Math.PI, t: 0, moving: false };   // facing : angle de la direction regardée
 const cam = { yaw: 0, pitch: 0.35, dist: 5.5 };
 
 // ---------- Entrées ----------
 const keys = new Set();
-addEventListener("keydown", e => { keys.add(e.code); if (e.code.startsWith("Arrow")) e.preventDefault(); });
+addEventListener("keydown", e => {
+  keys.add(e.code);
+  if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault();
+  if (e.code === "Space" && !e.repeat) jumpRequested = true;
+});
+const jumpBtn = document.getElementById("jump");
+jumpBtn.addEventListener("pointerdown", e => { e.preventDefault(); jumpRequested = true; });
 addEventListener("keyup", e => keys.delete(e.code));
 addEventListener("blur", () => keys.clear());
 
@@ -448,8 +438,15 @@ function frame(now) {
     p.t += dt;
   } else p.t = 0;
 
+  // saut : impulsion vers le haut si l'avatar touche le sol, puis gravité
+  if (jumpRequested && p.y <= 0) p.vy = JUMP_SPEED;
+  jumpRequested = false;
+  p.vy -= GRAVITY * dt; p.y += p.vy * dt;
+  if (p.y < 0) { p.y = 0; p.vy = 0; }
+  const airborne = p.y > 0;
+
   // caméra en orbite autour de l'avatar, gardée à l'intérieur de la pièce
-  const tx = p.x, ty = 1.1, tz = p.z;
+  const tx = p.x, ty = 1.1 + p.y * 0.5, tz = p.z;      // la caméra suit un peu le saut
   let cx = tx + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
   let cy = ty + Math.sin(cam.pitch) * cam.dist;
   let cz = tz + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
@@ -462,9 +459,10 @@ function frame(now) {
   const dfx = Math.sin(p.facing), dfz = Math.cos(p.facing);
   const dot = (dfx * vx + dfz * vz) / vl, side = (dfx * -vz + dfz * vx) / vl;
   const row = dot < -0.7 ? ROW.down : dot > 0.7 ? ROW.up : side > 0 ? ROW.right : ROW.left;
-  setFrame(row, p.moving ? Math.floor(p.t * 8) % 4 : 0);
-  avatar.position.set(p.x, 0, p.z);
-  blob.position.set(p.x, 0.01, p.z);
+  setFrame(row, airborne ? 1 : p.moving ? Math.floor(p.t * 8) % 4 : 0);   // en l'air : jambes écartées
+  avatar.position.set(p.x, p.y, p.z);
+  const sh = 1 / (1 + p.y * 0.7);                       // l'ombre rétrécit et pâlit en hauteur
+  blob.position.set(p.x, 0.01, p.z); blob.scale.set(sh, 0.7 * sh, 1); blob.material.opacity = 0.35 * sh;
 
   updateFountain(dt, now);
   renderer.render(scene, camera);

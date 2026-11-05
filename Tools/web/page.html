@@ -13,13 +13,20 @@
   .stick { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
   #ring { width: 110px; height: 110px; border: 3px solid rgba(255, 255, 255, 0.35); }
   #knob { width: 46px; height: 46px; background: rgba(255, 255, 255, 0.4); }
+  #jump { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    width: 76px; height: 76px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.5); background: var(--glass);
+    color: var(--fg); font: 600 14px system-ui, sans-serif; touch-action: none; display: none; }
+  #jump:active { background: rgba(255, 255, 255, 0.3); }
+  #jump:focus-visible { outline: 3px solid #fff; }
+  @media (pointer: coarse) { #jump { display: block; } }
 </style>
 <main>
   <canvas id="c"></canvas>
   <div id="ring" class="stick" hidden></div>
   <div id="knob" class="stick" hidden></div>
-  <p class="help">Ordinateur : ZQSD ou WASD pour bouger, glisser la souris ou ← → pour tourner, molette pour zoomer.
-    Téléphone : doigt à gauche pour bouger, doigt à droite pour tourner.</p>
+  <button id="jump" type="button">Sauter</button>
+  <p class="help">Ordinateur : ZQSD ou WASD pour bouger, glisser la souris ou ← → pour tourner, molette pour zoomer, Espace pour sauter.
+    Téléphone : doigt à gauche pour bouger, doigt à droite pour tourner, bouton Sauter.</p>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
