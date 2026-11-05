@@ -24,8 +24,13 @@ const room = new Image(); room.src = "data:image/png;base64,{{ROOM}}";
 const sheet = new Image(); sheet.src = "data:image/png;base64,{{AVATAR}}";
 
 // Géométrie de la salle (mêmes valeurs que Tools/generate_room.py)
-const DS = 1.5, VPX = 620, VPY = 130, FLOOR_Y = 270, FOC = 300, BL = 170, BR = 1070;
-const ROOM_W = 1240, VIEW_W = 640;      // largeur de la salle / largeur visible (unités)
+const VPX = 620, VPY = 130, FLOOR_Y = 270, FOC = 300, BL = 170, BR = 1070;
+const ROOM_W = 1240, ROOM_H = 480;     // taille de la salle (unités)
+const VIEW_W = 480, VIEW_H = 360;       // partie visible à l'écran (caméra rapprochée)
+const DS = 960 / VIEW_W;                // pixels du canevas par unité
+// Brouillard : grille de 4 unités ; noir = jamais vu, pénombre = déjà exploré, clair = autour de l'avatar
+const FOG_CELL = 4, FOG_W = ROOM_W / FOG_CELL, FOG_H = ROOM_H / FOG_CELL;
+const DARK_UNSEEN = 0.97, DARK_SEEN = 0.5;
 const EDGE = 75;                        // l'avatar reste à cette distance des bords de l'image
 const AV_H = 92;                        // hauteur de l'image de l'avatar (unités) au fond de la salle
 const FW = 128, FH = 192;               // taille d'une image de la planche
@@ -36,7 +41,28 @@ const DIR = { down: 0, left: 1, right: 2, up: 3 };
 const cv = document.getElementById("c"), ctx = cv.getContext("2d");
 ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
 
-let camX = (ROOM_W - VIEW_W) / 2;
+let camX = null, camY = 0;
+const explored = new Float32Array(FOG_W * FOG_H);
+const fog = document.createElement("canvas"); fog.width = FOG_W; fog.height = FOG_H;
+const fctx = fog.getContext("2d"), fimg = fctx.createImageData(FOG_W, FOG_H);
+
+function updateFog(lx, ly, k) {        // lx, ly : centre de la lumière (unités) ; k : perspective
+  const rx = 95 * k, ry = 78 * k, d = fimg.data;
+  for (let j = 0; j < FOG_H; j++) {
+    const dy = ((j + 0.5) * FOG_CELL - ly) / ry;
+    for (let i = 0; i < FOG_W; i++) {
+      const dx = ((i + 0.5) * FOG_CELL - lx) / rx;
+      const r = Math.sqrt(dx * dx + dy * dy);
+      let light = Math.min(1, Math.max(0, (1 - r) / 0.45));
+      light = light * light * (3 - 2 * light);
+      const n = j * FOG_W + i;
+      if (light > explored[n]) explored[n] = light;
+      const a = (DARK_UNSEEN + (DARK_SEEN - DARK_UNSEEN) * explored[n]) * (1 - light);
+      d[n * 4] = 14; d[n * 4 + 1] = 9; d[n * 4 + 2] = 22; d[n * 4 + 3] = a * 255;
+    }
+  }
+  fctx.putImageData(fimg, 0, 0);
+}
 const p = { wx: 620, z: 200, dir: DIR.down, t: 0, moving: false };
 const keys = new Set();
 addEventListener("keydown", e => { keys.add(e.code); if (e.code.startsWith("Arrow")) e.preventDefault(); });
@@ -87,17 +113,24 @@ function frame(now) {
   } else p.t = 0;
 
   const [sx, sy, k] = project(p.wx, p.z);
-  const target = Math.max(0, Math.min(ROOM_W - VIEW_W, sx - VIEW_W / 2));   // la caméra suit l'avatar
-  camX += (target - camX) * Math.min(1, dt * 6);
-  const scale = room.naturalHeight / 480;
-  ctx.drawImage(room, camX * scale, 0, VIEW_W * scale, room.naturalHeight, 0, 0, cv.width, cv.height);
+  const bodyY = sy - AV_H * k * 0.45;                              // centre du corps
+  const tx = Math.max(0, Math.min(ROOM_W - VIEW_W, sx - VIEW_W / 2));   // la caméra suit l'avatar
+  const ty = Math.max(0, Math.min(ROOM_H - VIEW_H, bodyY - VIEW_H / 2));
+  if (camX === null) { camX = tx; camY = ty; }
+  camX += (tx - camX) * Math.min(1, dt * 6); camY += (ty - camY) * Math.min(1, dt * 6);
+  const scale = room.naturalHeight / ROOM_H;
+  ctx.fillStyle = "#0e0916"; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(room, camX * scale, camY * scale, VIEW_W * scale, VIEW_H * scale, 0, 0, cv.width, cv.height);
 
   const dh = AV_H * k * DS, dw = dh * FW / FH;                     // taille affichée
-  const fx = (sx - camX) * DS, fy = sy * DS;
+  const fx = (sx - camX) * DS, fy = (sy - camY) * DS;
   ctx.fillStyle = "rgba(40,24,56,0.28)";
   ctx.beginPath(); ctx.ellipse(fx, fy - dh * 0.02, dw * 0.3, dw * 0.08, 0, 0, Math.PI * 2); ctx.fill();
   const col = p.moving ? Math.floor(p.t * 8) % 4 : 0;
   ctx.drawImage(sheet, col * FW + 1, p.dir * FH + 1, FW - 2, FH - 2, fx - dw / 2, fy - dh, dw, dh);   // marge de 1 px : pas de débord entre images
+
+  updateFog(sx, bodyY, k);
+  ctx.drawImage(fog, camX / FOG_CELL, camY / FOG_CELL, VIEW_W / FOG_CELL, VIEW_H / FOG_CELL, 0, 0, cv.width, cv.height);
 
   if (stick) {
     ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 4;
