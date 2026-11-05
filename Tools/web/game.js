@@ -5,13 +5,14 @@ const BRICK_URI = "data:image/png;base64,{{BRICK}}";
 const FLOOR_URI = "data:image/png;base64,{{FLOOR}}";
 
 // ---------- Réglages ----------
-const ROOM = 20, HALF = ROOM / 2, WALL_H = 4;                // pièce carrée de 20 m, murs de 4 m
+const ROOM = 20, HALF = ROOM / 2, WALL_H = 10;               // pièce carrée de 20 m, murs très hauts qui se perdent dans le noir
+const LIGHT_H = 3.2;                                         // hauteur de la lampe (à hauteur d'homme)
 const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
 const SPEED = 4.2;                                           // m/s
 const AV_H = 1.7;                                            // taille de l'avatar (m)
 const FW = 172, FH = 303, SW = 688, SH = 1212;               // planche : images de 172x303 (voir avatar_sheet.json)
 const ROW = { down: 0, left: 1, right: 2, up: 3 };
-const COLORS = { bg: 0x1d1526, ceiling: 0x4e4168 };
+const COLORS = { bg: 0x07040b };                             // obscurité au-dessus des murs
 
 // ---------- Scène ----------
 const canvas = document.getElementById("c");
@@ -41,18 +42,30 @@ const surface = map => new THREE.MeshStandardMaterial({ map, roughness: 0.95, me
 
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), surface(tiled(FLOOR_URI, ROOM, ROOM)));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), new THREE.MeshStandardMaterial({ color: COLORS.ceiling, roughness: 1 }));
-ceiling.rotation.x = Math.PI / 2; ceiling.position.y = WALL_H; scene.add(ceiling);
 // 4 murs : un plan par mur, tourné vers l'intérieur
 const wallMat = surface(tiled(BRICK_URI, ROOM, WALL_H));
+wallMat.vertexColors = true;
+// dégradé vertical : les briques s'assombrissent en montant jusqu'au noir complet (pas de plafond visible)
+function fadingWall() {
+  const g = new THREE.PlaneGeometry(ROOM, WALL_H, 1, 20);
+  const pos = g.attributes.position, col = [];
+  for (let i = 0; i < pos.count; i++) {
+    const h = (pos.getY(i) + WALL_H / 2);                     // hauteur en mètres
+    const t = Math.min(1, Math.max(0, (h - 2.2) / 5.5));
+    const c = Math.pow(1 - t * t * (3 - 2 * t), 1.4);
+    col.push(c, c, c);
+  }
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  return g;
+}
 for (const [x, z, ry] of [[0, -HALF, 0], [0, HALF, Math.PI], [-HALF, 0, Math.PI / 2], [HALF, 0, -Math.PI / 2]]) {
-  const wall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, WALL_H), wallMat);
+  const wall = new THREE.Mesh(fadingWall(), wallMat);
   wall.position.set(x, WALL_H / 2, z); wall.rotation.y = ry; wall.receiveShadow = true; scene.add(wall);
 }
 
-scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.5));
-const lamp = new THREE.PointLight(0xfff1dc, 0.85, 34, 1.6);
-lamp.position.set(0, WALL_H - 0.4, 0); lamp.castShadow = true; lamp.shadow.mapSize.set(1024, 1024);
+scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.42));
+const lamp = new THREE.PointLight(0xfff1dc, 1.0, 34, 1.5);
+lamp.position.set(0, LIGHT_H, 0); lamp.castShadow = true; lamp.shadow.mapSize.set(1024, 1024);
 scene.add(lamp);
 
 // ---------- Avatar (sprite toujours face à la caméra) ----------

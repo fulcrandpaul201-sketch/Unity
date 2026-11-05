@@ -17,7 +17,9 @@ public class RoomPrototype : MonoBehaviour
     public static bool AutoStart = true;
 
     // Réglages (mêmes valeurs que Tools/web/game.js)
-    const float Room = 20f, Half = Room / 2f, WallH = 4f, WallT = 0.4f;
+    const float Room = 20f, Half = Room / 2f, WallH = 10f, WallT = 0.4f;   // murs très hauts, sans plafond
+    const float LightH = 3.2f;      // lampe à hauteur d'homme
+    const float FadeStart = 2.2f, FadeEnd = 7.7f;   // les murs se perdent dans le noir entre ces hauteurs
     const float Speed = 4.2f, AvatarHeight = 1.7f;
     const float Tile = 2f;          // mètres couverts par une texture
     const int FrameW = 172, FrameH = 303;
@@ -25,8 +27,7 @@ public class RoomPrototype : MonoBehaviour
 
     static readonly Color FloorColor = new Color32(185, 176, 207, 255);
     static readonly Color WallColor = new Color32(135, 120, 166, 255);
-    static readonly Color CeilingColor = new Color32(78, 65, 104, 255);
-    static readonly Color BgColor = new Color32(29, 21, 38, 255);
+    static readonly Color BgColor = new Color32(7, 4, 11, 255);   // obscurité au-dessus des murs
 
     Sprite[,] frames = new Sprite[4, 4];
     Transform player, billboard;
@@ -69,25 +70,54 @@ public class RoomPrototype : MonoBehaviour
         var paving = LoadTiled("tex_floor");
         // la mise à l'échelle des textures suit la taille de la face visible : 1 répétition tous les 2 m
         Box("Floor", new Vector3(0f, -0.05f, 0f), new Vector3(Room, 0.1f, Room), FloorColor, paving, new Vector2(Room / Tile, Room / Tile));
-        Box("Ceiling", new Vector3(0f, WallH + 0.05f, 0f), new Vector3(Room, 0.1f, Room), CeilingColor, null, Vector2.one);
         var wallTiling = new Vector2(Room / Tile, WallH / Tile);
         Box("Wall N", new Vector3(0f, WallH / 2f, Half + WallT / 2f), new Vector3(Room, WallH, WallT), WallColor, brick, wallTiling);
         Box("Wall S", new Vector3(0f, WallH / 2f, -Half - WallT / 2f), new Vector3(Room, WallH, WallT), WallColor, brick, wallTiling);
         Box("Wall E", new Vector3(Half + WallT / 2f, WallH / 2f, 0f), new Vector3(WallT, WallH, Room), WallColor, brick, wallTiling);
         Box("Wall W", new Vector3(-Half - WallT / 2f, WallH / 2f, 0f), new Vector3(WallT, WallH, Room), WallColor, brick, wallTiling);
 
+        // voile noir dégradé devant chaque mur : transparent en bas, noir en haut (pas de plafond visible)
+        var fade = MakeFadeSprite();
+        Fade(fade, new Vector3(0f, 0f, Half - 0.01f), 180f);
+        Fade(fade, new Vector3(0f, 0f, -Half + 0.01f), 0f);
+        Fade(fade, new Vector3(Half - 0.01f, 0f, 0f), -90f);
+        Fade(fade, new Vector3(-Half + 0.01f, 0f, 0f), 90f);
+
         var lamp = new GameObject("Lamp").AddComponent<Light>();
         lamp.type = LightType.Point;
         lamp.color = new Color32(255, 241, 220, 255);
-        lamp.range = 30f;
-        lamp.intensity = 2.2f;
+        lamp.range = 22f;
+        lamp.intensity = 2.4f;
         lamp.shadows = LightShadows.Soft;
-        lamp.transform.position = new Vector3(0f, WallH - 0.4f, 0f);
+        lamp.transform.position = new Vector3(0f, LightH, 0f);
 
         RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-        RenderSettings.ambientSkyColor = new Color32(150, 140, 175, 255);
-        RenderSettings.ambientEquatorColor = new Color32(120, 108, 150, 255);
-        RenderSettings.ambientGroundColor = new Color32(74, 60, 102, 255);
+        RenderSettings.ambientSkyColor = new Color32(40, 34, 54, 255);
+        RenderSettings.ambientEquatorColor = new Color32(110, 98, 138, 255);
+        RenderSettings.ambientGroundColor = new Color32(70, 58, 96, 255);
+    }
+
+    static Sprite MakeFadeSprite()
+    {
+        const int h = 64;
+        var t = new Texture2D(1, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+        for (int y = 0; y < h; y++)
+        {
+            float height = (y + 0.5f) / h * WallH;
+            float a = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(FadeStart, FadeEnd, height));
+            t.SetPixel(0, y, new Color(BgColor.r, BgColor.g, BgColor.b, a));
+        }
+        t.Apply();
+        return Sprite.Create(t, new Rect(0, 0, 1, h), new Vector2(0.5f, 0f), 1f);
+    }
+
+    static void Fade(Sprite sprite, Vector3 basePos, float yRot)
+    {
+        var sr = new GameObject("Wall fade").AddComponent<SpriteRenderer>();
+        sr.sprite = sprite;
+        sr.transform.position = basePos;
+        sr.transform.rotation = Quaternion.Euler(0f, yRot, 0f);
+        sr.transform.localScale = new Vector3(Room, WallH / 64f, 1f);
     }
 
     static Texture2D LoadTiled(string name)

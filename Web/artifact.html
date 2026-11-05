@@ -30,13 +30,14 @@ const BRICK_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAACgCAIAAAA
 const FLOOR_URI = "data:image/png;base64,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";
 
 // ---------- Réglages ----------
-const ROOM = 20, HALF = ROOM / 2, WALL_H = 4;                // pièce carrée de 20 m, murs de 4 m
+const ROOM = 20, HALF = ROOM / 2, WALL_H = 10;               // pièce carrée de 20 m, murs très hauts qui se perdent dans le noir
+const LIGHT_H = 3.2;                                         // hauteur de la lampe (à hauteur d'homme)
 const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
 const SPEED = 4.2;                                           // m/s
 const AV_H = 1.7;                                            // taille de l'avatar (m)
 const FW = 172, FH = 303, SW = 688, SH = 1212;               // planche : images de 172x303 (voir avatar_sheet.json)
 const ROW = { down: 0, left: 1, right: 2, up: 3 };
-const COLORS = { bg: 0x1d1526, ceiling: 0x4e4168 };
+const COLORS = { bg: 0x07040b };                             // obscurité au-dessus des murs
 
 // ---------- Scène ----------
 const canvas = document.getElementById("c");
@@ -66,18 +67,30 @@ const surface = map => new THREE.MeshStandardMaterial({ map, roughness: 0.95, me
 
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), surface(tiled(FLOOR_URI, ROOM, ROOM)));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), new THREE.MeshStandardMaterial({ color: COLORS.ceiling, roughness: 1 }));
-ceiling.rotation.x = Math.PI / 2; ceiling.position.y = WALL_H; scene.add(ceiling);
 // 4 murs : un plan par mur, tourné vers l'intérieur
 const wallMat = surface(tiled(BRICK_URI, ROOM, WALL_H));
+wallMat.vertexColors = true;
+// dégradé vertical : les briques s'assombrissent en montant jusqu'au noir complet (pas de plafond visible)
+function fadingWall() {
+  const g = new THREE.PlaneGeometry(ROOM, WALL_H, 1, 20);
+  const pos = g.attributes.position, col = [];
+  for (let i = 0; i < pos.count; i++) {
+    const h = (pos.getY(i) + WALL_H / 2);                     // hauteur en mètres
+    const t = Math.min(1, Math.max(0, (h - 2.2) / 5.5));
+    const c = Math.pow(1 - t * t * (3 - 2 * t), 1.4);
+    col.push(c, c, c);
+  }
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  return g;
+}
 for (const [x, z, ry] of [[0, -HALF, 0], [0, HALF, Math.PI], [-HALF, 0, Math.PI / 2], [HALF, 0, -Math.PI / 2]]) {
-  const wall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, WALL_H), wallMat);
+  const wall = new THREE.Mesh(fadingWall(), wallMat);
   wall.position.set(x, WALL_H / 2, z); wall.rotation.y = ry; wall.receiveShadow = true; scene.add(wall);
 }
 
-scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.5));
-const lamp = new THREE.PointLight(0xfff1dc, 0.85, 34, 1.6);
-lamp.position.set(0, WALL_H - 0.4, 0); lamp.castShadow = true; lamp.shadow.mapSize.set(1024, 1024);
+scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.42));
+const lamp = new THREE.PointLight(0xfff1dc, 1.0, 34, 1.5);
+lamp.position.set(0, LIGHT_H, 0); lamp.castShadow = true; lamp.shadow.mapSize.set(1024, 1024);
 scene.add(lamp);
 
 // ---------- Avatar (sprite toujours face à la caméra) ----------
