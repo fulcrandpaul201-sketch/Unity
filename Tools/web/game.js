@@ -9,6 +9,7 @@ const ROOM = 26, HALF = ROOM / 2, WALL_H = 15.6;             // cour carrée de 
 const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
 const SPEED = 4.2;                                           // m/s
 const JUMP_SPEED = 5.4, GRAVITY = 15;                        // saut : environ 1 m de haut
+const FLY_SPEED = 7.5, FLY_CLIMB = 4.5;                        // vol en balai (m/s)
 const PLAYER_R = 0.3;                                        // rayon de collision de l'avatar
 const COLORS = { bg: 0x0b1020 };                             // ciel de nuit au-dessus des murs
 
@@ -343,8 +344,8 @@ function buildRoom(g) {
   const l = new THREE.PointLight(0xffb260, 1.3, 16, 2); l.position.set(0, cy - 0.1, zc); g.add(l);
   chandeliers.push({ l, seed: Math.random() * 100 });
   // zones praticables : passage et salle
-  WALKABLE.push(worldRect(g, -AR, AR, z0 - 0.6, 2.0));     // chevauche la cour et la salle pour passer de l'une à l'autre
-  WALKABLE.push(worldRect(g, -RW / 2 + 0.2, RW / 2 - 0.2, zb + 0.2, z0));
+  WALKABLE.push(worldRect(g, -AR, AR, z0 - 0.6, 2.0, { maxFly: ARCH.h + AR - 2.0 }));     // chevauche la cour et la salle pour passer de l'une à l'autre
+  WALKABLE.push(worldRect(g, -RW / 2 + 0.2, RW / 2 - 0.2, zb + 0.2, z0, { maxFly: RH - 2.0 }));
   CAM_ZONES.push(worldRect(g, -AR + 0.15, AR - 0.15, z0 - 0.3, 0.6, { maxY: ARCH.h + AR - 0.3 }));
   CAM_ZONES.push(worldRect(g, -RW / 2 + 0.3, RW / 2 - 0.3, zb + 0.3, z0 - 0.3, { maxY: RH - 0.5 }));
 }
@@ -352,7 +353,7 @@ const IRON = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x26221f).c
 const FLAME = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc56e).convertSRGBToLinear() });
 const CANDLE = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xe9e0cc).convertSRGBToLinear(), roughness: 0.7 });
 
-WALKABLE.push({ minX: -HALF + 0.5, maxX: HALF - 0.5, minZ: -HALF + 0.5, maxZ: HALF - 0.5, court: true });   // la cour
+WALKABLE.push({ minX: -HALF + 0.5, maxX: HALF - 0.5, minZ: -HALF + 0.5, maxZ: HALF - 0.5, court: true, maxFly: 13.5 });   // la cour (on vole sous les créneaux)
 CAM_ZONES.push({ minX: -HALF + 0.45, maxX: HALF - 0.45, minZ: -HALF + 0.45, maxZ: HALF - 0.45, maxY: 40 });
 for (const [px, pz, ry, win] of [[0, -HALF, 0, false], [0, HALF, Math.PI, false], [-HALF, 0, Math.PI / 2, true], [HALF, 0, -Math.PI / 2, true]])
   buildRoom(buildWall(px, pz, ry, win));      // fenêtres du rez-de-chaussée sur les deux murs parallèles de gauche et de droite
@@ -498,10 +499,202 @@ function bench(cx, cz) {                       // banc en bois le long d'un mur 
   OBSTACLES.push({ minX: cx - BENCH.len / 2, maxX: cx + BENCH.len / 2, minZ: cz - BENCH.depth / 2, maxZ: cz + BENCH.depth / 2,
                    top: BENCH.seat + 0.025, standable: true });
 }
-for (const x of [-11.2, -6.5, 6.5, 11.2]) { bench(x, -HALF + 1.25); bench(x, HALF - 1.25); }
+for (const x of [-11.2, -6.5, 6.5, 11.2]) { if (x !== -6.5) bench(x, -HALF + 1.25); bench(x, HALF - 1.25); }   // la statue prend la place d'un banc
 
 
 mergeStones();
+
+// ---------- Statue d'un ancien élève illustre, façon statue grecque en marbre ----------
+// Orateur barbu couronné de laurier, drapé d'un himation, bras droit levé, rouleau dans la main gauche.
+// Sculptée à l'échelle d'un humain (1,8 m) puis agrandie x3,2, sur un socle de 1,6 m.
+const STATUE = { x: -6.5, z: -HALF + 1.8 };                       // contre la façade nord, entre deux piliers
+{
+  const marble = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xe9e4da).convertSRGBToLinear(), roughness: 0.42 });
+  const marbleS = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xd8d1c4).convertSRGBToLinear(), roughness: 0.55 });
+  const root = new THREE.Group(); root.position.set(STATUE.x, 0, STATUE.z);
+  // tournée vers la cour
+  scene.add(root);
+  const put = (geo, m, parent, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => {
+    const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = o.receiveShadow = true; parent.add(o); return o;
+  };
+  // socle : marches, dé, corniche
+  const PED_H = 1.6;
+  put(new THREE.BoxGeometry(3.0, 0.22, 3.0), marbleS, root, 0, 0.11, 0);
+  put(new THREE.BoxGeometry(2.6, 0.22, 2.6), marble, root, 0, 0.33, 0);
+  put(new THREE.BoxGeometry(2.1, 0.12, 2.1), marbleS, root, 0, 0.5, 0);
+  put(new THREE.BoxGeometry(1.9, 0.86, 1.9), marble, root, 0, 0.99, 0);
+  put(new THREE.BoxGeometry(2.1, 0.1, 2.1), marbleS, root, 0, 1.47, 0);
+  put(new THREE.BoxGeometry(2.25, 0.08, 2.25), marble, root, 0, PED_H - 0.04, 0);
+  // plaque en bronze gravée
+  const pc = document.createElement("canvas"); pc.width = 512; pc.height = 160;
+  { const c = pc.getContext("2d");
+    const g = c.createLinearGradient(0, 0, 0, 160); g.addColorStop(0, "#8a6a32"); g.addColorStop(1, "#5e4520");
+    c.fillStyle = g; c.fillRect(0, 0, 512, 160); c.strokeStyle = "#c9a45a"; c.lineWidth = 6; c.strokeRect(8, 8, 496, 144);
+    c.fillStyle = "#f0d58a"; c.textAlign = "center"; c.font = "bold 46px Georgia, serif"; c.fillText("ALDRIC VALMORE", 256, 72);
+    c.font = "italic 26px Georgia, serif"; c.fillText("Ancien élève · Maître des savoirs", 256, 118); }
+  const plaqueTex = new THREE.CanvasTexture(pc); plaqueTex.encoding = THREE.sRGBEncoding;
+  put(new THREE.PlaneGeometry(1.3, 0.4), new THREE.MeshStandardMaterial({ map: plaqueTex, metalness: 0.6, roughness: 0.4 }), root, 0, 1.0, 0.951);
+
+  const fig = new THREE.Group(); fig.position.y = PED_H; fig.scale.setScalar(2.4); root.add(fig);   // ≈ 4,3 m de haut, sous les fenêtres du 1er étage
+  window.STATUE_FIG = fig;
+  // tissu à plis : surface de révolution dont le rayon ondule (plis verticaux qui s'estompent vers le haut)
+  function cloth(profile, n, amp, phiStart = 0, phiLen = Math.PI * 2) {
+    const g = new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), 120, phiStart, phiLen);
+    const P = g.attributes.position, y0 = profile[0][1], y1 = profile[profile.length - 1][1];
+    for (let i = 0; i < P.count; i++) {
+      const x = P.getX(i), z = P.getZ(i), y = P.getY(i), a = Math.atan2(x, z), t = (y - y0) / (y1 - y0);
+      const k = 1 + amp * (1 - 0.75 * t) * (Math.sin(a * n + Math.sin(a * 3) * 1.5) * 0.7 + Math.sin(a * n * 2.1 + 1.3) * 0.3);
+      P.setX(i, x * k); P.setZ(i, z * k);
+    }
+    g.computeVertexNormals(); return g;
+  }
+  const capsule = (r1, r2, len) => {
+    const pts = [];
+    for (let i = 0; i <= 6; i++) { const a = -Math.PI / 2 + i / 6 * Math.PI / 2; pts.push(new THREE.Vector2(Math.max(1e-4, Math.cos(a) * r2), -len + Math.sin(a) * r2)); }
+    for (let i = 1; i <= 6; i++) { const a = i / 6 * Math.PI / 2; pts.push(new THREE.Vector2(Math.max(1e-4, Math.cos(a) * r1), Math.sin(a) * r1)); }
+    return new THREE.LatheGeometry(pts, 24);
+  };
+  // pieds en sandales, le droit légèrement avancé
+  for (const sx of [-1, 1]) put(new THREE.SphereGeometry(0.055, 16, 10), marble, fig, sx * 0.1, 0.035, 0.22 + (sx > 0 ? 0.06 : 0)).scale.set(0.85, 0.6, 2);
+  // chiton : une seule draperie continue, des chevilles à la poitrine
+  put(cloth([[0.3, 0.0], [0.29, 0.1], [0.255, 0.45], [0.2, 0.8], [0.17, 0.95], [0.18, 1.1], [0.195, 1.25], [0.19, 1.33], [0.13, 1.42], [0.06, 1.47], [0.001, 1.48]], 15, 0.06), marble, fig)
+    .scale.set(1, 1, 0.78);
+  // himation : grande écharpe de tissu en diagonale, de l'épaule gauche à la hanche droite, autour du corps
+  // boucle inclinée qui épouse le buste : épaule gauche -> devant -> hanche droite -> dos -> épaule gauche
+  const sash = [];
+  for (let i = 0; i < 28; i++) {
+    const a = i / 28 * Math.PI * 2, x = Math.sin(a) * 0.215, z = Math.cos(a) * 0.17;
+    sash.push(new THREE.Vector3(x, 1.17 - x * 0.95, z));
+  }
+  const sashGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sash, true), 96, 0.03, 10, true);
+  put(sashGeo, marbleS, fig).scale.set(1, 1, 1);
+  // pan du manteau qui tombe de l'épaule gauche jusqu'aux mollets, dans le dos
+  put(cloth([[0.11, 0.25], [0.12, 0.6], [0.1, 1.0], [0.085, 1.3], [0.05, 1.4]], 7, 0.14), marbleS, fig, -0.12, 0, -0.1).scale.set(1, 1, 0.6);
+  // bras droit levé vers l'avant (geste de l'orateur)
+  const rs = new THREE.Group(); rs.position.set(0.2, 1.36, 0); rs.rotation.set(-1.35, 0, -0.12); fig.add(rs);
+  put(new THREE.SphereGeometry(0.068, 16, 12), marble, rs);
+  put(capsule(0.062, 0.05, 0.29), marble, rs);
+  const re = new THREE.Group(); re.position.y = -0.29; re.rotation.x = -0.45; rs.add(re);
+  put(capsule(0.05, 0.04, 0.25), marble, re);
+  put(new THREE.SphereGeometry(0.048, 14, 10), marble, re, 0, -0.3, 0).scale.set(0.95, 1.3, 0.45);
+  // bras gauche le long du corps, avant-bras replié tenant un rouleau, drapé qui retombe
+  const ls = new THREE.Group(); ls.position.set(-0.2, 1.36, 0); ls.rotation.set(-0.1, 0, 0.1); fig.add(ls);
+  put(new THREE.SphereGeometry(0.07, 16, 12), marbleS, ls);
+  put(capsule(0.064, 0.055, 0.29), marbleS, ls);
+  const le = new THREE.Group(); le.position.y = -0.29; le.rotation.x = -1.3; ls.add(le);
+  put(capsule(0.05, 0.042, 0.23), marble, le);
+  put(new THREE.CylinderGeometry(0.033, 0.033, 0.28, 16), marble, le, 0, -0.27, 0.015, 0, 0, Math.PI / 2);
+  put(cloth([[0.04, -0.05], [0.09, -0.35], [0.12, -0.6]].map(([r, y]) => [r, y]).reverse().map(([r, y]) => [r, y]), 6, 0.2), marbleS, le, 0.01, -0.12, -0.06).rotation.x = 1.3;
+  // cou et tête : visage, barbe courte, cheveux bouclés serrés, couronne de laurier
+  put(new THREE.CylinderGeometry(0.055, 0.065, 0.1, 18), marble, fig, 0, 1.5, 0);
+  const head = new THREE.Group(); head.position.set(0, 1.62, 0.015); head.rotation.set(-0.1, 0.25, 0); fig.add(head);
+  window.STATUE_HEAD = head;
+  put(new THREE.SphereGeometry(0.1, 32, 24), marble, head).scale.set(0.88, 1.1, 1);
+  put(new THREE.SphereGeometry(0.08, 24, 16), marble, head, 0, -0.045, 0.02).scale.set(0.85, 0.8, 0.95);       // mâchoire
+  put(new THREE.ConeGeometry(0.017, 0.05, 10), marble, head, 0, -0.005, 0.1, Math.PI / 2 - 0.2);                 // nez
+  for (const sx of [-1, 1]) {
+    put(new THREE.SphereGeometry(0.016, 10, 8), marbleS, head, sx * 0.034, 0.018, 0.08).scale.set(1.3, 0.75, 0.5);   // orbites
+    put(new THREE.BoxGeometry(0.04, 0.008, 0.015), marble, head, sx * 0.035, 0.038, 0.088, 0, 0, sx * -0.1);       // arcades
+    put(new THREE.SphereGeometry(0.022, 10, 8), marble, head, sx * 0.088, 0.0, -0.005).scale.set(0.4, 1, 0.7);     // oreilles
+  }
+  const beard = put(new THREE.SphereGeometry(0.088, 24, 14, 0, Math.PI * 2, Math.PI * 0.52, Math.PI * 0.45), marbleS, head, 0, -0.03, 0.022);
+  beard.scale.set(1.0, 1.3, 1.12);
+  put(new THREE.SphereGeometry(0.106, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.42), marbleS, head, 0, 0.012, -0.01).scale.set(0.92, 1.1, 1.02);   // chevelure
+  let seed = 3; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 34; i++) {                                     // petites boucles sur le dessus et l'arrière
+    const a = rnd() * Math.PI * 2, e = rnd() * 1.25;
+    if (Math.cos(a) > 0.2 && e > 0.75) continue;
+    put(new THREE.SphereGeometry(0.02, 8, 6), marbleS, head, Math.sin(a) * Math.sin(e) * 0.098, 0.022 + Math.cos(e) * 0.112, Math.cos(a) * Math.sin(e) * 0.1 - 0.01);
+  }
+  for (let i = 0; i < 24; i++) {                                     // couronne de laurier
+    const a = i / 24 * Math.PI * 2; if (Math.cos(a) > 0.93) continue;
+    put(new THREE.SphereGeometry(0.02, 8, 6), marble, head, Math.sin(a) * 0.1, 0.06 + 0.006 * Math.sin(i * 2.3), Math.cos(a) * 0.106, 0, a + Math.PI / 2, 0.5).scale.set(0.5, 0.3, 1.5);   // feuilles le long de la couronne
+  }
+  // socle : on peut s'y poser (en volant) ; la statue elle-même bloque le passage
+  OBSTACLES.push({ minX: STATUE.x - 1.5, maxX: STATUE.x + 1.5, minZ: STATUE.z - 1.5, maxZ: STATUE.z + 1.5, top: PED_H, standable: true });
+  OBSTACLES.push({ minX: STATUE.x - 0.75, maxX: STATUE.x + 0.75, minZ: STATUE.z - 0.75, maxZ: STATUE.z + 0.75, top: PED_H + 1.8 * 2.4, standable: false });
+  // éclairage de mise en valeur depuis le pied du socle
+  for (const s of [-1, 1]) {
+    const spot = new THREE.SpotLight(0xffd9a0, 1.6, 14, 0.45, 0.6, 1.5);
+    spot.position.set(s * 1.6, 0.3, 2.6); root.add(spot);
+    spot.target.position.set(0, 4.2, 0); root.add(spot.target);
+  }
+}
+
+// ---------- Balai magique : posé dans la cour, on l'enfourche (E) pour voler, on le lâche (E) ----------
+const BROOM = { equipped: false, x: 2.6, y: 0.3, z: 7.4, vy: 0, yaw: 0.7, tilt: 0 };
+const broom = new THREE.Group(); scene.add(broom);
+{
+  const wood = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x5a3a22).convertSRGBToLinear(), roughness: 0.55 });
+  const straw = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xc9a25a).convertSRGBToLinear(), roughness: 0.85 });
+  const band = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x6a35a6).convertSRGBToLinear(), roughness: 0.5, emissive: 0x2a0f50 });
+  const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = true; broom.add(o); return o; };
+  add(new THREE.CylinderGeometry(0.02, 0.026, 1.55, 10), wood, 0, 0, 0.12, Math.PI / 2);          // manche (axe z = avant)
+  add(new THREE.SphereGeometry(0.032, 10, 8), wood, 0, 0, 0.9);                                  // pommeau
+  add(new THREE.TorusGeometry(0.03, 0.008, 6, 14), band, 0, 0, 0.78);                           // anneau violet
+  add(new THREE.CylinderGeometry(0.05, 0.045, 0.07, 12), band, 0, 0, -0.62, Math.PI / 2);       // ligatures
+  add(new THREE.CylinderGeometry(0.06, 0.055, 0.04, 12), band, 0, 0, -0.74, Math.PI / 2);
+  let seed = 9; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 46; i++) {                                                                  // brindilles en éventail
+    const a = rnd() * Math.PI * 2, r = 0.02 + rnd() * 0.04, spread = 1.6 + rnd() * 1.2, len = 0.42 + rnd() * 0.12;
+    const s = add(new THREE.CylinderGeometry(0.006, 0.009, len, 4), straw, 0, 0, 0, 0, 0, 0);
+    const dir = new THREE.Vector3(Math.cos(a) * r * spread, Math.sin(a) * r * spread, -1).normalize();
+    s.position.set(Math.cos(a) * r, Math.sin(a) * r, -0.66).addScaledVector(dir, len / 2);
+    s.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  }
+  const glow = new THREE.PointLight(0xa07cff, 0.7, 4, 2); glow.position.set(0, 0.1, 0); broom.add(glow);
+}
+// étincelles magiques autour du balai et en traînée pendant le vol
+const SPARKS = 90, sparkPos = new Float32Array(SPARKS * 3), sparks = [];
+const sparkGeo = new THREE.BufferGeometry(); sparkGeo.setAttribute("position", new THREE.BufferAttribute(sparkPos, 3));
+scene.add(new THREE.Points(sparkGeo, new THREE.PointsMaterial({ map: new THREE.CanvasTexture(dotCanvas), color: 0xc8b0ff, size: 0.07,
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })));
+for (let i = 0; i < SPARKS; i++) sparks.push({ life: Math.random(), x: 0, y: -10, z: 0, vx: 0, vy: 0, vz: 0 });
+function updateBroom(dt, now) {
+  const t = now / 1000;
+  if (BROOM.equipped) {
+    BROOM.x = p.x; BROOM.z = p.z; BROOM.y = p.y + 0.62;
+    let d = heroYaw - BROOM.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); BROOM.yaw += d * Math.min(1, dt * 12);
+    BROOM.tilt += (-p.vy * 0.08 - BROOM.tilt) * Math.min(1, dt * 6);
+    broom.position.set(BROOM.x, BROOM.y, BROOM.z); broom.rotation.set(BROOM.tilt, BROOM.yaw, 0);
+  } else {
+    // lâché : il retombe doucement puis flotte à 30 cm du sol en tournant lentement
+    const floorY = groundAt(BROOM.x, BROOM.z, BROOM.y) + 0.3 + Math.sin(t * 2) * 0.04;
+    if (BROOM.y > floorY + 0.01) { BROOM.vy -= 6 * dt; BROOM.y = Math.max(floorY, BROOM.y + BROOM.vy * dt); } else { BROOM.vy = 0; BROOM.y = floorY; }
+    BROOM.yaw += dt * 0.35;
+    broom.position.set(BROOM.x, BROOM.y, BROOM.z); broom.rotation.set(0, BROOM.yaw, Math.sin(t * 1.3) * 0.06);
+  }
+  broom.updateMatrixWorld();
+  const tail = broom.localToWorld(new THREE.Vector3(0, 0, -0.95));
+  for (let i = 0; i < SPARKS; i++) {
+    const s = sparks[i];
+    s.life -= dt * (BROOM.equipped ? 1.6 : 0.8);
+    if (s.life <= 0) {
+      s.life = 1;
+      if (BROOM.equipped && p.moving) { s.x = tail.x; s.y = tail.y; s.z = tail.z; s.vx = (Math.random() - 0.5) * 0.4; s.vy = (Math.random() - 0.5) * 0.4; s.vz = (Math.random() - 0.5) * 0.4; }
+      else { const a = Math.random() * 6.28; s.x = BROOM.x + Math.cos(a) * 0.5; s.y = BROOM.y + (Math.random() - 0.5) * 0.3; s.z = BROOM.z + Math.sin(a) * 0.5; s.vx = 0; s.vy = 0.3; s.vz = 0; }
+    }
+    s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
+    sparkPos[i * 3] = s.x; sparkPos[i * 3 + 1] = s.y; sparkPos[i * 3 + 2] = s.z;
+  }
+  sparkGeo.attributes.position.needsUpdate = true;
+  // indication à l'écran
+  const near = Math.hypot(p.x - BROOM.x, p.z - BROOM.z) < 1.8 && Math.abs(p.y - (BROOM.y - 0.3)) < 1.5;
+  const msg = BROOM.equipped ? "E : lâcher le balai · Espace : monter · Maj : descendre" : near ? "E : enfourcher le balai magique" : "";
+  if (prompt.textContent !== msg) prompt.textContent = msg;
+  prompt.hidden = !msg;
+  broomBtn.hidden = !(BROOM.equipped || near);
+  broomBtn.textContent = BROOM.equipped ? "Lâcher" : "Balai";
+  downBtn.hidden = !BROOM.equipped;
+  jumpBtn.textContent = BROOM.equipped ? "Monter" : "Sauter";
+}
+function toggleBroom() {
+  if (BROOM.equipped) {                                         // on le lâche : il tombe sous nous, on retombe aussi
+    BROOM.equipped = false; BROOM.vy = 0; p.vy = 0;
+  } else if (Math.hypot(p.x - BROOM.x, p.z - BROOM.z) < 1.8) {
+    BROOM.equipped = true; p.vy = 0; p.y += 0.3;
+  }
+}
 
 // ---------- Nuit : ciel étoilé, clair de lune, lanternes ----------
 scene.add(new THREE.HemisphereLight(0x8090c0, 0x3a332c, 0.42));
@@ -791,7 +984,7 @@ function animateHero(dt, now, airborne, ground) {
   let col = 0;
   if (airborne) col = 1;                                          // en l'air : jambes écartées
   else if (p.moving) { HERO.phase += dt * SPEED * 2.0; col = Math.floor(HERO.phase) % 4; }
-  showCharacter(HERO, p.x, p.y, p.z, heroYaw, col, ground);
+  showCharacter(HERO, p.x, p.y + (BROOM.equipped ? 0.06 * Math.sin(now / 300) : 0), p.z, heroYaw, col, ground);
 }
 
 // ---------- État ----------
@@ -805,9 +998,16 @@ addEventListener("keydown", e => {
   keys.add(e.code);
   if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault();
   if (e.code === "Space" && !e.repeat) jumpRequested = true;
+  if (e.code === "KeyE" && !e.repeat) toggleBroom();
 });
-const jumpBtn = document.getElementById("jump");
-jumpBtn.addEventListener("pointerdown", e => { e.preventDefault(); jumpRequested = true; });
+const jumpBtn = document.getElementById("jump"), broomBtn = document.getElementById("broomBtn"), downBtn = document.getElementById("down");
+const prompt = document.getElementById("prompt");
+let touchUp = false, touchDown = false;
+jumpBtn.addEventListener("pointerdown", e => { e.preventDefault(); jumpRequested = true; touchUp = true; });
+downBtn.addEventListener("pointerdown", e => { e.preventDefault(); touchDown = true; });
+for (const [b, f] of [[jumpBtn, () => touchUp = false], [downBtn, () => touchDown = false]])
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, f);
+broomBtn.addEventListener("pointerdown", e => { e.preventDefault(); toggleBroom(); });
 addEventListener("keyup", e => keys.delete(e.code));
 addEventListener("blur", () => keys.clear());
 
@@ -858,6 +1058,18 @@ function readMove() {
 
 // ---------- Collisions avec le décor ----------
 const COURT_CLEAR = WALL_CLEAR - 0.5;    // dans la cour : rester devant piliers et soubassement
+function canMove(x, z, y) {               // position atteignable à cette hauteur (vol : plafond des passages et des salles)
+  return WALKABLE.some(r => {
+    const m = r.court ? PLAYER_R + COURT_CLEAR : PLAYER_R;
+    return x >= r.minX + m && x <= r.maxX - m && z >= r.minZ + m && z <= r.maxZ - m && y <= (r.maxFly || 0) + 1e-3;
+  });
+}
+function ceilingAt(x, z) { let c = 0; for (const r of WALKABLE) if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) c = Math.max(c, r.maxFly || 0); return c; }
+function groundAt(x, z, y) {               // pavés, ou dessus d'un banc / du socle sous cette position
+  let g = 0;
+  for (const o of OBSTACLES) if (o.standable && x > o.minX - 0.1 && x < o.maxX + 0.1 && z > o.minZ - 0.1 && z < o.maxZ + 0.1 && y >= o.top - 0.12) g = Math.max(g, o.top);
+  return g;
+}
 function canStand(x, z) {
   return WALKABLE.some(r => {
     const m = r.court ? PLAYER_R + COURT_CLEAR : PLAYER_R;
@@ -891,15 +1103,16 @@ function frame(now) {
     const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
     const mx = fx * f + rx * s, mz = fz * f + rz * s;
     // déplacement limité aux zones praticables (cour, passages sous les arches, salles)
-    const nx = p.x + mx * SPEED * dt, nz = p.z + mz * SPEED * dt;
-    if (canStand(nx, nz)) { p.x = nx; p.z = nz; }
-    else if (canStand(nx, p.z)) p.x = nx;
-    else if (canStand(p.x, nz)) p.z = nz;
+    const sp = BROOM.equipped ? FLY_SPEED : SPEED;
+    const nx = p.x + mx * sp * dt, nz = p.z + mz * sp * dt;
+    if (canMove(nx, nz, p.y)) { p.x = nx; p.z = nz; }
+    else if (canMove(nx, p.z, p.y)) p.x = nx;
+    else if (canMove(p.x, nz, p.y)) p.z = nz;
     // on fait le tour de la fontaine sans la traverser
     const fd = Math.hypot(p.x, p.z);
-    if (fd < FOUNT.collide) { const k = FOUNT.collide / (fd || 1); p.x *= k; p.z *= k; }
+    if (fd < FOUNT.collide && p.y < 2.9) { const k = FOUNT.collide / (fd || 1); p.x *= k; p.z *= k; }
     for (const o of OBSTACLES) {                         // contourner les bancs (sauf si on est dessus) et la bascule
-      if (o.standable && p.y >= o.top - 0.12) continue;
+      if (p.y >= o.top - (o.standable ? 0.12 : 0)) continue;   // on passe au-dessus en volant
       const x0 = o.minX - PLAYER_R, x1 = o.maxX + PLAYER_R, z0 = o.minZ - PLAYER_R, z1 = o.maxZ + PLAYER_R;
       if (p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1) {
         const pen = [p.x - x0, x1 - p.x, p.z - z0, z1 - p.z], i = pen.indexOf(Math.min(...pen));
@@ -911,18 +1124,24 @@ function frame(now) {
   } else p.t = 0;
 
   // hauteur du sol sous l'avatar : pavés, ou dessus d'un banc
-  let ground = 0;
-  for (const o of OBSTACLES)
-    if (o.standable && p.x > o.minX - 0.1 && p.x < o.maxX + 0.1 && p.z > o.minZ - 0.1 && p.z < o.maxZ + 0.1 && p.y >= o.top - 0.12) ground = Math.max(ground, o.top);
-  // saut : impulsion vers le haut si l'avatar touche le sol, puis gravité
-  if (jumpRequested && p.y <= ground + 1e-3) p.vy = JUMP_SPEED;
+  const ground = groundAt(p.x, p.z, p.y);
+  if (BROOM.equipped) {
+    // vol : Espace / bouton Monter pour monter, Maj / C / bouton Descendre pour descendre, pas de gravité
+    const up = keys.has("Space") || touchUp, down = keys.has("ShiftLeft") || keys.has("ShiftRight") || keys.has("KeyC") || touchDown;
+    const target = ((up ? 1 : 0) - (down ? 1 : 0)) * FLY_CLIMB;
+    p.vy += (target - p.vy) * Math.min(1, dt * 5);
+    p.y = Math.max(ground, Math.min(ceilingAt(p.x, p.z), p.y + p.vy * dt));
+  } else {
+    // saut : impulsion vers le haut si l'avatar touche le sol, puis gravité
+    if (jumpRequested && p.y <= ground + 1e-3) p.vy = JUMP_SPEED;
+    p.vy -= GRAVITY * dt; p.y += p.vy * dt;
+    if (p.y < ground) { p.y = ground; p.vy = 0; }
+  }
   jumpRequested = false;
-  p.vy -= GRAVITY * dt; p.y += p.vy * dt;
-  if (p.y < ground) { p.y = ground; p.vy = 0; }
-  const airborne = p.y > ground + 1e-3;
+  const airborne = BROOM.equipped || p.y > ground + 1e-3;
 
   // caméra en orbite autour de l'avatar, gardée à l'intérieur de la pièce
-  const tx = p.x, ty = 1.1 + p.y * 0.5, tz = p.z;      // la caméra suit un peu le saut
+  const tx = p.x, ty = 1.1 + (BROOM.equipped ? p.y : p.y * 0.5), tz = p.z;   // en vol la caméra suit l'altitude
   let cx = tx + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
   let cy = ty + Math.sin(cam.pitch) * cam.dist;
   let cz = tz + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
@@ -940,6 +1159,7 @@ function frame(now) {
 
   updateFountain(dt, now);
   updateLights(now);
+  updateBroom(dt, now);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
