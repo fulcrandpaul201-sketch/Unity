@@ -3,6 +3,7 @@
 const AVATAR_URI = "data:image/png;base64,{{AVATAR}}";
 const BRICK_URI = "data:image/png;base64,{{BRICK}}";
 const FLOOR_URI = "data:image/png;base64,{{FLOOR}}";
+const HOPSCOTCH_URI = "data:image/png;base64,{{HOPSCOTCH}}";
 
 // ---------- Réglages ----------
 const ROOM = 20, HALF = ROOM / 2, WALL_H = 10;               // pièce carrée de 20 m, murs très hauts qui se perdent dans le noir
@@ -10,6 +11,7 @@ const LIGHT_H = 3.2;                                         // hauteur de la la
 const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
 const SPEED = 4.2;                                           // m/s
 const JUMP_SPEED = 5.4, GRAVITY = 15;                        // saut : environ 1 m de haut
+const PLAYER_R = 0.3;                                        // rayon de collision de l'avatar
 const AV_H = 1.7;                                            // taille de l'avatar (m)
 const FW = 172, FH = 303, SW = 688, SH = 1212;               // planche : images de 172x303 (voir avatar_sheet.json)
 const ROW = { down: 0, left: 1, right: 2, up: 3 };
@@ -105,7 +107,10 @@ function archOpening(r) {                // contour d'une ouverture (rectangle +
 // Toutes les pierres de la pièce sont fusionnées en un seul maillage (rapide, même sur téléphone)
 const stoneParts = [];
 const tmpM = new THREE.Matrix4();
-function stone(geo, matrix, shade) { stoneParts.push([geo, matrix.clone(), shade === LEAD ? LEAD_COLOR : STONES[shade % STONES.length]]); }
+function stone(geo, matrix, shade) {
+  const c = shade instanceof THREE.Color ? shade : shade === LEAD ? LEAD_COLOR : STONES[shade % STONES.length];
+  stoneParts.push([geo, matrix.clone(), c]);
+}
 function boxStone(wallM, w, h, d, x, y, z, shade) {
   stone(new THREE.BoxGeometry(w, h, d), wallM.clone().multiply(tmpM.makeTranslation(x, y, z)), shade);
 }
@@ -322,7 +327,109 @@ function updateFountain(dt, now) {
   dropGeo.attributes.position.needsUpdate = true;
 }
 
+// ---------- Cour de récréation : bancs, bascule, marelle, ballon ----------
+// obstacles en boîtes alignées : l'avatar les contourne, ou monte dessus si « standable » (sauter sur un banc)
+const OBSTACLES = [];
+const WOOD = [0x9a6a3e, 0x8f6038, 0xa47246].map(c => new THREE.Color(c).convertSRGBToLinear());
+const WOOD_DARK = new THREE.Color(0x6a4226).convertSRGBToLinear();
+function woodBox(w, h, d, x, y, z, color, rotZ = 0, cx = 0, cz = 0, ry = 0) {
+  const m = new THREE.Matrix4().makeTranslation(cx, 0, cz).multiply(new THREE.Matrix4().makeRotationY(ry))
+    .multiply(new THREE.Matrix4().makeTranslation(x, y, z)).multiply(new THREE.Matrix4().makeRotationZ(rotZ));
+  stone(new THREE.BoxGeometry(w, h, d), m, color);
+}
+const BENCH = { len: 2.2, seat: 0.45, depth: 0.46 };
+function bench(cx, cz) {                       // banc en bois le long d'un mur (axe x)
+  for (let i = 0; i < 3; i++)                  // 3 planches d'assise
+    woodBox(BENCH.len, 0.05, 0.14, 0, BENCH.seat, -0.16 + i * 0.16, WOOD[i], 0, cx, cz);
+  for (const sx of [-0.92, 0.92]) {
+    woodBox(0.09, BENCH.seat - 0.025, 0.4, sx, (BENCH.seat - 0.025) / 2, 0, WOOD_DARK, 0, cx, cz);   // pieds
+    woodBox(0.1, 0.06, 0.48, sx, BENCH.seat - 0.06, 0, WOOD_DARK, 0, cx, cz);                         // traverse sous l'assise
+  }
+  woodBox(1.84, 0.06, 0.06, 0, 0.14, 0, WOOD_DARK, 0, cx, cz);                                        // entretoise
+  OBSTACLES.push({ minX: cx - BENCH.len / 2, maxX: cx + BENCH.len / 2, minZ: cz - BENCH.depth / 2, maxZ: cz + BENCH.depth / 2,
+                   top: BENCH.seat + 0.025, standable: true });
+}
+bench(-6.5, -HALF + 1.25); bench(6.5, -HALF + 1.25); bench(-6.5, HALF - 1.25); bench(6.5, HALF - 1.25);
+
+function seesaw(cx, cz) {                      // bascule en bois inclinée, poignées et sièges
+  const tilt = 0.17, L = 3.4, pivotY = 0.5;
+  woodBox(0.34, 0.36, 0.5, 0, 0.18, 0, WOOD_DARK, 0, cx, cz);                                         // socle
+  woodBox(0.16, 0.16, 0.62, 0, pivotY - 0.06, 0, WOOD[0], 0, cx, cz);                                  // axe
+  const m = new THREE.Matrix4().makeTranslation(cx, pivotY, cz).multiply(new THREE.Matrix4().makeRotationZ(tilt));
+  const part = (w, h, d, x, y, z, c) => stone(new THREE.BoxGeometry(w, h, d), m.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, z)), c);
+  part(L, 0.07, 0.34, 0, 0.035, 0, WOOD[2]);                                                           // planche
+  for (const sx of [-1, 1]) {
+    part(0.4, 0.06, 0.36, sx * (L / 2 - 0.3), 0.1, 0, WOOD[1]);                                        // siège
+    part(0.06, 0.34, 0.06, sx * (L / 2 - 0.62), 0.24, -0.12, WOOD_DARK);                                // poignée
+    part(0.06, 0.34, 0.06, sx * (L / 2 - 0.62), 0.24, 0.12, WOOD_DARK);
+    part(0.06, 0.06, 0.3, sx * (L / 2 - 0.62), 0.42, 0, WOOD_DARK);
+  }
+  OBSTACLES.push({ minX: cx - L / 2, maxX: cx + L / 2, minZ: cz - 0.25, maxZ: cz + 0.25, top: 99, standable: false });
+}
+seesaw(-5.5, 4.5);
+
+// marelle à la craie sur les pavés (le « CIEL » vers la fontaine)
+{
+  const t = loader.load(HOPSCOTCH_URI);
+  t.magFilter = THREE.NearestFilter; t.encoding = THREE.sRGBEncoding;
+  const hop = new THREE.Mesh(new THREE.PlaneGeometry(80 / 64, 272 / 64),
+    new THREE.MeshStandardMaterial({ map: t, transparent: true, alphaTest: 0.1, roughness: 1, depthWrite: false }));
+  hop.rotation.x = -Math.PI / 2; hop.position.set(5.5, 0.006, 4.4); hop.receiveShadow = true; scene.add(hop);
+}
+
 mergeStones();
+
+// ballon : il roule, rebondit et ricoche ; on le pousse en marchant dessus
+const BALL_R = 0.22;
+const ballCanvas = document.createElement("canvas"); ballCanvas.width = 32; ballCanvas.height = 16;
+{
+  const c = ballCanvas.getContext("2d");
+  const cols = ["#d8433b", "#f2efe6", "#3b6fd8", "#f2efe6"];
+  for (let i = 0; i < 8; i++) { c.fillStyle = cols[i % 4]; c.fillRect(i * 4, 0, 4, 16); }
+  c.fillStyle = "#f6d24a"; c.fillRect(0, 0, 32, 2); c.fillRect(0, 14, 32, 2);
+}
+const ballTex = new THREE.CanvasTexture(ballCanvas); ballTex.magFilter = THREE.NearestFilter; ballTex.encoding = THREE.sRGBEncoding;
+const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 20, 14), new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.6 }));
+ballMesh.castShadow = true; scene.add(ballMesh);
+const ball = { x: 2.5, y: BALL_R, z: 6.0, vx: 0, vy: 0, vz: 0, cool: 0 };
+function updateBall(dt) {
+  const b = ball;
+  b.cool -= dt;
+  // coup de pied quand l'avatar touche le ballon
+  const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz), reach = 0.3 + BALL_R + 0.08;
+  if (d < reach && b.y - BALL_R < p.y + 0.6 && b.cool <= 0) {
+    const nx = dx / (d || 1), nz = dz / (d || 1), sp = p.moving ? 6.5 : 2.5;
+    b.vx = nx * sp; b.vz = nz * sp; b.vy = p.moving ? 2.6 : 1.2; b.cool = 0.25;
+    b.x = p.x + nx * reach; b.z = p.z + nz * reach;
+  }
+  b.vy -= GRAVITY * dt;
+  b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+  if (b.y < BALL_R) { b.y = BALL_R; b.vy = Math.abs(b.vy) > 0.6 ? -b.vy * 0.55 : 0; }
+  if (b.y <= BALL_R + 1e-3) { const f = Math.exp(-1.3 * dt); b.vx *= f; b.vz *= f; }
+  const lim = HALF - 0.45 - BALL_R;                                  // murs (devant le soubassement)
+  if (b.x < -lim) { b.x = -lim; b.vx = Math.abs(b.vx) * 0.7; } if (b.x > lim) { b.x = lim; b.vx = -Math.abs(b.vx) * 0.7; }
+  if (b.z < -lim) { b.z = -lim; b.vz = Math.abs(b.vz) * 0.7; } if (b.z > lim) { b.z = lim; b.vz = -Math.abs(b.vz) * 0.7; }
+  const fr = FOUNT.basinOut + 0.1 + BALL_R, fd = Math.hypot(b.x, b.z);   // bord de la fontaine
+  if (fd < fr && b.y < 0.75) {
+    const nx = b.x / fd, nz = b.z / fd, vn = b.vx * nx + b.vz * nz;
+    b.x = nx * fr; b.z = nz * fr;
+    if (vn < 0) { b.vx -= 1.7 * vn * nx; b.vz -= 1.7 * vn * nz; }
+  }
+  for (const o of OBSTACLES) {                                        // bancs et bascule
+    if (b.y - BALL_R > o.top) continue;
+    const qx = Math.max(o.minX, Math.min(o.maxX, b.x)), qz = Math.max(o.minZ, Math.min(o.maxZ, b.z));
+    const ex = b.x - qx, ez = b.z - qz, ed = Math.hypot(ex, ez);
+    if (ed < BALL_R && ed > 1e-6) {
+      const nx = ex / ed, nz = ez / ed, vn = b.vx * nx + b.vz * nz;
+      b.x = qx + nx * BALL_R; b.z = qz + nz * BALL_R;
+      if (vn < 0) { b.vx -= 1.7 * vn * nx; b.vz -= 1.7 * vn * nz; }
+    }
+  }
+  // rotation visuelle : il roule dans le sens du mouvement
+  const sp = Math.hypot(b.vx, b.vz);
+  if (sp > 1e-3) ballMesh.rotateOnWorldAxis(new THREE.Vector3(b.vz / sp, 0, -b.vx / sp), sp * dt / BALL_R);
+  ballMesh.position.set(b.x, b.y, b.z);
+}
 
 scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.42));
 const lamp = new THREE.PointLight(0xfff1dc, 1.0, 34, 1.5);
@@ -434,16 +541,28 @@ function frame(now) {
     // on fait le tour de la fontaine sans la traverser
     const fd = Math.hypot(p.x, p.z);
     if (fd < FOUNT.collide) { const k = FOUNT.collide / (fd || 1); p.x *= k; p.z *= k; }
+    for (const o of OBSTACLES) {                         // contourner les bancs (sauf si on est dessus) et la bascule
+      if (o.standable && p.y >= o.top - 0.12) continue;
+      const x0 = o.minX - PLAYER_R, x1 = o.maxX + PLAYER_R, z0 = o.minZ - PLAYER_R, z1 = o.maxZ + PLAYER_R;
+      if (p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1) {
+        const pen = [p.x - x0, x1 - p.x, p.z - z0, z1 - p.z], i = pen.indexOf(Math.min(...pen));
+        if (i === 0) p.x = x0; else if (i === 1) p.x = x1; else if (i === 2) p.z = z0; else p.z = z1;
+      }
+    }
     p.facing = Math.atan2(mx, mz);
     p.t += dt;
   } else p.t = 0;
 
+  // hauteur du sol sous l'avatar : pavés, ou dessus d'un banc
+  let ground = 0;
+  for (const o of OBSTACLES)
+    if (o.standable && p.x > o.minX - 0.1 && p.x < o.maxX + 0.1 && p.z > o.minZ - 0.1 && p.z < o.maxZ + 0.1 && p.y >= o.top - 0.12) ground = Math.max(ground, o.top);
   // saut : impulsion vers le haut si l'avatar touche le sol, puis gravité
-  if (jumpRequested && p.y <= 0) p.vy = JUMP_SPEED;
+  if (jumpRequested && p.y <= ground + 1e-3) p.vy = JUMP_SPEED;
   jumpRequested = false;
   p.vy -= GRAVITY * dt; p.y += p.vy * dt;
-  if (p.y < 0) { p.y = 0; p.vy = 0; }
-  const airborne = p.y > 0;
+  if (p.y < ground) { p.y = ground; p.vy = 0; }
+  const airborne = p.y > ground + 1e-3;
 
   // caméra en orbite autour de l'avatar, gardée à l'intérieur de la pièce
   const tx = p.x, ty = 1.1 + p.y * 0.5, tz = p.z;      // la caméra suit un peu le saut
@@ -461,10 +580,11 @@ function frame(now) {
   const row = dot < -0.7 ? ROW.down : dot > 0.7 ? ROW.up : side > 0 ? ROW.right : ROW.left;
   setFrame(row, airborne ? 1 : p.moving ? Math.floor(p.t * 8) % 4 : 0);   // en l'air : jambes écartées
   avatar.position.set(p.x, p.y, p.z);
-  const sh = 1 / (1 + p.y * 0.7);                       // l'ombre rétrécit et pâlit en hauteur
-  blob.position.set(p.x, 0.01, p.z); blob.scale.set(sh, 0.7 * sh, 1); blob.material.opacity = 0.35 * sh;
+  const sh = 1 / (1 + (p.y - ground) * 0.7);            // l'ombre rétrécit et pâlit en hauteur
+  blob.position.set(p.x, ground + 0.01, p.z); blob.scale.set(sh, 0.7 * sh, 1); blob.material.opacity = 0.35 * sh;
 
   updateFountain(dt, now);
+  updateBall(dt);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }

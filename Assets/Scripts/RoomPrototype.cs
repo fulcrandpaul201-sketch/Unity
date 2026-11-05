@@ -23,6 +23,13 @@ public class RoomPrototype : MonoBehaviour
     const float FadeStart = 2.2f, FadeEnd = 7.7f;   // les murs se perdent dans le noir entre ces hauteurs
     const float Speed = 4.2f, AvatarHeight = 1.7f;
     const float JumpSpeed = 5.4f, Gravity = 15f;   // saut d'environ 1 m
+    const float PlayerR = 0.3f;     // rayon de collision de l'avatar
+    // Cour de récréation : obstacles en boîtes alignées (bancs : on peut monter dessus ; bascule : on la contourne)
+    struct Obstacle { public float minX, maxX, minZ, maxZ, top; public bool standable; }
+    readonly System.Collections.Generic.List<Obstacle> obstacles = new System.Collections.Generic.List<Obstacle>();
+    const float BenchLen = 2.2f, BenchSeat = 0.45f, BenchDepth = 0.46f, BallR = 0.22f;
+    Rigidbody ball;
+    float kickCooldown;
     const float Tile = 2f;          // mètres couverts par une texture
     // Arches des murs de côté : ouverture 3 m, montants 3 m, alcôve 1,4 m, encadrement qui dépasse de 0,2 m
     const float ArchW = 3f, ArchH = 3f, ArchDepth = 1.4f, ArchRing = 0.42f, ArchOut = 0.2f, AR = ArchW / 2f;
@@ -53,6 +60,7 @@ public class RoomPrototype : MonoBehaviour
     float facing;                 // angle (degrés) de la direction regardée, autour de Y
     float yaw = 0f, pitch = 20f, dist = 5.5f, animT;
     float vy;                     // vitesse verticale (saut)
+    float ground;                 // hauteur du sol sous l'avatar (0 ou dessus d'un banc)
     Transform shadowBlob;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -79,6 +87,7 @@ public class RoomPrototype : MonoBehaviour
 
         BuildRoom();
         BuildFountain();
+        BuildPlayground();
         BuildAvatar();
         UpdateCameraAndAvatar(false);
     }
@@ -408,6 +417,8 @@ public class RoomPrototype : MonoBehaviour
         go.transform.localPosition = new Vector3(0f, (y0 + y1) / 2f, 0f);
         go.transform.localScale = new Vector3(r * 2f, Mathf.Max(0.001f, (y1 - y0) / 2f), r * 2f);
         go.GetComponent<Renderer>().material.color = color;
+        Destroy(go.GetComponent<Collider>());
+        go.AddComponent<MeshCollider>().convex = true;
         return go;
     }
 
@@ -420,6 +431,118 @@ public class RoomPrototype : MonoBehaviour
         go.transform.localPosition = pos;
         go.transform.localScale = size;
         go.GetComponent<Renderer>().material.color = color;
+    }
+
+    // ---------- Cour de récréation ----------
+    void BuildPlayground()
+    {
+        var root = new GameObject("Playground").transform;
+        Color32[] wood = { new Color32(154, 106, 62, 255), new Color32(143, 96, 56, 255), new Color32(164, 114, 70, 255) };
+        Color32 woodDark = new Color32(106, 66, 38, 255);
+
+        // 4 bancs le long des murs du fond et de devant, entre les piliers
+        foreach (var (cx, cz) in new[] { (-6.5f, -Half + 1.25f), (6.5f, -Half + 1.25f), (-6.5f, Half - 1.25f), (6.5f, Half - 1.25f) })
+        {
+            var b = new GameObject("Bench").transform; b.SetParent(root, false); b.localPosition = new Vector3(cx, 0f, cz);
+            for (int i = 0; i < 3; i++) LocalCube(b, "Plank", new Vector3(0f, BenchSeat, -0.16f + i * 0.16f), new Vector3(BenchLen, 0.05f, 0.14f), wood[i]);
+            foreach (float sx in new[] { -0.92f, 0.92f })
+            {
+                LocalCube(b, "Leg", new Vector3(sx, (BenchSeat - 0.025f) / 2f, 0f), new Vector3(0.09f, BenchSeat - 0.025f, 0.4f), woodDark);
+                LocalCube(b, "Rail", new Vector3(sx, BenchSeat - 0.06f, 0f), new Vector3(0.1f, 0.06f, 0.48f), woodDark);
+            }
+            LocalCube(b, "Stretcher", new Vector3(0f, 0.14f, 0f), new Vector3(1.84f, 0.06f, 0.06f), woodDark);
+            Solid(b, new Vector3(0f, BenchSeat / 2f, 0f), new Vector3(BenchLen, BenchSeat + 0.05f, BenchDepth));   // pour le ballon
+            obstacles.Add(new Obstacle { minX = cx - BenchLen / 2f, maxX = cx + BenchLen / 2f, minZ = cz - BenchDepth / 2f, maxZ = cz + BenchDepth / 2f, top = BenchSeat + 0.025f, standable = true });
+        }
+
+        // bascule inclinée avec sièges et poignées
+        {
+            float cx = -5.5f, cz = -4.5f, L = 3.4f, pivotY = 0.5f;
+            var b = new GameObject("Seesaw").transform; b.SetParent(root, false); b.localPosition = new Vector3(cx, 0f, cz);
+            LocalCube(b, "Base", new Vector3(0f, 0.18f, 0f), new Vector3(0.34f, 0.36f, 0.5f), woodDark);
+            LocalCube(b, "Axle", new Vector3(0f, pivotY - 0.06f, 0f), new Vector3(0.16f, 0.16f, 0.62f), wood[0]);
+            var plank = new GameObject("Plank").transform; plank.SetParent(b, false);
+            plank.localPosition = new Vector3(0f, pivotY, 0f); plank.localRotation = Quaternion.Euler(0f, 0f, 10f);
+            LocalCube(plank, "Board", new Vector3(0f, 0.035f, 0f), new Vector3(L, 0.07f, 0.34f), wood[2]);
+            foreach (float sx in new[] { -1f, 1f })
+            {
+                LocalCube(plank, "Seat", new Vector3(sx * (L / 2f - 0.3f), 0.1f, 0f), new Vector3(0.4f, 0.06f, 0.36f), wood[1]);
+                LocalCube(plank, "Handle", new Vector3(sx * (L / 2f - 0.62f), 0.24f, -0.12f), new Vector3(0.06f, 0.34f, 0.06f), woodDark);
+                LocalCube(plank, "Handle", new Vector3(sx * (L / 2f - 0.62f), 0.24f, 0.12f), new Vector3(0.06f, 0.34f, 0.06f), woodDark);
+                LocalCube(plank, "Handle bar", new Vector3(sx * (L / 2f - 0.62f), 0.42f, 0f), new Vector3(0.06f, 0.06f, 0.3f), woodDark);
+            }
+            Solid(b, new Vector3(0f, 0.5f, 0f), new Vector3(L, 1f, 0.5f));
+            obstacles.Add(new Obstacle { minX = cx - L / 2f, maxX = cx + L / 2f, minZ = cz - 0.25f, maxZ = cz + 0.25f, top = 99f, standable = false });
+        }
+
+        // marelle à la craie (le « CIEL » vers la fontaine)
+        var hopTex = Resources.Load<Texture2D>("tex_hopscotch");
+        if (hopTex != null)
+        {
+            hopTex.filterMode = FilterMode.Point;
+            var sr = new GameObject("Hopscotch").AddComponent<SpriteRenderer>();
+            sr.sprite = Sprite.Create(hopTex, new Rect(0, 0, hopTex.width, hopTex.height), new Vector2(0.5f, 0.5f), 64f);   // 64 px par mètre
+            sr.transform.SetParent(root, false);
+            sr.transform.localPosition = new Vector3(5.5f, 0.006f, -4.4f);
+            sr.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // à plat, le haut de l'image vers la fontaine
+        }
+
+        // murs invisibles pour le ballon (devant le soubassement)
+        float wl = Half - 0.45f;
+        Solid(root, new Vector3(0f, 1f, wl + 0.5f), new Vector3(Room, 2f, 1f));
+        Solid(root, new Vector3(0f, 1f, -wl - 0.5f), new Vector3(Room, 2f, 1f));
+        Solid(root, new Vector3(wl + 0.5f, 1f, 0f), new Vector3(1f, 2f, Room));
+        Solid(root, new Vector3(-wl - 0.5f, 1f, 0f), new Vector3(1f, 2f, Room));
+        var basin = GameObject.CreatePrimitive(PrimitiveType.Cylinder);            // bord de la fontaine
+        basin.name = "Basin collider"; basin.transform.SetParent(root, false);
+        basin.transform.localPosition = new Vector3(0f, 0.32f, 0f); basin.transform.localScale = new Vector3((BasinOut + 0.1f) * 2f, 0.32f, (BasinOut + 0.1f) * 2f);
+        Destroy(basin.GetComponent<Collider>()); basin.AddComponent<MeshCollider>().convex = true;
+        basin.GetComponent<Renderer>().enabled = false;
+
+        // ballon rayé : roule, rebondit, on le pousse en marchant dessus
+        var bg = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        bg.name = "Ball"; bg.transform.SetParent(root, false);
+        bg.transform.localPosition = new Vector3(-2.5f, BallR, -6f); bg.transform.localScale = Vector3.one * BallR * 2f;
+        var bt = new Texture2D(32, 16) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Repeat };
+        Color32[] stripes = { new Color32(216, 67, 59, 255), new Color32(242, 239, 230, 255), new Color32(59, 111, 216, 255), new Color32(242, 239, 230, 255) };
+        for (int y = 0; y < 16; y++) for (int x = 0; x < 32; x++)
+            bt.SetPixel(x, y, (y < 2 || y > 13) ? (Color)new Color32(246, 210, 74, 255) : (Color)stripes[(x / 4) % 4]);
+        bt.Apply();
+        var bm = bg.GetComponent<Renderer>().material; bm.mainTexture = bt; bm.color = Color.white;
+        var pm = new PhysicMaterial("Ball") { bounciness = 0.55f, dynamicFriction = 0.4f, staticFriction = 0.4f, bounceCombine = PhysicMaterialCombine.Maximum };
+        bg.GetComponent<Collider>().material = pm;
+        ball = bg.AddComponent<Rigidbody>();
+        ball.mass = 0.4f;
+        ball.interpolation = RigidbodyInterpolation.Interpolate;
+        ball.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+    }
+
+    // collisionneur invisible (boîte)
+    static void Solid(Transform parent, Vector3 localPos, Vector3 size)
+    {
+        var go = new GameObject("Collider");
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = localPos;
+        go.AddComponent<BoxCollider>().size = size;
+    }
+
+    void KickBall(bool moving)
+    {
+        kickCooldown -= Time.deltaTime;
+        if (ball == null || kickCooldown > 0f) return;
+        Vector3 d = ball.position - pos; d.y = 0f;
+        float reach = PlayerR + BallR + 0.08f;
+        if (d.magnitude < reach && ball.position.y - BallR < pos.y + 0.6f)
+        {
+            Vector3 n = d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.forward;
+            Vector3 v = n * (moving ? 6.5f : 2.5f) + Vector3.up * (moving ? 2.6f : 1.2f);
+#if UNITY_6000_0_OR_NEWER
+            ball.linearVelocity = v;
+#else
+            ball.velocity = v;
+#endif
+            kickCooldown = 0.25f;
+        }
     }
 
     static Vector2 UVxy(Vector3 p) => new Vector2(p.x / Tile, p.y / Tile);
@@ -655,16 +778,33 @@ public class RoomPrototype : MonoBehaviour
             // on fait le tour de la fontaine sans la traverser
             var flat = new Vector2(pos.x, pos.z);
             if (flat.magnitude < FountainCollide) { flat = (flat.sqrMagnitude > 1e-6f ? flat.normalized : Vector2.up) * FountainCollide; pos.x = flat.x; pos.z = flat.y; }
+            foreach (var o in obstacles)                 // contourner les bancs (sauf si on est dessus) et la bascule
+            {
+                if (o.standable && pos.y >= o.top - 0.12f) continue;
+                float x0 = o.minX - PlayerR, x1 = o.maxX + PlayerR, z0 = o.minZ - PlayerR, z1 = o.maxZ + PlayerR;
+                if (pos.x > x0 && pos.x < x1 && pos.z > z0 && pos.z < z1)
+                {
+                    float[] pen = { pos.x - x0, x1 - pos.x, pos.z - z0, z1 - pos.z };
+                    int i = 0; for (int k = 1; k < 4; k++) if (pen[k] < pen[i]) i = k;
+                    if (i == 0) pos.x = x0; else if (i == 1) pos.x = x1; else if (i == 2) pos.z = z0; else pos.z = z1;
+                }
+            }
             facing = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
             animT += Time.deltaTime;
         }
         else animT = 0f;
 
         // saut : impulsion si l'avatar touche le sol, puis gravité
-        if (jump && pos.y <= 0f) vy = JumpSpeed;
+        // hauteur du sol sous l'avatar : pavés, ou dessus d'un banc
+        ground = 0f;
+        foreach (var o in obstacles)
+            if (o.standable && pos.x > o.minX - 0.1f && pos.x < o.maxX + 0.1f && pos.z > o.minZ - 0.1f && pos.z < o.maxZ + 0.1f && pos.y >= o.top - 0.12f)
+                ground = Mathf.Max(ground, o.top);
+        if (jump && pos.y <= ground + 1e-3f) vy = JumpSpeed;
         vy -= Gravity * Time.deltaTime;
         pos.y += vy * Time.deltaTime;
-        if (pos.y < 0f) { pos.y = 0f; vy = 0f; }
+        if (pos.y < ground) { pos.y = ground; vy = 0f; }
+        KickBall(moving);
         UpdateCameraAndAvatar(moving);
     }
 
@@ -693,12 +833,12 @@ public class RoomPrototype : MonoBehaviour
         float dot = Vector3.Dot(f, v);
         float side = Vector3.Dot(f, Vector3.Cross(Vector3.up, v));   // > 0 : regarde vers la droite de l'écran
         int row = dot < -0.7f ? RowDown : dot > 0.7f ? RowUp : side > 0f ? RowRight : RowLeft;
-        bool airborne = pos.y > 0f;
+        bool airborne = pos.y > ground + 1e-3f;
         int col = airborne ? 1 : moving ? Mathf.FloorToInt(animT * 8f) % 4 : 0;   // en l'air : jambes écartées
         if (shadowBlob != null)   // l'ombre reste au sol et rétrécit en hauteur
         {
-            float sh = 1f / (1f + pos.y * 0.7f);
-            shadowBlob.localPosition = new Vector3(0f, 0.005f - pos.y, 0f);
+            float sh = 1f / (1f + (pos.y - ground) * 0.7f);
+            shadowBlob.localPosition = new Vector3(0f, ground + 0.005f - pos.y, 0f);
             shadowBlob.localScale = new Vector3(0.64f * sh, 0.002f, 0.45f * sh);
         }
         body.sprite = frames[row, col];

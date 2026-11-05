@@ -3,7 +3,8 @@ import base64, os
 os.chdir(os.path.join(os.path.dirname(__file__), ".."))
 b64 = lambda p: base64.b64encode(open(p, "rb").read()).decode()
 script = (open("Tools/web/game.js").read().replace("{{AVATAR}}", b64("Assets/Resources/avatar_sheet.png"))
-          .replace("{{BRICK}}", b64("Assets/Resources/tex_brick.png")).replace("{{FLOOR}}", b64("Assets/Resources/tex_floor.png")))
+          .replace("{{BRICK}}", b64("Assets/Resources/tex_brick.png")).replace("{{FLOOR}}", b64("Assets/Resources/tex_floor.png"))
+          .replace("{{HOPSCOTCH}}", b64("Assets/Resources/tex_hopscotch.png")))
 page = open("Tools/web/page.html").read().replace("{{SCRIPT}}", script)
 open("Web/piece-3d-v2.html", "w").write(page)   # version de travail publiée
 # Web/versions/ : copies figées des versions précédentes, à ne pas modifier

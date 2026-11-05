@@ -66,3 +66,60 @@ if __name__ == "__main__":
     os.makedirs("Assets/Art/Preview", exist_ok=True)
     prev.resize((prev.width * 2, prev.height * 2), Image.NEAREST).save("Assets/Art/Preview/textures_tiled.png")
     print("ok")
+
+# ---------- Marelle à la craie (pixel art, fond transparent) ----------
+# 64 px par mètre ; cases de 0,6 m ; de bas en haut : 1, 2, 3, 4|5, 6, 7|8, puis le « CIEL » en demi-cercle
+GLYPHS = {
+    "1": ["010", "110", "010", "010", "111"], "2": ["111", "001", "111", "100", "111"], "3": ["111", "001", "011", "001", "111"],
+    "4": ["101", "101", "111", "001", "001"], "5": ["111", "100", "111", "001", "111"], "6": ["111", "100", "111", "101", "111"],
+    "7": ["111", "001", "010", "010", "010"], "8": ["111", "101", "111", "101", "111"],
+    "C": ["111", "100", "100", "100", "111"], "I": ["111", "010", "010", "010", "111"], "E": ["111", "100", "110", "100", "111"],
+    "L": ["100", "100", "100", "100", "111"],
+}
+
+def hopscotch():
+    PX, CELL = 64, 0.6
+    w, h = int(2 * CELL * PX) + 4, int(7 * CELL * PX) + 4          # 2 cases de large, 6 rangées + ciel
+    img = np.zeros((h, w, 4), np.uint8)
+    rng = np.random.default_rng(3)
+    def chalk(x, y):
+        if 0 <= x < w and 0 <= y < h and rng.random() > 0.12:      # trait de craie un peu irrégulier
+            img[y, x] = (240, 236, 246, 215 + int(rng.random() * 40))
+    def line(x0, y0, x1, y1):
+        n = int(max(abs(x1 - x0), abs(y1 - y0))) + 1
+        for t in np.linspace(0, 1, n):
+            x, y = int(round(x0 + (x1 - x0) * t)), int(round(y0 + (y1 - y0) * t))
+            for dx in (0, 1):
+                for dy in (0, 1): chalk(x + dx, y + dy)
+    def rect(x0, y0, x1, y1):
+        line(x0, y0, x1, y0); line(x1, y0, x1, y1); line(x1, y1, x0, y1); line(x0, y1, x0, y0)
+    def text(s, cx, cy, scale=4):
+        tw = len(s) * 4 * scale - scale
+        x = cx - tw // 2
+        for ch in s:
+            for j, row in enumerate(GLYPHS[ch]):
+                for i, bit in enumerate(row):
+                    if bit == "1":
+                        for a in range(scale):
+                            for b in range(scale): chalk(x + i * scale + a, cy - 5 * scale // 2 + j * scale + b)
+            x += 4 * scale
+    c = int(CELL * PX); mid = w // 2
+    rows = [["1"], ["2"], ["3"], ["4", "5"], ["6"], ["7", "8"]]
+    for r, labels in enumerate(rows):                                 # rangée 0 en bas de l'image
+        y1 = h - 2 - r * c; y0 = y1 - c
+        if len(labels) == 1:
+            rect(mid - c // 2, y0, mid + c // 2, y1); text(labels[0], mid, (y0 + y1) // 2)
+        else:
+            rect(mid - c, y0, mid, y1); rect(mid, y0, mid + c, y1)
+            text(labels[0], mid - c // 2, (y0 + y1) // 2); text(labels[1], mid + c // 2, (y0 + y1) // 2)
+    ytop = h - 2 - 6 * c                                              # demi-cercle du ciel
+    for a in np.linspace(0, np.pi, 160):
+        x, y = mid + np.cos(a) * c, ytop - np.sin(a) * (c - 2)
+        chalk(int(x), int(y)); chalk(int(x) + 1, int(y))
+    line(mid - c, ytop, mid + c, ytop)
+    text("CIEL", mid, ytop - c // 2 + 4, 3)
+    Image.fromarray(img, "RGBA").save("Assets/Resources/tex_hopscotch.png")
+
+if __name__ == "__main__":
+    hopscotch()
+    print("marelle ok")
