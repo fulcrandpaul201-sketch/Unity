@@ -1,6 +1,7 @@
-"""Avatar pixel art 16x24 : 4 directions x 4 images de marche -> Assets/Resources/avatar_sheet.png
+"""Avatar 16x24 dessiné en pixel art puis adouci (Scale2x x2 -> 64x96) : 4 directions x 4 images de marche -> Assets/Resources/avatar_sheet.png
 Lignes de la planche : 0=bas, 1=gauche, 2=droite, 3=haut. Colonnes : repos, pas A, repos, pas B."""
 import os
+import numpy as np
 from PIL import Image
 
 PAL = {
@@ -27,7 +28,7 @@ BACK = sym([
 ])
 SIDE = [  # regarde vers la droite
     ".....oooo.......", "....ohhhhoo.....", "...ohhHHhhho....", "...ohHhhhhhho...",
-    "...ohhhhhhhho...", "...ohhhhhssso...", "...ohhhhsssso...", "...ohhhhssseo...",
+    "...ohhhhhhhho...", "...ohhhhhssso...", "...ohhhhsssso...", "...ohhhhssesso..",
     "...oohhhssspo...", "....oohsssoo....", ".....oswwo......", "....orrrRro.....",
     "....orrdRRro....", "....orrdRRro....", "....orrdRRro....", "....orrrsRro....",
     "....oggggggo....", "....orrrrrro....", "...orrrrrrrro...", "...orrrrrrrro...",
@@ -61,14 +62,34 @@ def draw(rows, flip=False):
             if ch != ".": im.putpixel((x, y), PAL[ch] + (255,))
     return im
 
+def scale2x(a):
+    """Scale2x/EPX : double la taille en arrondissant les diagonales"""
+    p = np.pad(a, ((1, 1), (1, 1), (0, 0)), mode="edge")
+    P = p[1:-1, 1:-1]; A = p[:-2, 1:-1]; B = p[1:-1, 2:]; C = p[1:-1, :-2]; D = p[2:, 1:-1]
+    eq = lambda u, v: np.all(u == v, axis=-1)[..., None]
+    o1 = np.where(eq(C, A) & ~eq(C, D) & ~eq(A, B), A, P)
+    o2 = np.where(eq(A, B) & ~eq(A, C) & ~eq(B, D), B, P)
+    o3 = np.where(eq(D, C) & ~eq(D, B) & ~eq(C, A), C, P)
+    o4 = np.where(eq(B, D) & ~eq(B, A) & ~eq(D, C), D, P)
+    h, w = a.shape[:2]
+    out = np.zeros((h * 2, w * 2, a.shape[2]), a.dtype)
+    out[0::2, 0::2], out[0::2, 1::2], out[1::2, 0::2], out[1::2, 1::2] = o1, o2, o3, o4
+    return out
+
+def smooth(im):
+    a = np.array(im)
+    return Image.fromarray(scale2x(scale2x(a)))
+
 if __name__ == "__main__":
     os.chdir(os.path.join(os.path.dirname(__file__), ".."))
-    sheet = Image.new("RGBA", (64, 96), (0, 0, 0, 0))
+    F = 4                                   # 16x24 -> 64x96
+    sheet = Image.new("RGBA", (64 * F, 96 * F), (0, 0, 0, 0))
     rows = [(FRONT, "front", False), (SIDE, "side", True), (SIDE, "side", False), (BACK, "back", False)]
     for j, (base, kind, flip) in enumerate(rows):
         for i, fr in enumerate(frames(base, kind)):
-            sheet.paste(draw(fr, flip), (i * 16, j * 24))
+            sheet.paste(smooth(draw(fr, flip)), (i * 16 * F, j * 24 * F))
     os.makedirs("Assets/Resources", exist_ok=True)
+    os.makedirs("Assets/Art/Preview", exist_ok=True)
     sheet.save("Assets/Resources/avatar_sheet.png")
-    sheet.resize((64 * 8, 96 * 8), Image.NEAREST).save("Assets/Art/Preview/avatar_sheet_x8.png")
+    sheet.resize((sheet.width * 2, sheet.height * 2), Image.NEAREST).save("Assets/Art/Preview/avatar_sheet_x2.png")
     print("ok")

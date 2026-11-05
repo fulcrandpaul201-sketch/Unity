@@ -9,7 +9,7 @@
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
     padding-block: 8px; box-sizing: border-box; }
   canvas { width: min(100%, 960px, calc((100dvh - 70px) * 4 / 3)); max-width: 100%; aspect-ratio: 4 / 3;
-    image-rendering: pixelated; border-radius: 6px; box-shadow: 0 8px 30px #0008; }
+    border-radius: 6px; box-shadow: 0 8px 30px #0008; }
   p { margin: 0; font-size: 14px; color: var(--muted); text-align: center; }
 </style>
 <main>
@@ -21,16 +21,17 @@ const room = new Image(); room.src = "data:image/png;base64,{{ROOM}}";
 const sheet = new Image(); sheet.src = "data:image/png;base64,{{AVATAR}}";
 
 // Géométrie de la salle (mêmes valeurs que Tools/generate_rooms.py)
-const DS = 3, VPX = 160, VPY = 80, FLOOR_Y = 136, FOC = 160, BL = 80, BR = 240;
-const CHAR_SCALE = 1.5;                 // taille de l'avatar au fond de la salle
-const SPEED = 48;                       // unités monde / seconde
-const MIN_Z = 70, MAX_Z = FOC - 3, MARGIN = 7;
+const DS = 1.5, VPX = 320, VPY = 130, FLOOR_Y = 270, FOC = 300, BL = 170, BR = 470;
+const AV_H = 66;                        // hauteur de l'avatar (unités) au fond de la salle
+const FW = 64, FH = 96;                 // taille d'une image de la planche
+const SPEED = 95;                       // unités monde / seconde
+const MIN_Z = 135, MAX_Z = FOC - 6, MARGIN = 14;
 const DIR = { down: 0, left: 1, right: 2, up: 3 };
 
 const cv = document.getElementById("c"), ctx = cv.getContext("2d");
-ctx.imageSmoothingEnabled = false;
+ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
 
-const p = { wx: 160, z: 110, dir: DIR.down, t: 0, moving: false };
+const p = { wx: 320, z: 200, dir: DIR.down, t: 0, moving: false };
 const keys = new Set();
 addEventListener("keydown", e => { keys.add(e.code); if (e.code.startsWith("Arrow")) e.preventDefault(); });
 addEventListener("keyup", e => keys.delete(e.code));
@@ -77,15 +78,15 @@ function frame(now) {
     p.t += dt;
   } else p.t = 0;
 
-  ctx.drawImage(room, 0, 0, 320 * DS, 240 * DS);
+  ctx.drawImage(room, 0, 0, cv.width, cv.height);
 
   const [sx, sy, k] = project(p.wx, p.z);
-  const ps = Math.max(2, Math.round(DS * CHAR_SCALE * k));            // pixels écran par pixel du sprite
-  const fx = Math.round(sx * DS), fy = Math.round(sy * DS);
+  const dh = AV_H * k * DS, dw = dh * FW / FH;                     // taille affichée
+  const fx = sx * DS, fy = sy * DS;
   ctx.fillStyle = "rgba(40,24,56,0.28)";
-  ctx.beginPath(); ctx.ellipse(fx, fy - ps * 0.5, ps * 6, ps * 1.8, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(fx, fy - dh * 0.02, dw * 0.36, dw * 0.1, 0, 0, Math.PI * 2); ctx.fill();
   const col = p.moving ? Math.floor(p.t * 8) % 4 : 0;
-  ctx.drawImage(sheet, col * 16, p.dir * 24, 16, 24, fx - ps * 8, fy - ps * 24, ps * 16, ps * 24);
+  ctx.drawImage(sheet, col * FW + 1, p.dir * FH + 1, FW - 2, FH - 2, fx - dw / 2, fy - dh, dw, dh);   // marge de 1 px : pas de débord entre images
 
   if (stick) {
     ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 4;
