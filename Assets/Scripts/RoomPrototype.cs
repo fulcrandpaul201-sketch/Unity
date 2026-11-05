@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// Prototype : affiche la salle vide et un avatar déplaçable (flèches / ZQSD / manette).
 /// Se lance tout seul quand on appuie sur Play, dans n'importe quelle scène.
-/// Images attendues dans Assets/Resources : room_empty.png (1860x720) et avatar_sheet.png (512x768, images de 128x192).
+/// Images attendues dans Assets/Resources : room_empty.png (1860x720) et avatar_sheet.png (688x1212, images de 172x303).
 /// La salle mesure 1240x480 unités Unity ; la caméra, rapprochée, suit l'avatar.
 /// Brouillard : la salle est noire au départ, l'avatar éclaire autour de lui et les zones visitées restent en pénombre.
 /// </summary>
@@ -18,10 +18,10 @@ public class RoomPrototype : MonoBehaviour
     const float VPX = 620f, VPY = 130f, FloorY = 270f, Foc = 300f, WallL = 170f, WallR = 1070f;
     const float RoomW = 1240f, RoomH = 480f;
     const float Edge = 75f;         // distance minimale entre l'avatar et le bord de l'image
-    const float AvatarHeight = 92f; // hauteur de l'image de l'avatar au fond de la salle
+    const float AvatarHeight = 84f; // hauteur de l'image de l'avatar au fond de la salle
     const float Speed = 95f;        // unités "monde" par seconde
     const float MinZ = 135f, MaxZ = 294f, Margin = 14f;
-    const int FrameW = 128, FrameH = 192;
+    const int FrameW = 172, FrameH = 303;   // voir Assets/Resources/avatar_sheet.json
     const float ViewH = 360f;       // hauteur visible (caméra rapprochée)
     const int FogCell = 4;          // taille d'une case du brouillard (unités)
     const float DarkUnseen = 0.97f, DarkSeen = 0.5f;
