@@ -43,7 +43,7 @@ const BRICK_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAACgCAIAAAA
 const FLOOR_URI = "data:image/png;base64,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";
 
 // ---------- Réglages ----------
-const ROOM = 26, HALF = ROOM / 2, WALL_H = 10;               // cour carrée de 26 m, murs hauts qui se fondent dans la nuit
+const ROOM = 26, HALF = ROOM / 2, WALL_H = 15.6;             // cour carrée de 26 m entourée de façades à 3 niveaux
 const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
 const SPEED = 4.2;                                           // m/s
 const JUMP_SPEED = 5.4, GRAVITY = 15;                        // saut : environ 1 m de haut
@@ -76,8 +76,8 @@ function tiled(uri, width, height) {
 }
 const surface = map => new THREE.MeshStandardMaterial({ map, roughness: 0.95, metalness: 0 });
 
-// Obscurité en hauteur : chaque matériau des murs se fond dans le noir au-dessus de 2,2 m (pas de plafond visible)
-const FADE_START = 2.2, FADE_END = 7.7;
+// Pénombre en hauteur : les étages restent visibles mais s'assombrissent doucement vers le ciel de nuit
+const FADE_START = 9, FADE_END = 24;
 function withHeightFade(mat) {
   mat.customProgramCacheKey = () => "heightFade";   // sinon Three.js réutilise le shader du sol, sans le fondu
   mat.onBeforeCompile = sh => {
@@ -86,14 +86,14 @@ function withHeightFade(mat) {
       "#include <begin_vertex>\nvWorldY = (modelMatrix * vec4(transformed, 1.0)).y;");
     sh.fragmentShader = "varying float vWorldY;\nuniform vec3 fadeColor;\n" + sh.fragmentShader.replace("#include <dithering_fragment>",
       "#include <dithering_fragment>\nfloat fadeT = smoothstep(" + FADE_START.toFixed(2) + ", " + FADE_END.toFixed(2) + ", vWorldY);\n" +
-      "gl_FragColor.rgb = mix(gl_FragColor.rgb, fadeColor, pow(fadeT, 0.8));");
+      "gl_FragColor.rgb = mix(gl_FragColor.rgb, fadeColor, 0.6 * pow(fadeT, 0.8));");
   };
   return mat;
 }
 
 // ---------- Architecture : la même structure en pierre sur les 4 murs ----------
 // Repère local d'un mur : x le long du mur, y vers le haut, z vers l'intérieur de la pièce (0 = surface du mur)
-const ARCH = { w: 3.0, h: 3.0, depth: 1.4, ring: 0.42, out: 0.2 };   // ouverture 3 m, montants de 3 m, alcôve de 1,4 m
+const ARCH = { w: 3.0, h: 3.0, depth: 1.4, ring: 0.42, out: 0.2 };   // ouverture 3 m, montants de 3 m, passage voûté de 1,4 m
 const AR = ARCH.w / 2;
 const ARCH_X = [0];                                                  // une arche au centre de chaque mur
 const PILLAR_X = [-HALF + 0.35, -9.75, -3.25, 3.25, 9.75, HALF - 0.35];   // piliers réguliers et dans les angles
@@ -103,21 +103,33 @@ const WALL_CLEAR = 0.8;                                              // distance
 // Fenêtres (murs de gauche et de droite) : plein cintre, appui à 1,5 m, sommet à 3,4 m
 const WIN = { w: 1.4, bottom: 1.5, spring: 2.7, depth: 0.45, ring: 0.3, out: 0.16 };
 const WR = WIN.w / 2;
-const WIN_X = [-11.2, -6.5, 6.5, 11.2];                              // une fenêtre dans chaque travée
+const WIN_X = [-6.5, 6.5];                                           // rez-de-chaussée : de part et d'autre de l'arche
+const UPPER_LEVELS = [6.3, 10.5];                                     // appuis des fenêtres des 2 étages
+const UPPER_X = [-11.2, -6.5, 0, 6.5, 11.2];
+const STRING_Y = 9.6, TOP_CORNICE_Y = 14.45;                          // bandeau entre les étages, corniche sommitale
+// Salles derrière les arches
+const RW = 12, RD = 10, RH = 5;                                       // largeur, profondeur, hauteur sous plafond
 
 const metersBrick = () => tiled(BRICK_URI, 1, 1);                    // UV en mètres -> 1 répétition tous les 2 m
+const floorMat = (w, d) => surface(tiled(FLOOR_URI, w, d));
 const wallMat = withHeightFade(surface(metersBrick()));
 wallMat.shadowSide = THREE.DoubleSide;                               // les murs (plans) projettent leur ombre au clair de lune
 const nicheMat = withHeightFade(new THREE.MeshStandardMaterial({ map: metersBrick(), color: new THREE.Color(0x7d766d).convertSRGBToLinear(), roughness: 0.95, side: THREE.BackSide }));
 const stoneMat = withHeightFade(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
 const STONES = [0xb9b1a5, 0xafa699, 0xc3bbb0, 0xa79f93].map(c => new THREE.Color(c).convertSRGBToLinear());
+const WOOD = [0x5e3d26, 0x553722, 0x66442b].map(c => new THREE.Color(c).convertSRGBToLinear());   // chêne foncé
+const WOOD_DARK = new THREE.Color(0x2f2b2a).convertSRGBToLinear();
 const LEAD = -1, LEAD_COLOR = new THREE.Color(0x2e2a28).convertSRGBToLinear();   // croisillons des fenêtres
 const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffbe63).convertSRGBToLinear() });   // fenêtres éclairées de l'intérieur
+const glassDark = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x283044).convertSRGBToLinear() });  // pièces éteintes
+const glassMoon = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x8fa6d8).convertSRGBToLinear() });  // vue sur la nuit depuis les salles
+const hiddenMat = new THREE.MeshBasicMaterial({ visible: false });
 
-function windowShape(cx) {               // contour d'une fenêtre (rectangle + demi-cercle)
-  const sh = new THREE.Shape();
-  sh.moveTo(cx - WR, WIN.bottom); sh.lineTo(cx + WR, WIN.bottom); sh.lineTo(cx + WR, WIN.spring);
-  sh.absarc(cx, WIN.spring, WR, 0, Math.PI, false); sh.lineTo(cx - WR, WIN.bottom);
+const WIN_H = WIN.spring - WIN.bottom;
+function windowShape(cx, bottom = WIN.bottom) {   // contour d'une fenêtre (rectangle + demi-cercle)
+  const sh = new THREE.Shape(), spring = bottom + WIN_H;
+  sh.moveTo(cx - WR, bottom); sh.lineTo(cx + WR, bottom); sh.lineTo(cx + WR, spring);
+  sh.absarc(cx, spring, WR, 0, Math.PI, false); sh.lineTo(cx - WR, bottom);
   return sh;
 }
 function wallGeometry(windows) {         // mur entier avec les ouvertures des arches (et des fenêtres) découpées
@@ -130,6 +142,7 @@ function wallGeometry(windows) {         // mur entier avec les ouvertures des a
   }
   sh.lineTo(HALF, 0); sh.lineTo(HALF, WALL_H); sh.lineTo(-HALF, WALL_H); sh.closePath();
   if (windows) for (const cx of WIN_X) sh.holes.push(windowShape(cx));
+  for (const b of UPPER_LEVELS) for (const cx of UPPER_X) sh.holes.push(windowShape(cx, b));
   return new THREE.ShapeGeometry(sh, 32);
 }
 function archOpening(r) {                // contour d'une ouverture (rectangle + demi-cercle)
@@ -142,7 +155,8 @@ function archOpening(r) {                // contour d'une ouverture (rectangle +
 const stoneParts = [];
 const tmpM = new THREE.Matrix4();
 function stone(geo, matrix, shade) {
-  const c = shade instanceof THREE.Color ? shade : shade === LEAD ? LEAD_COLOR : STONES[shade % STONES.length];
+  const n = STONES.length;
+  const c = shade instanceof THREE.Color ? shade : shade === LEAD ? LEAD_COLOR : STONES[((Math.round(shade) % n) + n) % n];
   stoneParts.push([geo, matrix.clone(), c]);
 }
 function boxStone(wallM, w, h, d, x, y, z, shade) {
@@ -181,26 +195,27 @@ function makeVoussoirs(r, ring, out, n, keyExtra) {
 const VOUSSOIRS = makeVoussoirs(AR, ARCH.ring, ARCH.out, 9, 0.16);
 const WIN_VOUSSOIRS = makeVoussoirs(WR, WIN.ring, WIN.out, 7, 0.1);
 
-function buildWindow(g, W, cx) {
+function buildWindow(g, W, cx, bottom = WIN.bottom, glassM = glassMat) {
+  const B = bottom, S = bottom + WIN_H;
   // tableau (épaisseur du mur) vu de l'intérieur + vitrage au fond
-  const reveal = new THREE.Mesh(new THREE.ExtrudeGeometry(windowShape(cx), { depth: WIN.depth, bevelEnabled: false, curveSegments: 24 }), nicheMat);
+  const reveal = new THREE.Mesh(new THREE.ExtrudeGeometry(windowShape(cx, B), { depth: WIN.depth, bevelEnabled: false, curveSegments: 24 }), [hiddenMat, nicheMat]);
   reveal.position.z = -WIN.depth; reveal.receiveShadow = true; g.add(reveal);
-  const glass = new THREE.Mesh(new THREE.ShapeGeometry(windowShape(cx), 24), glassMat);
+  const glass = new THREE.Mesh(new THREE.ShapeGeometry(windowShape(cx, B), 24), glassM);
   glass.position.z = -WIN.depth + 0.02; g.add(glass);
   // croisillons
-  const top = WIN.spring + WR, zc = -WIN.depth + 0.05;
-  boxStone(W, 0.07, top - WIN.bottom, 0.05, cx, (WIN.bottom + top) / 2, zc, LEAD);
-  boxStone(W, WIN.w, 0.07, 0.05, cx, WIN.spring, zc, LEAD);
-  boxStone(W, WIN.w, 0.06, 0.05, cx, (WIN.bottom + WIN.spring) / 2, zc, LEAD);
+  const top = S + WR, zc = -WIN.depth + 0.05;
+  boxStone(W, 0.07, top - B, 0.05, cx, (B + top) / 2, zc, LEAD);
+  boxStone(W, WIN.w, 0.07, 0.05, cx, S, zc, LEAD);
+  boxStone(W, WIN.w, 0.06, 0.05, cx, (B + S) / 2, zc, LEAD);
   // encadrement : montants alternés, appui saillant, claveaux et clé
-  const rows = 4, bh = (WIN.spring - WIN.bottom) / rows, gap = 0.03;
+  const rows = 4, bh = (S - B) / rows, gap = 0.03;
   for (let i = 0; i < rows; i++) {
     const wdt = i % 2 ? 0.22 : 0.32;
-    for (const side of [-1, 1]) boxStone(W, wdt, bh - gap, WIN.out, cx + side * (WR + wdt / 2), WIN.bottom + i * bh + bh / 2, WIN.out / 2, i + (side > 0 ? 1 : 0));
+    for (const side of [-1, 1]) boxStone(W, wdt, bh - gap, WIN.out, cx + side * (WR + wdt / 2), B + i * bh + bh / 2, WIN.out / 2, i + (side > 0 ? 1 : 0));
   }
-  boxStone(W, WIN.w + 0.8, 0.16, WIN.out + 0.16, cx, WIN.bottom - 0.08, (WIN.out + 0.16) / 2, 2);   // appui
-  boxStone(W, WIN.w + 0.4, 0.14, WIN.out, cx, WIN.bottom - 0.23, WIN.out / 2, 3);                   // sous l'appui
-  WIN_VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, WIN.spring, 0)), i));
+  boxStone(W, WIN.w + 0.8, 0.16, WIN.out + 0.16, cx, B - 0.08, (WIN.out + 0.16) / 2, 2);   // appui
+  boxStone(W, WIN.w + 0.4, 0.14, WIN.out, cx, B - 0.23, WIN.out / 2, 3);                   // sous l'appui
+  WIN_VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, S, 0)), i));
 }
 
 function buildWall(px, pz, ry, windows = false) {
@@ -209,12 +224,17 @@ function buildWall(px, pz, ry, windows = false) {
   const W = g.matrixWorld;
   const wall = new THREE.Mesh(wallGeometry(windows), wallMat); wall.receiveShadow = wall.castShadow = true; g.add(wall);
   if (windows) for (const cx of WIN_X) buildWindow(g, W, cx);
+  UPPER_LEVELS.forEach((b, li) => UPPER_X.forEach((cx, i) => {
+    const lit = ((i * 7 + li * 3 + Math.round(px + pz * 3)) % 5) < 3;     // certaines pièces éclairées, d'autres éteintes
+    buildWindow(g, W, cx, b, lit ? glassMat : glassDark);
+  }));
 
   ARCH_X.forEach((cx, ai) => {
-    // alcôve : volume extrudé derrière le mur, vu de l'intérieur (faces arrière) + marche en pierre
-    const niche = new THREE.Mesh(new THREE.ExtrudeGeometry(archOpening(AR), { depth: ARCH.depth, bevelEnabled: false, curveSegments: 32 }), nicheMat);
-    niche.position.set(cx, 0, -ARCH.depth); niche.receiveShadow = true; g.add(niche);
-    boxStone(W, ARCH.w, 0.22, ARCH.depth, cx, 0.11, -ARCH.depth / 2, 3);
+    // passage voûté à travers le mur (ouvert aux deux bouts) vers la salle de derrière
+    const tunnel = new THREE.Mesh(new THREE.ExtrudeGeometry(archOpening(AR), { depth: ARCH.depth, bevelEnabled: false, curveSegments: 32 }), [hiddenMat, nicheMat]);
+    tunnel.position.set(cx, 0, -ARCH.depth); tunnel.receiveShadow = tunnel.castShadow = true; g.add(tunnel);
+    const tf = new THREE.Mesh(new THREE.PlaneGeometry(ARCH.w, ARCH.depth), floorMat(ARCH.w, ARCH.depth));
+    tf.rotation.x = -Math.PI / 2; tf.position.set(cx, 0.003, -ARCH.depth / 2); tf.receiveShadow = true; g.add(tf);
     // montants : blocs alternés large / étroit
     const rows = 6, bh = ARCH.h / rows, gap = 0.035;
     for (let i = 0; i < rows; i++) {
@@ -255,16 +275,125 @@ function buildWall(px, pz, ry, windows = false) {
   // corniche : bandeau de pierre au-dessus des arches, sur toute la longueur
   const cn = Math.round(ROOM / 1.25), cl = ROOM / cn;
   for (let i = 0; i < cn; i++) boxStone(W, cl - 0.035, CORNICE.h, CORNICE.out, -HALF + cl * (i + 0.5), CORNICE.y, CORNICE.out / 2, i);
+  // étages : pilastres dans l'axe des piliers, bandeau intermédiaire, corniche sommitale et créneaux
+  for (const x of PILLAR_X) {
+    const rows = 12, y0 = CORNICE.y + CORNICE.h / 2, bh = (TOP_CORNICE_Y - y0) / rows;
+    for (let i = 0; i < rows; i++) boxStone(W, i % 2 ? 0.46 : 0.54, bh - 0.03, 0.14, x, y0 + i * bh + bh / 2, 0.07, i);
+  }
+  for (let i = 0; i < cn; i++) {
+    const x = -HALF + cl * (i + 0.5);
+    boxStone(W, cl - 0.035, 0.22, 0.16, x, STRING_Y, 0.08, i + 1);
+    boxStone(W, cl - 0.035, 0.34, 0.32, x, TOP_CORNICE_Y, 0.16, i + 2);
+    boxStone(W, cl - 0.035, 0.18, 0.4, x, TOP_CORNICE_Y + 0.26, 0.05, i);
+  }
+  for (let x = -HALF + 0.55; x < HALF - 0.3; x += 1.6) boxStone(W, 0.9, 0.75, 0.55, x, WALL_H + 0.37, -0.12, Math.round(x));   // merlons
+  boxStone(W, ROOM, 0.5, 0.55, 0, WALL_H - 0.25 + 0.0, -0.12, 3);                                                              // chemin de ronde
+  // gargouilles perchées au-dessus de la corniche, dans l'axe des pilastres
+  for (const x of [-9.75, -3.25, 3.25, 9.75]) gargoyle(W, x, TOP_CORNICE_Y + 0.62);
+  return g;
 }
 
-// sol en pavés
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), surface(tiled(FLOOR_URI, ROOM, ROOM)));
+// ---------- Gargouille en pierre : créature accroupie sur une console, ailes repliées ----------
+const GARG = [0x8d877f, 0x7f7a73, 0x989188].map(c => new THREE.Color(c).convertSRGBToLinear());
+function gargoyle(W, x, y) {
+  const base = W.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, 0)).multiply(new THREE.Matrix4().makeScale(1.8, 1.8, 1.8));   // taille lisible depuis la cour
+  const part = (geo, px, py, pz, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1, c = 0) => {
+    const m = base.clone().multiply(new THREE.Matrix4().compose(new THREE.Vector3(px, py, pz),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz)));
+    stone(geo, m, GARG[c]);
+  };
+  part(new THREE.BoxGeometry(0.56, 0.3, 0.75), 0, -0.2, 0.37, 0, 0, 0, 1, 1, 1, 2);                         // console
+  part(new THREE.BoxGeometry(0.46, 0.12, 0.62), 0, -0.4, 0.28, 0, 0, 0, 1, 1, 1, 1);
+  part(new THREE.IcosahedronGeometry(0.27, 1), 0, 0.17, 0.42, -0.35, 0, 0, 1, 0.82, 1.25, 0);              // corps
+  for (const sx of [-1, 1]) {
+    part(new THREE.IcosahedronGeometry(0.14, 0), sx * 0.17, 0.05, 0.25, 0, 0, 0, 1, 1.1, 1.3, 1);          // cuisses
+    part(new THREE.BoxGeometry(0.08, 0.32, 0.09), sx * 0.13, -0.0, 0.72, 0.25, 0, 0, 1, 1, 1, 1);           // pattes avant
+    part(new THREE.BoxGeometry(0.12, 0.05, 0.13), sx * 0.13, -0.15, 0.78, 0, 0, 0, 1, 1, 1, 0);             // griffes
+    const wing = new THREE.Shape(); wing.moveTo(0, 0); wing.lineTo(0.5, 0.12); wing.lineTo(0.42, 0.34); wing.lineTo(0.3, 0.3);
+    wing.lineTo(0.24, 0.5); wing.lineTo(0.08, 0.42); wing.closePath();
+    part(new THREE.ExtrudeGeometry(wing, { depth: 0.04, bevelEnabled: false }), sx * 0.16, 0.18, 0.2,
+         0.2, sx > 0 ? -1.75 : -1.39, sx * 0.55, sx, 1, 1, 2);                                              // ailes repliées
+    part(new THREE.ConeGeometry(0.045, 0.2, 5), sx * 0.1, 0.62, 0.86, -0.7, 0, sx * -0.35, 1, 1, 1, 2);     // cornes
+    part(new THREE.ConeGeometry(0.035, 0.1, 4), sx * 0.15, 0.52, 0.8, 0, 0, sx * -1.2, 1, 1, 1, 1);         // oreilles pointues
+  }
+  part(new THREE.BoxGeometry(0.3, 0.26, 0.28), 0, 0.42, 0.88, 0.15, 0, 0, 1, 1, 1, 0);                     // tête
+  part(new THREE.BoxGeometry(0.2, 0.1, 0.22), 0, 0.4, 1.07, 0.1, 0, 0, 1, 1, 1, 2);                        // museau
+  part(new THREE.BoxGeometry(0.18, 0.06, 0.2), 0, 0.29, 1.05, -0.25, 0, 0, 1, 1, 1, 1);                   // mâchoire ouverte
+  part(new THREE.BoxGeometry(0.24, 0.05, 0.05), 0, 0.53, 0.99, 0, 0, 0, 1, 1, 1, 1);                       // arcades sourcilières
+}
+
+// sol en dalles
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), floorMat(ROOM, ROOM));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
-buildWall(0, -HALF, 0);
-buildWall(0, HALF, Math.PI);
-buildWall(-HALF, 0, Math.PI / 2, true);     // fenêtres sur les deux murs parallèles de gauche et de droite
-buildWall(HALF, 0, -Math.PI / 2, true);
+// ---------- Salles derrière les 4 arches ----------
+// Dans le repère du mur : la salle va de z = -ARCH.depth à z = -ARCH.depth - RD, x de -RW/2 à RW/2
+const roomWallMat = withHeightFade(surface(metersBrick())); roomWallMat.shadowSide = THREE.DoubleSide;
+const ceilingMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2c2017).convertSRGBToLinear(), roughness: 0.9, side: THREE.DoubleSide });
+const WALKABLE = [];                     // zones où l'avatar peut marcher (cour, passages, salles), en coordonnées monde
+const CAM_ZONES = [];                    // volumes où la caméra peut se placer
+function worldRect(g, x0, x1, z0, z1, extra = {}) {
+  const a = g.localToWorld(new THREE.Vector3(x0, 0, z0)), b = g.localToWorld(new THREE.Vector3(x1, 0, z1));
+  return { minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z), ...extra };
+}
+function roomWallGeometry(w, h, arch) {  // mur intérieur, avec ou sans ouverture d'arche en bas au centre (UV en mètres)
+  const sh = new THREE.Shape();
+  sh.moveTo(-w / 2, 0);
+  if (arch) { sh.lineTo(-AR, 0); sh.lineTo(-AR, ARCH.h); sh.absarc(0, ARCH.h, AR, Math.PI, 0, true); sh.lineTo(AR, 0); }
+  sh.lineTo(w / 2, 0); sh.lineTo(w / 2, h); sh.lineTo(-w / 2, h); sh.closePath();
+  return sh;
+}
+const chandeliers = [];
+function buildRoom(g) {
+  const z0 = -ARCH.depth, zc = z0 - RD / 2, zb = z0 - RD;
+  const add = (geo, mat, x, y, z, ry = 0, rx = 0) => {
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); m.receiveShadow = m.castShadow = true; g.add(m); return m;
+  };
+  add(new THREE.PlaneGeometry(RW, RD), floorMat(RW, RD), 0, 0.002, zc, 0, -Math.PI / 2);                       // sol
+  add(new THREE.ShapeGeometry(roomWallGeometry(RW, RH, true), 32), roomWallMat, 0, 0, z0, Math.PI);            // mur côté cour (arche)
+  const back = roomWallGeometry(RW, RH, false); back.holes.push(windowShape(0));
+  add(new THREE.ShapeGeometry(back, 24), roomWallMat, 0, 0, zb);                                              // mur du fond (fenêtre)
+  for (const sx of [-1, 1])                                                                                   // murs latéraux
+    add(new THREE.ShapeGeometry(roomWallGeometry(RD, RH, false)), roomWallMat, sx * RW / 2, 0, zc, -sx * Math.PI / 2);
+  add(new THREE.PlaneGeometry(RW, RD), ceilingMat, 0, RH, zc, 0, Math.PI / 2);                                 // plafond
+  g.updateMatrixWorld();
+  const W = g.matrixWorld;
+  for (let x = -RW / 2 + 1; x < RW / 2; x += 2) boxStone(W, 0.26, 0.32, RD, x, RH - 0.16, zc, WOOD[(x + 7) % 3 | 0]);   // poutres
+  for (const sx of [-1, 1]) boxStone(W, 0.3, 0.36, RD, sx * (RW / 2 - 0.15), RH - 0.18, zc, WOOD_DARK);           // sablières
+  // fenêtre au fond (vue sur la nuit) : construite dans un repère tourné vers l'intérieur de la salle
+  const wg = new THREE.Group(); wg.position.z = zb; g.add(wg); wg.updateMatrixWorld();
+  buildWindow(wg, wg.matrixWorld, 0, WIN.bottom, glassMoon);
+  // plinthe en pierre autour de la salle
+  for (const [w, x, z, ry] of [[RW, 0, zb, 0], [RD, -RW / 2, zc, Math.PI / 2], [RD, RW / 2, zc, -Math.PI / 2], [RW / 2 - AR - 0.2, -(RW / 2 + AR + 0.2) / 2, z0, Math.PI], [RW / 2 - AR - 0.2, (RW / 2 + AR + 0.2) / 2, z0, Math.PI]]) {
+    const m = W.clone().multiply(new THREE.Matrix4().makeTranslation(x, 0, z)).multiply(new THREE.Matrix4().makeRotationY(ry))
+      .multiply(new THREE.Matrix4().makeTranslation(0, 0.16, 0.05));
+    stone(new THREE.BoxGeometry(w, 0.32, 0.1), m, 3);
+  }
+  // lustre en fer forgé avec bougies, au centre de la salle
+  const cy = RH - 1.4;
+  const ring = add(new THREE.TorusGeometry(0.55, 0.035, 6, 24), IRON, 0, cy, zc, 0, Math.PI / 2);
+  add(new THREE.CylinderGeometry(0.02, 0.02, RH - cy, 6), IRON, 0, cy + (RH - cy) / 2, zc);
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2, x = Math.cos(a) * 0.55, z = zc + Math.sin(a) * 0.55;
+    add(new THREE.CylinderGeometry(0.03, 0.03, 0.14, 6), CANDLE, x, cy + 0.09, z);
+    add(new THREE.ConeGeometry(0.025, 0.07, 5), FLAME, x, cy + 0.2, z).castShadow = false;
+  }
+  const l = new THREE.PointLight(0xffb260, 1.3, 16, 2); l.position.set(0, cy - 0.1, zc); g.add(l);
+  chandeliers.push({ l, seed: Math.random() * 100 });
+  // zones praticables : passage et salle
+  WALKABLE.push(worldRect(g, -AR, AR, z0 - 0.6, 2.0));     // chevauche la cour et la salle pour passer de l'une à l'autre
+  WALKABLE.push(worldRect(g, -RW / 2 + 0.2, RW / 2 - 0.2, zb + 0.2, z0));
+  CAM_ZONES.push(worldRect(g, -AR + 0.15, AR - 0.15, z0 - 0.3, 0.6, { maxY: ARCH.h + AR - 0.3 }));
+  CAM_ZONES.push(worldRect(g, -RW / 2 + 0.3, RW / 2 - 0.3, zb + 0.3, z0 - 0.3, { maxY: RH - 0.5 }));
+}
+const IRON = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x26221f).convertSRGBToLinear(), roughness: 0.6, metalness: 0.4 });
+const FLAME = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc56e).convertSRGBToLinear() });
+const CANDLE = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xe9e0cc).convertSRGBToLinear(), roughness: 0.7 });
+
+WALKABLE.push({ minX: -HALF + 0.5, maxX: HALF - 0.5, minZ: -HALF + 0.5, maxZ: HALF - 0.5, court: true });   // la cour
+CAM_ZONES.push({ minX: -HALF + 0.45, maxX: HALF - 0.45, minZ: -HALF + 0.45, maxZ: HALF - 0.45, maxY: 40 });
+for (const [px, pz, ry, win] of [[0, -HALF, 0, false], [0, HALF, Math.PI, false], [-HALF, 0, Math.PI / 2, true], [HALF, 0, -Math.PI / 2, true]])
+  buildRoom(buildWall(px, pz, ry, win));      // fenêtres du rez-de-chaussée sur les deux murs parallèles de gauche et de droite
 // ---------- Fontaine au centre : 3 niveaux en pierre, eau animée, gazon fleuri ----------
 const FOUNT = { basinIn: 1.6, basinOut: 1.95, basinH: 0.55, water0: 0.42, grassOut: 2.9, collide: 2.3 };
 const BOWL1 = { y: 1.25, r: 0.98, water: 1.42 }, BOWL2 = { y: 1.95, r: 0.48, water: 2.07 }, SPOUT_Y = 2.38;
@@ -361,8 +490,6 @@ function updateFountain(dt, now) {
 // ---------- Mobilier : bancs en chêne le long des murs ----------
 // obstacles en boîtes alignées : l'avatar les contourne, ou monte dessus si « standable » (sauter sur un banc)
 const OBSTACLES = [];
-const WOOD = [0x5e3d26, 0x553722, 0x66442b].map(c => new THREE.Color(c).convertSRGBToLinear());
-const WOOD_DARK = new THREE.Color(0x2f2b2a).convertSRGBToLinear();
 function woodBox(w, h, d, x, y, z, color, rotZ = 0, cx = 0, cz = 0, ry = 0) {
   const m = new THREE.Matrix4().makeTranslation(cx, 0, cz).multiply(new THREE.Matrix4().makeRotationY(ry))
     .multiply(new THREE.Matrix4().makeTranslation(x, y, z)).multiply(new THREE.Matrix4().makeRotationZ(rotZ));
@@ -388,15 +515,15 @@ mergeStones();
 // ---------- Nuit : ciel étoilé, clair de lune, lanternes ----------
 scene.add(new THREE.HemisphereLight(0x8090c0, 0x3a332c, 0.42));
 const moon = new THREE.DirectionalLight(0xc4d2ff, 0.55);
-moon.position.set(9, 22, 7); moon.castShadow = true;
+moon.position.set(18, 44, 14); moon.castShadow = true;
 moon.shadow.mapSize.set(2048, 2048); moon.shadow.bias = -0.0008; moon.shadow.normalBias = 0.03;
-Object.assign(moon.shadow.camera, { left: -HALF - 1, right: HALF + 1, top: HALF + 1, bottom: -HALF - 1, near: 1, far: 50 });
+Object.assign(moon.shadow.camera, { left: -HALF - 13, right: HALF + 13, top: HALF + 13, bottom: -HALF - 13, near: 1, far: 90 });
 scene.add(moon);
 { // étoiles
   const n = 700, pos = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2, e = 0.12 + Math.random() * 1.3, r = 70;
-    pos[i * 3] = Math.cos(a) * Math.cos(e) * r; pos[i * 3 + 1] = 14 + Math.sin(e) * r; pos[i * 3 + 2] = Math.sin(a) * Math.cos(e) * r;
+    pos[i * 3] = Math.cos(a) * Math.cos(e) * r; pos[i * 3 + 1] = 20 + Math.sin(e) * r; pos[i * 3 + 2] = Math.sin(a) * Math.cos(e) * r;
   }
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 0.35, sizeAttenuation: true, fog: false })));
@@ -404,8 +531,6 @@ scene.add(moon);
   moonDisk.position.set(27, 52, 21); moonDisk.lookAt(0, 0, 0); scene.add(moonDisk);
 }
 // lanternes en fer forgé sur les piliers : lueur chaude qui vacille
-const IRON = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x26221f).convertSRGBToLinear(), roughness: 0.6, metalness: 0.4 });
-const FLAME = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc56e).convertSRGBToLinear() });
 const lanterns = [];
 function lantern(wallX, wallZ, ry, x, withLight) {
   const g = new THREE.Group(); g.position.set(wallX, 0, wallZ); g.rotation.y = ry; scene.add(g);
@@ -429,7 +554,7 @@ for (const [wx, wz, ry] of [[0, -HALF, 0], [0, HALF, Math.PI], [-HALF, 0, Math.P
   for (const x of [-9.75, -3.25, 3.25, 9.75]) lantern(wx, wz, ry, x, Math.abs(x) < 5);
 function updateLights(now) {
   const t = now / 1000;
-  for (const { l, seed } of lanterns)
+  for (const { l, seed } of [...lanterns, ...chandeliers])
     l.intensity = 0.9 * (0.88 + 0.08 * Math.sin(t * 7.3 + seed) + 0.05 * Math.sin(t * 13.1 + seed * 2));
 }
 
@@ -585,7 +710,7 @@ canvas.addEventListener("pointermove", e => {
     knob.style.left = (stick.ox - r.left + dx) + "px"; knob.style.top = (stick.oy - r.top + dy) + "px";
   } else if (look && e.pointerId === look.id) {
     cam.yaw -= (e.clientX - look.x) * 0.006;
-    cam.pitch = Math.max(0.05, Math.min(1.25, cam.pitch + (e.clientY - look.y) * 0.004));
+    cam.pitch = Math.max(-0.45, Math.min(1.25, cam.pitch + (e.clientY - look.y) * 0.004));   // vers le bas : on regarde les étages
     look.x = e.clientX; look.y = e.clientY;
   }
 });
@@ -609,6 +734,18 @@ function readMove() {
   return [f, s];
 }
 
+// ---------- Collisions avec le décor ----------
+const COURT_CLEAR = WALL_CLEAR - 0.5;    // dans la cour : rester devant piliers et soubassement
+function canStand(x, z) {
+  return WALKABLE.some(r => {
+    const m = r.court ? PLAYER_R + COURT_CLEAR : PLAYER_R;
+    return x >= r.minX + m && x <= r.maxX - m && z >= r.minZ + m && z <= r.maxZ - m;
+  });
+}
+function camOk(x, y, z) {
+  return y > 0.25 && CAM_ZONES.some(r => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ && y <= r.maxY);
+}
+
 // ---------- Boucle ----------
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -630,9 +767,11 @@ function frame(now) {
     // avant = direction de la caméra (à plat), droite = perpendiculaire
     const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
     const mx = fx * f + rx * s, mz = fz * f + rz * s;
-    const lim = HALF - WALL_CLEAR;                       // l'avatar reste devant les piliers et les arches
-    p.x = Math.max(-lim, Math.min(lim, p.x + mx * SPEED * dt));
-    p.z = Math.max(-lim, Math.min(lim, p.z + mz * SPEED * dt));
+    // déplacement limité aux zones praticables (cour, passages sous les arches, salles)
+    const nx = p.x + mx * SPEED * dt, nz = p.z + mz * SPEED * dt;
+    if (canStand(nx, nz)) { p.x = nx; p.z = nz; }
+    else if (canStand(nx, p.z)) p.x = nx;
+    else if (canStand(p.x, nz)) p.z = nz;
     // on fait le tour de la fontaine sans la traverser
     const fd = Math.hypot(p.x, p.z);
     if (fd < FOUNT.collide) { const k = FOUNT.collide / (fd || 1); p.x *= k; p.z *= k; }
@@ -664,9 +803,15 @@ function frame(now) {
   let cx = tx + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
   let cy = ty + Math.sin(cam.pitch) * cam.dist;
   let cz = tz + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
-  const m = HALF - 0.45;                               // la caméra ne rentre pas dans les piliers
-  cx = Math.max(-m, Math.min(m, cx)); cz = Math.max(-m, Math.min(m, cz)); cy = Math.max(0.3, Math.min(WALL_H - 0.25, cy));
-  camera.position.set(cx, cy, cz); camera.lookAt(tx, ty, tz);
+  // la caméra se rapproche si un mur s'interpose (on avance le long du segment avatar -> caméra)
+  cy = Math.max(0.3, cy);
+  let k = 1;
+  for (let i = 1; i <= 24; i++) {
+    const t = i / 24;
+    if (!camOk(tx + (cx - tx) * t, ty + (cy - ty) * t, tz + (cz - tz) * t)) { k = (i - 1) / 24; break; }
+  }
+  k = Math.max(k, 0.12);
+  camera.position.set(tx + (cx - tx) * k, ty + (cy - ty) * k, tz + (cz - tz) * k); camera.lookAt(tx, ty, tz);
 
   animateHero(dt, now, airborne);
   const sh = 1 / (1 + (p.y - ground) * 0.7);            // l'ombre rétrécit et pâlit en hauteur
