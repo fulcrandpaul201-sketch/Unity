@@ -89,14 +89,26 @@ const PILLAR_X = [-HALF + 0.35, -3.25, 3.25, HALF - 0.35];           // piliers 
 const PILLAR = { w: 0.7, out: 0.3, h: 5.0 };
 const PLINTH = { h: 0.32, out: 0.1 }, CORNICE = { y: 5.35, h: 0.26, out: 0.2 };
 const WALL_CLEAR = 0.8;                                              // distance minimale avatar / mur
+// Fenêtres (murs de gauche et de droite) : plein cintre, appui à 1,5 m, sommet à 3,4 m
+const WIN = { w: 1.4, bottom: 1.5, spring: 2.7, depth: 0.45, ring: 0.3, out: 0.16 };
+const WR = WIN.w / 2;
+const WIN_X = [-6.5, 6.5];                                           // entre les piliers, de part et d'autre de l'arche
 
 const metersBrick = () => tiled(BRICK_URI, 1, 1);                    // UV en mètres -> 1 répétition tous les 2 m
 const wallMat = withHeightFade(surface(metersBrick()));
 const nicheMat = withHeightFade(new THREE.MeshStandardMaterial({ map: metersBrick(), color: 0x8f86a8, roughness: 0.95, side: THREE.BackSide }));
 const stoneMat = withHeightFade(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
 const STONES = [0xcfc6df, 0xc5bad8, 0xd6cee5, 0xc2b8d6].map(c => new THREE.Color(c).convertSRGBToLinear());
+const LEAD = -1, LEAD_COLOR = new THREE.Color(0x5e5478).convertSRGBToLinear();   // croisillons des fenêtres
+const glassMat = new THREE.MeshBasicMaterial({ color: 0xa9c2f0 });   // vitrage éclairé par la lune
 
-function wallGeometry() {                // mur entier avec les ouvertures des arches découpées
+function windowShape(cx) {               // contour d'une fenêtre (rectangle + demi-cercle)
+  const sh = new THREE.Shape();
+  sh.moveTo(cx - WR, WIN.bottom); sh.lineTo(cx + WR, WIN.bottom); sh.lineTo(cx + WR, WIN.spring);
+  sh.absarc(cx, WIN.spring, WR, 0, Math.PI, false); sh.lineTo(cx - WR, WIN.bottom);
+  return sh;
+}
+function wallGeometry(windows) {         // mur entier avec les ouvertures des arches (et des fenêtres) découpées
   const sh = new THREE.Shape();
   sh.moveTo(-HALF, 0);
   for (const c of ARCH_X) {
@@ -105,6 +117,7 @@ function wallGeometry() {                // mur entier avec les ouvertures des a
     sh.lineTo(c + AR, 0);
   }
   sh.lineTo(HALF, 0); sh.lineTo(HALF, WALL_H); sh.lineTo(-HALF, WALL_H); sh.closePath();
+  if (windows) for (const cx of WIN_X) sh.holes.push(windowShape(cx));
   return new THREE.ShapeGeometry(sh, 32);
 }
 function archOpening(r) {                // contour d'une ouverture (rectangle + demi-cercle)
@@ -116,7 +129,7 @@ function archOpening(r) {                // contour d'une ouverture (rectangle +
 // Toutes les pierres de la pièce sont fusionnées en un seul maillage (rapide, même sur téléphone)
 const stoneParts = [];
 const tmpM = new THREE.Matrix4();
-function stone(geo, matrix, shade) { stoneParts.push([geo, matrix.clone(), STONES[shade % STONES.length]]); }
+function stone(geo, matrix, shade) { stoneParts.push([geo, matrix.clone(), shade === LEAD ? LEAD_COLOR : STONES[shade % STONES.length]]); }
 function boxStone(wallM, w, h, d, x, y, z, shade) {
   stone(new THREE.BoxGeometry(w, h, d), wallM.clone().multiply(tmpM.makeTranslation(x, y, z)), shade);
 }
@@ -138,24 +151,52 @@ function mergeStones() {
   const mesh = new THREE.Mesh(g, stoneMat); mesh.castShadow = mesh.receiveShadow = true; scene.add(mesh);
 }
 
-// claveaux : formes partagées par toutes les arches
-const VOUSSOIRS = [];
-{
-  const n = 9, ga = 0.018;
+// claveaux en éventail (clé de voûte plus grande au milieu) : formes partagées
+function makeVoussoirs(r, ring, out, n, keyExtra) {
+  const list = [], ga = 0.018;
   for (let i = 0; i < n; i++) {
     const a0 = Math.PI - i * Math.PI / n - ga, a1 = Math.PI - (i + 1) * Math.PI / n + ga;
     const key = i === (n - 1) / 2;
     const sh = new THREE.Shape();
-    sh.absarc(0, 0, AR + ARCH.ring + (key ? 0.16 : 0), a0, a1, true); sh.absarc(0, 0, AR, a1, a0, false); sh.closePath();
-    VOUSSOIRS.push(new THREE.ExtrudeGeometry(sh, { depth: ARCH.out + (key ? 0.06 : 0), bevelEnabled: false, curveSegments: 6 }));
+    sh.absarc(0, 0, r + ring + (key ? keyExtra : 0), a0, a1, true); sh.absarc(0, 0, r, a1, a0, false); sh.closePath();
+    list.push(new THREE.ExtrudeGeometry(sh, { depth: out + (key ? 0.05 : 0), bevelEnabled: false, curveSegments: 6 }));
   }
+  return list;
+}
+const VOUSSOIRS = makeVoussoirs(AR, ARCH.ring, ARCH.out, 9, 0.16);
+const WIN_VOUSSOIRS = makeVoussoirs(WR, WIN.ring, WIN.out, 7, 0.1);
+
+function buildWindow(g, W, cx) {
+  // tableau (épaisseur du mur) vu de l'intérieur + vitrage au fond
+  const reveal = new THREE.Mesh(new THREE.ExtrudeGeometry(windowShape(cx), { depth: WIN.depth, bevelEnabled: false, curveSegments: 24 }), nicheMat);
+  reveal.position.z = -WIN.depth; reveal.receiveShadow = true; g.add(reveal);
+  const glass = new THREE.Mesh(new THREE.ShapeGeometry(windowShape(cx), 24), glassMat);
+  glass.position.z = -WIN.depth + 0.02; g.add(glass);
+  // croisillons
+  const top = WIN.spring + WR, zc = -WIN.depth + 0.05;
+  boxStone(W, 0.07, top - WIN.bottom, 0.05, cx, (WIN.bottom + top) / 2, zc, LEAD);
+  boxStone(W, WIN.w, 0.07, 0.05, cx, WIN.spring, zc, LEAD);
+  boxStone(W, WIN.w, 0.06, 0.05, cx, (WIN.bottom + WIN.spring) / 2, zc, LEAD);
+  // encadrement : montants alternés, appui saillant, claveaux et clé
+  const rows = 4, bh = (WIN.spring - WIN.bottom) / rows, gap = 0.03;
+  for (let i = 0; i < rows; i++) {
+    const wdt = i % 2 ? 0.22 : 0.32;
+    for (const side of [-1, 1]) boxStone(W, wdt, bh - gap, WIN.out, cx + side * (WR + wdt / 2), WIN.bottom + i * bh + bh / 2, WIN.out / 2, i + (side > 0 ? 1 : 0));
+  }
+  boxStone(W, WIN.w + 0.8, 0.16, WIN.out + 0.16, cx, WIN.bottom - 0.08, (WIN.out + 0.16) / 2, 2);   // appui
+  boxStone(W, WIN.w + 0.4, 0.14, WIN.out, cx, WIN.bottom - 0.23, WIN.out / 2, 3);                   // sous l'appui
+  WIN_VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, WIN.spring, 0)), i));
+  // lumière froide qui entre par la fenêtre
+  const l = new THREE.PointLight(0x9fb6ff, 0.45, 8, 2);
+  l.position.set(cx, WIN.spring, 0.9); g.add(l);
 }
 
-function buildWall(px, pz, ry) {
+function buildWall(px, pz, ry, windows = false) {
   const g = new THREE.Group(); g.position.set(px, 0, pz); g.rotation.y = ry; scene.add(g);
   g.updateMatrixWorld();
   const W = g.matrixWorld;
-  const wall = new THREE.Mesh(wallGeometry(), wallMat); wall.receiveShadow = true; g.add(wall);
+  const wall = new THREE.Mesh(wallGeometry(windows), wallMat); wall.receiveShadow = true; g.add(wall);
+  if (windows) for (const cx of WIN_X) buildWindow(g, W, cx);
 
   ARCH_X.forEach((cx, ai) => {
     // alcôve : volume extrudé derrière le mur, vu de l'intérieur (faces arrière) + marche en pierre
@@ -210,8 +251,8 @@ floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
 buildWall(0, -HALF, 0);
 buildWall(0, HALF, Math.PI);
-buildWall(-HALF, 0, Math.PI / 2);
-buildWall(HALF, 0, -Math.PI / 2);
+buildWall(-HALF, 0, Math.PI / 2, true);     // fenêtres sur les deux murs parallèles de gauche et de droite
+buildWall(HALF, 0, -Math.PI / 2, true);
 mergeStones();
 
 scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.42));

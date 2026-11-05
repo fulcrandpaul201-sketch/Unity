@@ -31,6 +31,9 @@ public class RoomPrototype : MonoBehaviour
     const float PillarW = 0.7f, PillarOut = 0.3f, PillarH = 5f;
     const float PlinthH = 0.32f, PlinthOut = 0.1f, CorniceY = 5.35f, CorniceH = 0.26f, CorniceOut = 0.2f;
     const float WallClear = 0.8f;   // distance minimale avatar / mur
+    // Fenêtres sur les murs de gauche et de droite : plein cintre, appui à 1,5 m, sommet à 3,4 m
+    const float WinW = 1.4f, WinBottom = 1.5f, WinSpring = 2.7f, WinDepth = 0.45f, WinRing = 0.3f, WinOut = 0.16f, WR = WinW / 2f;
+    static readonly float[] WinX = { -6.5f, 6.5f };
     const int FrameW = 172, FrameH = 303;
     const int RowDown = 0, RowLeft = 1, RowRight = 2, RowUp = 3;
 
@@ -81,8 +84,8 @@ public class RoomPrototype : MonoBehaviour
         Box("Floor", new Vector3(0f, -0.05f, 0f), new Vector3(Room, 0.1f, Room), FloorColor, paving, new Vector2(Room / Tile, Room / Tile));
         BuildWall("Wall N", new Vector3(0f, 0f, Half), 180f, brick);
         BuildWall("Wall S", new Vector3(0f, 0f, -Half), 0f, brick);
-        BuildWall("Wall W", new Vector3(-Half, 0f, 0f), 90f, brick);
-        BuildWall("Wall E", new Vector3(Half, 0f, 0f), -90f, brick);
+        BuildWall("Wall W", new Vector3(-Half, 0f, 0f), 90f, brick, true);    // fenêtres sur les deux murs parallèles
+        BuildWall("Wall E", new Vector3(Half, 0f, 0f), -90f, brick, true);
 
         // voile noir dégradé devant chaque mur : transparent en bas, noir en haut (pas de plafond visible)
         var fade = MakeFadeSprite();
@@ -123,7 +126,7 @@ public class RoomPrototype : MonoBehaviour
         return m;
     }
 
-    void BuildWall(string name, Vector3 position, float yRot, Texture2D brick)
+    void BuildWall(string name, Vector3 position, float yRot, Texture2D brick, bool windows = false)
     {
         var root = new GameObject(name).transform;
         root.position = position;
@@ -131,27 +134,35 @@ public class RoomPrototype : MonoBehaviour
         Vector3 into = Vector3.forward;
 
         // surface du mur avec les ouvertures découpées (UV en mètres : briques continues, jamais étirées)
+        // chaque ouverture : centre x, rayon, bas, naissance de l'arc
+        var openings = new System.Collections.Generic.List<Vector4>();
+        foreach (float cx in ArchX) openings.Add(new Vector4(cx, AR, 0f, ArchH));
+        if (windows) foreach (float cx in WinX) openings.Add(new Vector4(cx, WR, WinBottom, WinSpring));
+        openings.Sort((p, q) => p.x.CompareTo(q.x));
         var wall = new MeshBuilder();
         float x = -Half;
-        foreach (float cx in ArchX)
+        foreach (var o in openings)
         {
-            wall.WallRect(x, 0f, cx - AR, WallH, 0f, into);          // entre deux arches, toute la hauteur
-            wall.WallRect(cx - AR, ArchH + AR, cx + AR, WallH, 0f, into);   // au-dessus de l'arc
+            float cx = o.x, r = o.y, bottom = o.z, spring = o.w;
+            wall.WallRect(x, 0f, cx - r, WallH, 0f, into);                 // plein mur jusqu'à l'ouverture
+            wall.WallRect(cx - r, 0f, cx + r, bottom, 0f, into);           // sous l'ouverture (fenêtre)
+            wall.WallRect(cx - r, spring + r, cx + r, WallH, 0f, into);    // au-dessus de l'arc
             const int slices = 24;
-            for (int k = 0; k < slices; k++)                           // écoinçons autour de l'arc
+            for (int k = 0; k < slices; k++)                                // écoinçons autour de l'arc
             {
-                float y0 = ArchH + k * AR / slices, y1 = y0 + AR / slices;
-                float w0 = Mathf.Sqrt(Mathf.Max(0f, AR * AR - (y0 - ArchH) * (y0 - ArchH)));
-                wall.WallRect(cx - AR, y0, cx - w0, y1, 0f, into);
-                wall.WallRect(cx + w0, y0, cx + AR, y1, 0f, into);
+                float y0 = spring + k * r / slices, y1 = y0 + r / slices;
+                float w0 = Mathf.Sqrt(Mathf.Max(0f, r * r - (y0 - spring) * (y0 - spring)));
+                wall.WallRect(cx - r, y0, cx - w0, y1, 0f, into);
+                wall.WallRect(cx + w0, y0, cx + r, y1, 0f, into);
             }
-            x = cx + AR;
+            x = cx + r;
         }
         wall.WallRect(x, 0f, Half, WallH, 0f, into);
         AddMesh(root, "Bricks", wall, NewMaterial(brick != null ? Color.white : WallColor, brick));
 
         Color32[] stones = { new Color32(207, 198, 223, 255), new Color32(197, 186, 216, 255), new Color32(214, 206, 229, 255), new Color32(194, 184, 214, 255) };
         var nicheMat = NewMaterial(new Color32(143, 134, 168, 255), brick);
+        if (windows) foreach (float wx in WinX) BuildWindow(root, wx, nicheMat, stones);
         int ai = 0;
         foreach (float cx in ArchX)
         {
@@ -243,6 +254,86 @@ public class RoomPrototype : MonoBehaviour
         const int cn = 16; float cl = Room / cn;
         for (int i = 0; i < cn; i++)
             LocalCube(root, "Cornice", new Vector3(-Half + cl * (i + 0.5f), CorniceY, CorniceOut / 2f), new Vector3(cl - 0.035f, CorniceH, CorniceOut), stones[i % 3]);
+    }
+
+    void BuildWindow(Transform root, float cx, Material revealMat, Color32[] stones)
+    {
+        Vector3 into = Vector3.forward;
+        float zb = -WinDepth, top = WinSpring + WR;
+        // tableau : côtés, appui intérieur et voûte, tournés vers l'ouverture
+        var reveal = new MeshBuilder();
+        Vector3 c0 = new Vector3(cx, WinSpring, 0f);
+        const int seg = 16;
+        for (int i = 0; i < seg; i++)
+        {
+            float a0 = Mathf.PI * i / seg, a1 = Mathf.PI * (i + 1) / seg;
+            Vector3 p0 = c0 + new Vector3(Mathf.Cos(a0) * WR, Mathf.Sin(a0) * WR, 0f);
+            Vector3 p1 = c0 + new Vector3(Mathf.Cos(a1) * WR, Mathf.Sin(a1) * WR, 0f);
+            Vector3 back = Vector3.forward * zb;
+            Vector3 inward = c0 - (p0 + p1) * 0.5f; inward.z = 0f;
+            reveal.Quad(p0 + back, p1 + back, p1, p0, inward, Vector2.zero, Vector2.right, Vector2.one, Vector2.up);
+        }
+        foreach (float sx in new[] { cx - WR, cx + WR })
+        {
+            Vector3 n = new Vector3(sx < cx ? 1f : -1f, 0f, 0f);
+            reveal.Quad(new Vector3(sx, WinBottom, zb), new Vector3(sx, WinBottom, 0f), new Vector3(sx, WinSpring, 0f), new Vector3(sx, WinSpring, zb), n,
+                Vector2.zero, Vector2.right, Vector2.one, Vector2.up);
+        }
+        reveal.Quad(new Vector3(cx - WR, WinBottom, zb), new Vector3(cx + WR, WinBottom, zb), new Vector3(cx + WR, WinBottom, 0f), new Vector3(cx - WR, WinBottom, 0f), Vector3.up,
+            Vector2.zero, Vector2.right, Vector2.one, Vector2.up);
+        AddMesh(root, "Window reveal", reveal, revealMat);
+
+        // vitrage lumineux (clair de lune) au fond
+        var glass = new MeshBuilder();
+        Vector3 gz = Vector3.forward * (zb + 0.02f);
+        glass.Quad(new Vector3(cx - WR, WinBottom, 0f) + gz, new Vector3(cx + WR, WinBottom, 0f) + gz, new Vector3(cx + WR, WinSpring, 0f) + gz, new Vector3(cx - WR, WinSpring, 0f) + gz, into,
+            Vector2.zero, Vector2.right, Vector2.one, Vector2.up);
+        for (int i = 0; i < seg; i++)
+        {
+            float a0 = Mathf.PI * i / seg, a1 = Mathf.PI * (i + 1) / seg;
+            glass.Tri(c0 + gz, c0 + gz + new Vector3(Mathf.Cos(a0), Mathf.Sin(a0), 0f) * WR, c0 + gz + new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * WR, into, Vector2.zero, Vector2.zero, Vector2.zero);
+        }
+        var glassMat = NewMaterial(new Color32(169, 194, 240, 255), null);
+        glassMat.EnableKeyword("_EMISSION");
+        glassMat.SetColor("_EmissionColor", new Color32(150, 175, 225, 255));
+        AddMesh(root, "Window glass", glass, glassMat);
+
+        // croisillons
+        Color32 lead = new Color32(94, 84, 120, 255);
+        float zc = zb + 0.05f;
+        LocalCube(root, "Mullion", new Vector3(cx, (WinBottom + top) / 2f, zc), new Vector3(0.07f, top - WinBottom, 0.05f), lead);
+        LocalCube(root, "Transom", new Vector3(cx, WinSpring, zc), new Vector3(WinW, 0.07f, 0.05f), lead);
+        LocalCube(root, "Transom", new Vector3(cx, (WinBottom + WinSpring) / 2f, zc), new Vector3(WinW, 0.06f, 0.05f), lead);
+
+        // encadrement : montants alternés, appui saillant, claveaux et clé de voûte
+        const int rows = 4; const float gap = 0.03f; float bh = (WinSpring - WinBottom) / rows;
+        for (int i = 0; i < rows; i++)
+        {
+            float w = i % 2 == 1 ? 0.22f : 0.32f;
+            foreach (float side in new[] { -1f, 1f })
+                LocalCube(root, "Window jamb", new Vector3(cx + side * (WR + w / 2f), WinBottom + i * bh + bh / 2f, WinOut / 2f),
+                          new Vector3(w, bh - gap, WinOut), stones[(i + (side > 0 ? 1 : 0)) % 3]);
+        }
+        LocalCube(root, "Sill", new Vector3(cx, WinBottom - 0.08f, (WinOut + 0.16f) / 2f), new Vector3(WinW + 0.8f, 0.16f, WinOut + 0.16f), stones[2]);
+        LocalCube(root, "Under sill", new Vector3(cx, WinBottom - 0.23f, WinOut / 2f), new Vector3(WinW + 0.4f, 0.14f, WinOut), stones[3]);
+        const int n7 = 7; const float ga = 0.018f;
+        for (int i = 0; i < n7; i++)
+        {
+            bool key = i == (n7 - 1) / 2;
+            float a0 = Mathf.PI - i * Mathf.PI / n7 - ga, a1 = Mathf.PI - (i + 1) * Mathf.PI / n7 + ga;
+            var mb = new MeshBuilder();
+            mb.Sector(c0, WR, WR + WinRing + (key ? 0.1f : 0f), a1, a0, WinOut + (key ? 0.05f : 0f));
+            AddMesh(root, key ? "Window keystone" : "Window voussoir", mb, NewMaterial(stones[i % 3], null));
+        }
+
+        // lumière froide qui entre par la fenêtre
+        var l = new GameObject("Window light").AddComponent<Light>();
+        l.type = LightType.Point;
+        l.color = new Color32(159, 182, 255, 255);
+        l.range = 8f;
+        l.intensity = 0.9f;
+        l.transform.SetParent(root, false);
+        l.transform.localPosition = new Vector3(cx, WinSpring, 0.9f);
     }
 
     static Vector2 UVxy(Vector3 p) => new Vector2(p.x / Tile, p.y / Tile);
