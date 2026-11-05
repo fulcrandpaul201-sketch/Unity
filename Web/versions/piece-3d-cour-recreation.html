@@ -1,0 +1,709 @@
+<title>Cour de récréation 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Plein écran sombre, une seule ambiance (jeu) : la vue 3D occupe tout, aide discrète en bas */
+  :root { --bg: #1d1526; --fg: #e9e2f3; --muted: #b3a6c8; --glass: rgba(29, 21, 38, 0.6); color-scheme: dark; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); overflow: hidden; touch-action: none; }
+  body { font-family: system-ui, sans-serif; }
+  main { position: relative; height: 100%; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .help { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100% - 32px); box-sizing: border-box; margin: 0; padding: 6px 12px; border-radius: 8px;
+    background: var(--glass); color: var(--muted); font-size: 13px; text-align: center; pointer-events: none; }
+  .stick { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+  #ring { width: 110px; height: 110px; border: 3px solid rgba(255, 255, 255, 0.35); }
+  #knob { width: 46px; height: 46px; background: rgba(255, 255, 255, 0.4); }
+  #jump { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    width: 76px; height: 76px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.5); background: var(--glass);
+    color: var(--fg); font: 600 14px system-ui, sans-serif; touch-action: none; display: none; }
+  #jump:active { background: rgba(255, 255, 255, 0.3); }
+  #jump:focus-visible { outline: 3px solid #fff; }
+  @media (pointer: coarse) { #jump { display: block; } }
+</style>
+<main>
+  <canvas id="c"></canvas>
+  <div id="ring" class="stick" hidden></div>
+  <div id="knob" class="stick" hidden></div>
+  <button id="jump" type="button">Sauter</button>
+  <p class="help">Ordinateur : ZQSD ou WASD pour bouger, glisser la souris ou ← → pour tourner, molette pour zoomer, Espace pour sauter.
+    Téléphone : doigt à gauche pour bouger, doigt à droite pour tourner, bouton Sauter.</p>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// Pièce vide en 3D, vue à la 3e personne : l'avatar se déplace par rapport à la caméra,
+// qu'on fait tourner autour de lui (souris / doigt / flèches).
+const BRICK_URI = "data:image/png;base64,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";
+const FLOOR_URI = "data:image/png;base64,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";
+const HOPSCOTCH_URI = "data:image/png;base64,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";
+
+// ---------- Réglages ----------
+const ROOM = 20, HALF = ROOM / 2, WALL_H = 10;               // pièce carrée de 20 m, murs très hauts qui se perdent dans le noir
+const LIGHT_H = 3.2;                                         // hauteur de la lampe (à hauteur d'homme)
+const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
+const SPEED = 4.2;                                           // m/s
+const JUMP_SPEED = 5.4, GRAVITY = 15;                        // saut : environ 1 m de haut
+const PLAYER_R = 0.3;                                        // rayon de collision de l'avatar
+const COLORS = { bg: 0x07040b };                             // obscurité au-dessus des murs
+
+// ---------- Scène ----------
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(COLORS.bg);
+const camera = new THREE.PerspectiveCamera(60, 4 / 3, 0.1, 100);
+
+// Texture pixel art répétée en mosaïque : le nombre de répétitions suit la taille de la surface
+const loader = new THREE.TextureLoader();
+function tiled(uri, width, height) {
+  const t = loader.load(uri);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(width / TILE, height / TILE);
+  t.magFilter = THREE.NearestFilter;                 // pixels nets de près
+  t.minFilter = THREE.LinearMipmapLinearFilter;      // pas de scintillement de loin
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+const surface = map => new THREE.MeshStandardMaterial({ map, roughness: 0.95, metalness: 0 });
+
+// Obscurité en hauteur : chaque matériau des murs se fond dans le noir au-dessus de 2,2 m (pas de plafond visible)
+const FADE_START = 2.2, FADE_END = 7.7;
+function withHeightFade(mat) {
+  mat.customProgramCacheKey = () => "heightFade";   // sinon Three.js réutilise le shader du sol, sans le fondu
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.fadeColor = { value: new THREE.Color(COLORS.bg) };
+    sh.vertexShader = "varying float vWorldY;\n" + sh.vertexShader.replace("#include <begin_vertex>",
+      "#include <begin_vertex>\nvWorldY = (modelMatrix * vec4(transformed, 1.0)).y;");
+    sh.fragmentShader = "varying float vWorldY;\nuniform vec3 fadeColor;\n" + sh.fragmentShader.replace("#include <dithering_fragment>",
+      "#include <dithering_fragment>\nfloat fadeT = smoothstep(" + FADE_START.toFixed(2) + ", " + FADE_END.toFixed(2) + ", vWorldY);\n" +
+      "gl_FragColor.rgb = mix(gl_FragColor.rgb, fadeColor, pow(fadeT, 0.8));");
+  };
+  return mat;
+}
+
+// ---------- Architecture : la même structure en pierre sur les 4 murs ----------
+// Repère local d'un mur : x le long du mur, y vers le haut, z vers l'intérieur de la pièce (0 = surface du mur)
+const ARCH = { w: 3.0, h: 3.0, depth: 1.4, ring: 0.42, out: 0.2 };   // ouverture 3 m, montants de 3 m, alcôve de 1,4 m
+const AR = ARCH.w / 2;
+const ARCH_X = [0];                                                  // une arche au centre de chaque mur
+const PILLAR_X = [-HALF + 0.35, -3.25, 3.25, HALF - 0.35];           // piliers entre les arches et dans les angles
+const PILLAR = { w: 0.7, out: 0.3, h: 5.0 };
+const PLINTH = { h: 0.32, out: 0.1 }, CORNICE = { y: 5.35, h: 0.26, out: 0.2 };
+const WALL_CLEAR = 0.8;                                              // distance minimale avatar / mur
+// Fenêtres (murs de gauche et de droite) : plein cintre, appui à 1,5 m, sommet à 3,4 m
+const WIN = { w: 1.4, bottom: 1.5, spring: 2.7, depth: 0.45, ring: 0.3, out: 0.16 };
+const WR = WIN.w / 2;
+const WIN_X = [-6.5, 6.5];                                           // entre les piliers, de part et d'autre de l'arche
+
+const metersBrick = () => tiled(BRICK_URI, 1, 1);                    // UV en mètres -> 1 répétition tous les 2 m
+const wallMat = withHeightFade(surface(metersBrick()));
+const nicheMat = withHeightFade(new THREE.MeshStandardMaterial({ map: metersBrick(), color: 0x8f86a8, roughness: 0.95, side: THREE.BackSide }));
+const stoneMat = withHeightFade(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+const STONES = [0xcfc6df, 0xc5bad8, 0xd6cee5, 0xc2b8d6].map(c => new THREE.Color(c).convertSRGBToLinear());
+const LEAD = -1, LEAD_COLOR = new THREE.Color(0x5e5478).convertSRGBToLinear();   // croisillons des fenêtres
+const glassMat = new THREE.MeshBasicMaterial({ color: 0xa9c2f0 });   // vitrage éclairé par la lune
+
+function windowShape(cx) {               // contour d'une fenêtre (rectangle + demi-cercle)
+  const sh = new THREE.Shape();
+  sh.moveTo(cx - WR, WIN.bottom); sh.lineTo(cx + WR, WIN.bottom); sh.lineTo(cx + WR, WIN.spring);
+  sh.absarc(cx, WIN.spring, WR, 0, Math.PI, false); sh.lineTo(cx - WR, WIN.bottom);
+  return sh;
+}
+function wallGeometry(windows) {         // mur entier avec les ouvertures des arches (et des fenêtres) découpées
+  const sh = new THREE.Shape();
+  sh.moveTo(-HALF, 0);
+  for (const c of ARCH_X) {
+    sh.lineTo(c - AR, 0); sh.lineTo(c - AR, ARCH.h);
+    sh.absarc(c, ARCH.h, AR, Math.PI, 0, true);
+    sh.lineTo(c + AR, 0);
+  }
+  sh.lineTo(HALF, 0); sh.lineTo(HALF, WALL_H); sh.lineTo(-HALF, WALL_H); sh.closePath();
+  if (windows) for (const cx of WIN_X) sh.holes.push(windowShape(cx));
+  return new THREE.ShapeGeometry(sh, 32);
+}
+function archOpening(r) {                // contour d'une ouverture (rectangle + demi-cercle)
+  const sh = new THREE.Shape();
+  sh.moveTo(-r, 0); sh.lineTo(r, 0); sh.lineTo(r, ARCH.h); sh.absarc(0, ARCH.h, r, 0, Math.PI, false); sh.closePath();
+  return sh;
+}
+
+// Toutes les pierres de la pièce sont fusionnées en un seul maillage (rapide, même sur téléphone)
+const stoneParts = [];
+const tmpM = new THREE.Matrix4();
+function stone(geo, matrix, shade) {
+  const c = shade instanceof THREE.Color ? shade : shade === LEAD ? LEAD_COLOR : STONES[shade % STONES.length];
+  stoneParts.push([geo, matrix.clone(), c]);
+}
+function boxStone(wallM, w, h, d, x, y, z, shade) {
+  stone(new THREE.BoxGeometry(w, h, d), wallM.clone().multiply(tmpM.makeTranslation(x, y, z)), shade);
+}
+function mergeStones() {
+  const pos = [], nor = [], col = [];
+  const nm = new THREE.Matrix3();
+  for (const [g0, m, c] of stoneParts) {
+    const g = g0.index ? g0.toNonIndexed() : g0.clone();   // copie : les formes partagées ne doivent pas être déplacées
+    g.applyMatrix4(m);
+    const P = g.attributes.position, N = g.attributes.normal;
+    for (let i = 0; i < P.count; i++) {
+      pos.push(P.getX(i), P.getY(i), P.getZ(i)); nor.push(N.getX(i), N.getY(i), N.getZ(i)); col.push(c.r, c.g, c.b);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  const mesh = new THREE.Mesh(g, stoneMat); mesh.castShadow = mesh.receiveShadow = true; scene.add(mesh);
+}
+
+// claveaux en éventail (clé de voûte plus grande au milieu) : formes partagées
+function makeVoussoirs(r, ring, out, n, keyExtra) {
+  const list = [], ga = 0.018;
+  for (let i = 0; i < n; i++) {
+    const a0 = Math.PI - i * Math.PI / n - ga, a1 = Math.PI - (i + 1) * Math.PI / n + ga;
+    const key = i === (n - 1) / 2;
+    const sh = new THREE.Shape();
+    sh.absarc(0, 0, r + ring + (key ? keyExtra : 0), a0, a1, true); sh.absarc(0, 0, r, a1, a0, false); sh.closePath();
+    list.push(new THREE.ExtrudeGeometry(sh, { depth: out + (key ? 0.05 : 0), bevelEnabled: false, curveSegments: 6 }));
+  }
+  return list;
+}
+const VOUSSOIRS = makeVoussoirs(AR, ARCH.ring, ARCH.out, 9, 0.16);
+const WIN_VOUSSOIRS = makeVoussoirs(WR, WIN.ring, WIN.out, 7, 0.1);
+
+function buildWindow(g, W, cx) {
+  // tableau (épaisseur du mur) vu de l'intérieur + vitrage au fond
+  const reveal = new THREE.Mesh(new THREE.ExtrudeGeometry(windowShape(cx), { depth: WIN.depth, bevelEnabled: false, curveSegments: 24 }), nicheMat);
+  reveal.position.z = -WIN.depth; reveal.receiveShadow = true; g.add(reveal);
+  const glass = new THREE.Mesh(new THREE.ShapeGeometry(windowShape(cx), 24), glassMat);
+  glass.position.z = -WIN.depth + 0.02; g.add(glass);
+  // croisillons
+  const top = WIN.spring + WR, zc = -WIN.depth + 0.05;
+  boxStone(W, 0.07, top - WIN.bottom, 0.05, cx, (WIN.bottom + top) / 2, zc, LEAD);
+  boxStone(W, WIN.w, 0.07, 0.05, cx, WIN.spring, zc, LEAD);
+  boxStone(W, WIN.w, 0.06, 0.05, cx, (WIN.bottom + WIN.spring) / 2, zc, LEAD);
+  // encadrement : montants alternés, appui saillant, claveaux et clé
+  const rows = 4, bh = (WIN.spring - WIN.bottom) / rows, gap = 0.03;
+  for (let i = 0; i < rows; i++) {
+    const wdt = i % 2 ? 0.22 : 0.32;
+    for (const side of [-1, 1]) boxStone(W, wdt, bh - gap, WIN.out, cx + side * (WR + wdt / 2), WIN.bottom + i * bh + bh / 2, WIN.out / 2, i + (side > 0 ? 1 : 0));
+  }
+  boxStone(W, WIN.w + 0.8, 0.16, WIN.out + 0.16, cx, WIN.bottom - 0.08, (WIN.out + 0.16) / 2, 2);   // appui
+  boxStone(W, WIN.w + 0.4, 0.14, WIN.out, cx, WIN.bottom - 0.23, WIN.out / 2, 3);                   // sous l'appui
+  WIN_VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, WIN.spring, 0)), i));
+  // lumière froide qui entre par la fenêtre
+  const l = new THREE.PointLight(0x9fb6ff, 0.45, 8, 2);
+  l.position.set(cx, WIN.spring, 0.9); g.add(l);
+}
+
+function buildWall(px, pz, ry, windows = false) {
+  const g = new THREE.Group(); g.position.set(px, 0, pz); g.rotation.y = ry; scene.add(g);
+  g.updateMatrixWorld();
+  const W = g.matrixWorld;
+  const wall = new THREE.Mesh(wallGeometry(windows), wallMat); wall.receiveShadow = true; g.add(wall);
+  if (windows) for (const cx of WIN_X) buildWindow(g, W, cx);
+
+  ARCH_X.forEach((cx, ai) => {
+    // alcôve : volume extrudé derrière le mur, vu de l'intérieur (faces arrière) + marche en pierre
+    const niche = new THREE.Mesh(new THREE.ExtrudeGeometry(archOpening(AR), { depth: ARCH.depth, bevelEnabled: false, curveSegments: 32 }), nicheMat);
+    niche.position.set(cx, 0, -ARCH.depth); niche.receiveShadow = true; g.add(niche);
+    boxStone(W, ARCH.w, 0.22, ARCH.depth, cx, 0.11, -ARCH.depth / 2, 3);
+    // montants : blocs alternés large / étroit
+    const rows = 6, bh = ARCH.h / rows, gap = 0.035;
+    for (let i = 0; i < rows; i++) {
+      const wdt = i % 2 ? 0.42 : 0.62;
+      for (const side of [-1, 1]) boxStone(W, wdt, bh - gap, ARCH.out, cx + side * (AR + wdt / 2), i * bh + bh / 2, ARCH.out / 2, i + ai + (side > 0 ? 1 : 0));
+    }
+    // claveaux en éventail + clé de voûte
+    VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, ARCH.h, 0)), i + ai));
+    // socles au pied des montants
+    for (const side of [-1, 1]) boxStone(W, 0.78, 0.26, ARCH.out + 0.08, cx + side * (AR + 0.36), 0.13, (ARCH.out + 0.08) / 2, 2);
+  });
+
+  // piliers : blocs empilés en alternance, base et chapiteau plus larges
+  for (const x of PILLAR_X) {
+    const rows = 9, bh = (PILLAR.h - 0.6) / rows, gap = 0.035;
+    boxStone(W, PILLAR.w + 0.22, 0.34, PILLAR.out + 0.1, x, 0.17, (PILLAR.out + 0.1) / 2, 2);              // base
+    for (let i = 0; i < rows; i++) {
+      const wdt = i % 2 ? PILLAR.w - 0.08 : PILLAR.w;
+      boxStone(W, wdt, bh - gap, PILLAR.out, x, 0.34 + i * bh + bh / 2, PILLAR.out / 2, i);
+    }
+    boxStone(W, PILLAR.w + 0.24, 0.26, PILLAR.out + 0.12, x, PILLAR.h - 0.13, (PILLAR.out + 0.12) / 2, 2); // chapiteau
+  }
+
+  // soubassement : rangée de dalles au pied du mur, interrompue par les arches et les piliers
+  const blocked = [...ARCH_X.map(c => [c - AR - 0.75, c + AR + 0.75]), ...PILLAR_X.map(x => [x - 0.46, x + 0.46])];
+  const free = x => !blocked.some(([a, b]) => x > a && x < b);
+  const step = 0.05;
+  let start = null;
+  for (let x = -HALF; x <= HALF + 1e-6; x += step) {
+    const ok = x < HALF - 1e-6 && free(x + step / 2);
+    if (ok && start === null) start = x;
+    if (!ok && start !== null) {
+      const len = x - start, n = Math.max(1, Math.round(len / 1.1)), bl = len / n;
+      for (let i = 0; i < n; i++) boxStone(W, bl - 0.035, PLINTH.h, PLINTH.out, start + bl * (i + 0.5), PLINTH.h / 2, PLINTH.out / 2, i);
+      start = null;
+    }
+  }
+  // corniche : bandeau de pierre au-dessus des arches, sur toute la longueur
+  const cn = 16, cl = ROOM / cn;
+  for (let i = 0; i < cn; i++) boxStone(W, cl - 0.035, CORNICE.h, CORNICE.out, -HALF + cl * (i + 0.5), CORNICE.y, CORNICE.out / 2, i);
+}
+
+// sol en pavés
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), surface(tiled(FLOOR_URI, ROOM, ROOM)));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+buildWall(0, -HALF, 0);
+buildWall(0, HALF, Math.PI);
+buildWall(-HALF, 0, Math.PI / 2, true);     // fenêtres sur les deux murs parallèles de gauche et de droite
+buildWall(HALF, 0, -Math.PI / 2, true);
+// ---------- Fontaine au centre : 3 niveaux en pierre, eau animée, gazon fleuri ----------
+const FOUNT = { basinIn: 1.6, basinOut: 1.95, basinH: 0.55, water0: 0.42, grassOut: 2.9, collide: 2.3 };
+const BOWL1 = { y: 1.25, r: 0.98, water: 1.42 }, BOWL2 = { y: 1.95, r: 0.48, water: 2.07 }, SPOUT_Y = 2.38;
+
+// bloc en secteur d'anneau, posé à plat (extrudé vers le haut)
+function ringBlock(r1, r2, a0, a1, y, h, shade) {
+  const sh = new THREE.Shape();
+  sh.absarc(0, 0, r2, a0, a1, false); sh.absarc(0, 0, r1, a1, a0, true); sh.closePath();
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false, curveSegments: 4 });
+  stone(geo, new THREE.Matrix4().makeTranslation(0, y, 0).multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2)), shade);
+}
+function stoneRing(r1, r2, y, h, n, shade0, offset = 0) {
+  const ga = 0.012;
+  for (let i = 0; i < n; i++) {
+    const a0 = (i + offset) * Math.PI * 2 / n + ga, a1 = (i + 1 + offset) * Math.PI * 2 / n - ga;
+    ringBlock(r1, r2, a0, a1, y, h, i + shade0);
+  }
+}
+function lathe(points, y, shade) {
+  const geo = new THREE.LatheGeometry(points.map(([r, h]) => new THREE.Vector2(r, h)), 32);
+  stone(geo, new THREE.Matrix4().makeTranslation(0, y, 0), shade);
+}
+// grand bassin : socle, deux rangées de pierres décalées, margelle
+stoneRing(FOUNT.basinIn - 0.05, FOUNT.basinOut + 0.12, 0, 0.12, 16, 3);
+stoneRing(FOUNT.basinIn, FOUNT.basinOut, 0.12, 0.2, 14, 0);
+stoneRing(FOUNT.basinIn, FOUNT.basinOut, 0.32, 0.2, 14, 1, 0.5);
+stoneRing(FOUNT.basinIn - 0.06, FOUNT.basinOut + 0.06, 0.52, 0.11, 12, 2);
+lathe([[0, 0], [FOUNT.basinIn, 0], [FOUNT.basinIn, 0.3], [0, 0.3]], 0.0, 3);           // fond du bassin
+// colonne et vasque du milieu
+lathe([[0, 0], [0.42, 0], [0.42, 0.14], [0.3, 0.2], [0.3, 0.75], [0.36, 0.82], [0.36, 0.9], [0, 0.9]], 0.3, 0);
+lathe([[0.1, -0.12], [0.45, -0.08], [0.85, 0.04], [BOWL1.r, 0.14], [BOWL1.r, 0.22], [BOWL1.r - 0.1, 0.22], [0.8, 0.12], [0, 0.1]], BOWL1.y, 2);
+// colonne et vasque du haut, fleuron
+lathe([[0, 0], [0.2, 0], [0.16, 0.08], [0.16, 0.5], [0.22, 0.58], [0, 0.58]], BOWL1.y + 0.12, 1);
+lathe([[0.06, -0.08], [0.25, -0.05], [0.42, 0.04], [BOWL2.r, 0.11], [BOWL2.r, 0.16], [BOWL2.r - 0.07, 0.16], [0.38, 0.08], [0, 0.07]], BOWL2.y, 0);
+lathe([[0, 0], [0.09, 0], [0.06, 0.12], [0.1, 0.2], [0.04, 0.3], [0, 0.34]], BOWL2.y + 0.05, 2);
+
+// eau : texture pixel art qui défile
+const waterCanvas = document.createElement("canvas"); waterCanvas.width = waterCanvas.height = 64;
+{
+  const c = waterCanvas.getContext("2d");
+  c.fillStyle = "#3f7fd6"; c.fillRect(0, 0, 64, 64);
+  const shades = ["#5a98e6", "#7ab4f2", "#2f69c0", "#a8d4ff"];
+  for (let i = 0; i < 90; i++) {
+    const x = Math.floor(Math.random() * 64), y = Math.floor(Math.random() * 64), w = 2 + Math.floor(Math.random() * 6);
+    c.fillStyle = shades[i % shades.length]; c.fillRect(x, y, w, 1); if (x + w > 64) c.fillRect(0, y, x + w - 64, 1);
+  }
+}
+const waterTex = new THREE.CanvasTexture(waterCanvas);
+waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping; waterTex.magFilter = THREE.NearestFilter; waterTex.encoding = THREE.sRGBEncoding;
+waterTex.repeat.set(3, 3);
+const waterMat = new THREE.MeshStandardMaterial({ map: waterTex, emissive: 0x16407e, emissiveIntensity: 0.6, roughness: 0.25, transparent: true, opacity: 0.92 });
+for (const [r, y] of [[FOUNT.basinIn, FOUNT.water0], [BOWL1.r - 0.1, BOWL1.water], [BOWL2.r - 0.07, BOWL2.water]]) {
+  const w = new THREE.Mesh(new THREE.CircleGeometry(r, 40), waterMat);
+  w.rotation.x = -Math.PI / 2; w.position.y = y; scene.add(w);
+}
+
+// gouttes : jet au sommet, cascades depuis les deux vasques
+const DROPS = 700;
+const dropPos = new Float32Array(DROPS * 3), drops = [];
+const dropGeo = new THREE.BufferGeometry(); dropGeo.setAttribute("position", new THREE.BufferAttribute(dropPos, 3));
+const dropPts = new THREE.Points(dropGeo, new THREE.PointsMaterial({ color: 0xcfe8ff, size: 0.055, transparent: true, opacity: 0.85, depthWrite: false }));
+scene.add(dropPts);
+function spawnDrop(d) {
+  const a = Math.random() * Math.PI * 2, kind = d.kind;
+  if (kind === 0) {        // jet : monte puis retombe dans la vasque du haut
+    d.x = 0; d.y = SPOUT_Y; d.z = 0;
+    const out = 0.25 + Math.random() * 0.25;
+    d.vx = Math.cos(a) * out; d.vz = Math.sin(a) * out; d.vy = 1.5 + Math.random() * 0.5; d.floor = BOWL2.water;
+  } else {                 // cascade : déborde du bord d'une vasque
+    const r = kind === 1 ? BOWL2.r : BOWL1.r, y = kind === 1 ? BOWL2.y + 0.16 : BOWL1.y + 0.22;
+    d.x = Math.cos(a) * r; d.y = y; d.z = Math.sin(a) * r;
+    const out = 0.25 + Math.random() * 0.15;
+    d.vx = Math.cos(a) * out; d.vz = Math.sin(a) * out; d.vy = -Math.random() * 0.2;
+    d.floor = kind === 1 ? BOWL1.water : FOUNT.water0;
+  }
+}
+for (let i = 0; i < DROPS; i++) {
+  const d = { kind: i < 120 ? 0 : i < 330 ? 1 : 2 };
+  spawnDrop(d);
+  for (let k = Math.random() * 60; k > 0; k--) { d.vy -= 9.8 / 60; d.x += d.vx / 60; d.y += d.vy / 60; d.z += d.vz / 60; if (d.y < d.floor) spawnDrop(d); }
+  drops.push(d);
+}
+function updateFountain(dt, now) {
+  waterTex.offset.set(now * 0.00004, now * 0.00007);
+  for (let i = 0; i < DROPS; i++) {
+    const d = drops[i];
+    d.vy -= 9.8 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
+    if (d.y < d.floor) spawnDrop(d);
+    dropPos[i * 3] = d.x; dropPos[i * 3 + 1] = d.y; dropPos[i * 3 + 2] = d.z;
+  }
+  dropGeo.attributes.position.needsUpdate = true;
+}
+
+// ---------- Cour de récréation : bancs, bascule, marelle, ballon ----------
+// obstacles en boîtes alignées : l'avatar les contourne, ou monte dessus si « standable » (sauter sur un banc)
+const OBSTACLES = [];
+const WOOD = [0x9a6a3e, 0x8f6038, 0xa47246].map(c => new THREE.Color(c).convertSRGBToLinear());
+const WOOD_DARK = new THREE.Color(0x6a4226).convertSRGBToLinear();
+function woodBox(w, h, d, x, y, z, color, rotZ = 0, cx = 0, cz = 0, ry = 0) {
+  const m = new THREE.Matrix4().makeTranslation(cx, 0, cz).multiply(new THREE.Matrix4().makeRotationY(ry))
+    .multiply(new THREE.Matrix4().makeTranslation(x, y, z)).multiply(new THREE.Matrix4().makeRotationZ(rotZ));
+  stone(new THREE.BoxGeometry(w, h, d), m, color);
+}
+const BENCH = { len: 2.2, seat: 0.45, depth: 0.46 };
+function bench(cx, cz) {                       // banc en bois le long d'un mur (axe x)
+  for (let i = 0; i < 3; i++)                  // 3 planches d'assise
+    woodBox(BENCH.len, 0.05, 0.14, 0, BENCH.seat, -0.16 + i * 0.16, WOOD[i], 0, cx, cz);
+  for (const sx of [-0.92, 0.92]) {
+    woodBox(0.09, BENCH.seat - 0.025, 0.4, sx, (BENCH.seat - 0.025) / 2, 0, WOOD_DARK, 0, cx, cz);   // pieds
+    woodBox(0.1, 0.06, 0.48, sx, BENCH.seat - 0.06, 0, WOOD_DARK, 0, cx, cz);                         // traverse sous l'assise
+  }
+  woodBox(1.84, 0.06, 0.06, 0, 0.14, 0, WOOD_DARK, 0, cx, cz);                                        // entretoise
+  OBSTACLES.push({ minX: cx - BENCH.len / 2, maxX: cx + BENCH.len / 2, minZ: cz - BENCH.depth / 2, maxZ: cz + BENCH.depth / 2,
+                   top: BENCH.seat + 0.025, standable: true });
+}
+bench(-6.5, -HALF + 1.25); bench(6.5, -HALF + 1.25); bench(-6.5, HALF - 1.25); bench(6.5, HALF - 1.25);
+
+function seesaw(cx, cz) {                      // bascule en bois inclinée, poignées et sièges
+  const tilt = 0.17, L = 3.4, pivotY = 0.5;
+  woodBox(0.34, 0.36, 0.5, 0, 0.18, 0, WOOD_DARK, 0, cx, cz);                                         // socle
+  woodBox(0.16, 0.16, 0.62, 0, pivotY - 0.06, 0, WOOD[0], 0, cx, cz);                                  // axe
+  const m = new THREE.Matrix4().makeTranslation(cx, pivotY, cz).multiply(new THREE.Matrix4().makeRotationZ(tilt));
+  const part = (w, h, d, x, y, z, c) => stone(new THREE.BoxGeometry(w, h, d), m.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, z)), c);
+  part(L, 0.07, 0.34, 0, 0.035, 0, WOOD[2]);                                                           // planche
+  for (const sx of [-1, 1]) {
+    part(0.4, 0.06, 0.36, sx * (L / 2 - 0.3), 0.1, 0, WOOD[1]);                                        // siège
+    part(0.06, 0.34, 0.06, sx * (L / 2 - 0.62), 0.24, -0.12, WOOD_DARK);                                // poignée
+    part(0.06, 0.34, 0.06, sx * (L / 2 - 0.62), 0.24, 0.12, WOOD_DARK);
+    part(0.06, 0.06, 0.3, sx * (L / 2 - 0.62), 0.42, 0, WOOD_DARK);
+  }
+  OBSTACLES.push({ minX: cx - L / 2, maxX: cx + L / 2, minZ: cz - 0.25, maxZ: cz + 0.25, top: 99, standable: false });
+}
+seesaw(-5.5, 4.5);
+
+// marelle à la craie sur les pavés (le « CIEL » vers la fontaine)
+{
+  const t = loader.load(HOPSCOTCH_URI);
+  t.magFilter = THREE.NearestFilter; t.encoding = THREE.sRGBEncoding;
+  const hop = new THREE.Mesh(new THREE.PlaneGeometry(80 / 64, 272 / 64),
+    new THREE.MeshStandardMaterial({ map: t, transparent: true, alphaTest: 0.1, roughness: 1, depthWrite: false }));
+  hop.rotation.x = -Math.PI / 2; hop.position.set(5.5, 0.006, 4.4); hop.receiveShadow = true; scene.add(hop);
+}
+
+mergeStones();
+
+// ballon : il roule, rebondit et ricoche ; on le pousse en marchant dessus
+const BALL_R = 0.22;
+const ballCanvas = document.createElement("canvas"); ballCanvas.width = 32; ballCanvas.height = 16;
+{
+  const c = ballCanvas.getContext("2d");
+  const cols = ["#d8433b", "#f2efe6", "#3b6fd8", "#f2efe6"];
+  for (let i = 0; i < 8; i++) { c.fillStyle = cols[i % 4]; c.fillRect(i * 4, 0, 4, 16); }
+  c.fillStyle = "#f6d24a"; c.fillRect(0, 0, 32, 2); c.fillRect(0, 14, 32, 2);
+}
+const ballTex = new THREE.CanvasTexture(ballCanvas); ballTex.magFilter = THREE.NearestFilter; ballTex.encoding = THREE.sRGBEncoding;
+const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 20, 14), new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.6 }));
+ballMesh.castShadow = true; scene.add(ballMesh);
+const ball = { x: 2.5, y: BALL_R, z: 6.0, vx: 0, vy: 0, vz: 0, cool: 0 };
+function updateBall(dt) {
+  const b = ball;
+  b.cool -= dt;
+  // coup de pied quand l'avatar touche le ballon
+  const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz), reach = 0.3 + BALL_R + 0.08;
+  if (d < reach && b.y - BALL_R < p.y + 0.6 && b.cool <= 0) {
+    const nx = dx / (d || 1), nz = dz / (d || 1), sp = p.moving ? 6.5 : 2.5;
+    b.vx = nx * sp; b.vz = nz * sp; b.vy = p.moving ? 2.6 : 1.2; b.cool = 0.25;
+    b.x = p.x + nx * reach; b.z = p.z + nz * reach;
+  }
+  b.vy -= GRAVITY * dt;
+  b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+  if (b.y < BALL_R) { b.y = BALL_R; b.vy = Math.abs(b.vy) > 0.6 ? -b.vy * 0.55 : 0; }
+  if (b.y <= BALL_R + 1e-3) { const f = Math.exp(-1.3 * dt); b.vx *= f; b.vz *= f; }
+  const lim = HALF - 0.45 - BALL_R;                                  // murs (devant le soubassement)
+  if (b.x < -lim) { b.x = -lim; b.vx = Math.abs(b.vx) * 0.7; } if (b.x > lim) { b.x = lim; b.vx = -Math.abs(b.vx) * 0.7; }
+  if (b.z < -lim) { b.z = -lim; b.vz = Math.abs(b.vz) * 0.7; } if (b.z > lim) { b.z = lim; b.vz = -Math.abs(b.vz) * 0.7; }
+  const fr = FOUNT.basinOut + 0.1 + BALL_R, fd = Math.hypot(b.x, b.z);   // bord de la fontaine
+  if (fd < fr && b.y < 0.75) {
+    const nx = b.x / fd, nz = b.z / fd, vn = b.vx * nx + b.vz * nz;
+    b.x = nx * fr; b.z = nz * fr;
+    if (vn < 0) { b.vx -= 1.7 * vn * nx; b.vz -= 1.7 * vn * nz; }
+  }
+  for (const o of OBSTACLES) {                                        // bancs et bascule
+    if (b.y - BALL_R > o.top) continue;
+    const qx = Math.max(o.minX, Math.min(o.maxX, b.x)), qz = Math.max(o.minZ, Math.min(o.maxZ, b.z));
+    const ex = b.x - qx, ez = b.z - qz, ed = Math.hypot(ex, ez);
+    if (ed < BALL_R && ed > 1e-6) {
+      const nx = ex / ed, nz = ez / ed, vn = b.vx * nx + b.vz * nz;
+      b.x = qx + nx * BALL_R; b.z = qz + nz * BALL_R;
+      if (vn < 0) { b.vx -= 1.7 * vn * nx; b.vz -= 1.7 * vn * nz; }
+    }
+  }
+  // rotation visuelle : il roule dans le sens du mouvement
+  const sp = Math.hypot(b.vx, b.vz);
+  if (sp > 1e-3) ballMesh.rotateOnWorldAxis(new THREE.Vector3(b.vz / sp, 0, -b.vx / sp), sp * dt / BALL_R);
+  ballMesh.position.set(b.x, b.y, b.z);
+}
+
+scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.42));
+const lamp = new THREE.PointLight(0xfff1dc, 1.0, 34, 1.5);
+lamp.position.set(0, LIGHT_H + 0.8, 0); lamp.castShadow = true; lamp.shadow.mapSize.set(1024, 1024);
+scene.add(lamp);
+
+// ---------- Avatar 3D : petit héros low-poly (cheveux en épis, écharpe violette, manteau prune) ----------
+// Origine aux pieds, le personnage regarde vers +z. Les membres pivotent depuis la hanche / l'épaule.
+const HERO_COL = { skin: 0xf2c29b, hair: 0x6b3a22, hairLight: 0x86502e, coat: 0x40243a, coatLight: 0x553049, trim: 0xd1a64e,
+                   belt: 0x5b3a22, scarf: 0x6c3aa6, scarfDark: 0x55288a, pants: 0x2b2232, boots: 0x7a4a2a, eye: 0x2b1a24 };
+const heroMat = {};
+for (const [k, c] of Object.entries(HERO_COL))      // couleurs données en sRGB, converties pour l'éclairage
+  heroMat[k] = new THREE.MeshStandardMaterial({ color: new THREE.Color(c).convertSRGBToLinear(), roughness: 0.8, flatShading: true });
+heroMat.eyeShine = new THREE.MeshBasicMaterial({ color: 0xffffff });
+function part(geo, mat, x, y, z, parent) {
+  const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m;
+}
+function makeHero() {
+  const hero = new THREE.Group(), body = new THREE.Group();
+  hero.add(body);                                                   // « body » rebondit pendant la marche
+  const limb = (r1, r2, h, mat, seg = 7) => { const g = new THREE.CylinderGeometry(r1, r2, h, seg); g.translate(0, -h / 2, 0); return [g, mat]; };
+
+  // jambes (pivot à la hanche) avec bottes
+  const legs = [];
+  for (const sx of [-1, 1]) {
+    const hip = new THREE.Group(); hip.position.set(sx * 0.11, 0.5, 0); body.add(hip);
+    part(...limb(0.075, 0.07, 0.34, heroMat.pants), 0, 0, 0, hip);
+    const boot = part(new THREE.BoxGeometry(0.15, 0.17, 0.24), heroMat.boots, 0, -0.41, 0.03, hip);
+    part(new THREE.BoxGeometry(0.165, 0.05, 0.17), heroMat.boots, 0, -0.32, 0, hip);   // revers de botte
+    legs.push(hip);
+  }
+  // manteau : tronc évasé + pans, bordures dorées, ceinture
+  part(new THREE.CylinderGeometry(0.2, 0.27, 0.5, 8), heroMat.coat, 0, 0.78, 0, body);
+  part(new THREE.CylinderGeometry(0.275, 0.29, 0.06, 8), heroMat.trim, 0, 0.53, 0, body);          // ourlet doré
+  part(new THREE.CylinderGeometry(0.23, 0.235, 0.06, 8), heroMat.belt, 0, 0.74, 0, body);          // ceinture
+  part(new THREE.BoxGeometry(0.06, 0.06, 0.03), heroMat.trim, 0, 0.74, 0.235, body);               // boucle
+  part(new THREE.BoxGeometry(0.035, 0.42, 0.02), heroMat.trim, 0, 0.79, 0.255, body);              // bordure avant
+  part(new THREE.BoxGeometry(0.08, 0.1, 0.02), heroMat.trim, 0, 0.92, 0.215, body);                // broche
+  // bras (pivot à l'épaule) avec manchette dorée et main
+  const arms = [];
+  for (const sx of [-1, 1]) {
+    const sh = new THREE.Group(); sh.position.set(sx * 0.25, 0.98, 0); body.add(sh);
+    part(...limb(0.065, 0.06, 0.32, heroMat.coatLight), 0, 0, 0, sh);
+    part(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 7), heroMat.trim, 0, -0.3, 0, sh);
+    part(new THREE.IcosahedronGeometry(0.06, 0), heroMat.skin, 0, -0.37, 0, sh);
+    arms.push(sh);
+  }
+  // écharpe : tour du cou + pan qui flotte dans le dos
+  part(new THREE.TorusGeometry(0.15, 0.065, 6, 12), heroMat.scarf, 0, 1.06, 0, body).rotation.x = Math.PI / 2;
+  const tail = new THREE.Group(); tail.position.set(0.08, 1.04, -0.13); body.add(tail);
+  const tg = new THREE.BoxGeometry(0.12, 0.34, 0.04); tg.translate(0, -0.17, 0);
+  part(tg, heroMat.scarfDark, 0, 0, 0, tail);
+  // tête : visage, yeux, cheveux en épis
+  const head = new THREE.Group(); head.position.set(0, 1.3, 0); body.add(head);
+  part(new THREE.IcosahedronGeometry(0.25, 1), heroMat.skin, 0, 0, 0, head);
+  for (const sx of [-1, 1]) {
+    part(new THREE.BoxGeometry(0.06, 0.09, 0.02), heroMat.eye, sx * 0.09, -0.01, 0.235, head);
+    part(new THREE.BoxGeometry(0.022, 0.022, 0.01), heroMat.eyeShine, sx * 0.09 - 0.012, 0.015, 0.247, head);
+    part(new THREE.IcosahedronGeometry(0.045, 0), heroMat.skin, sx * 0.25, -0.02, 0, head);      // oreilles
+  }
+  part(new THREE.IcosahedronGeometry(0.27, 1), heroMat.hair, 0, 0.07, -0.04, head).scale.set(1.02, 0.85, 1.0);   // calotte
+  // mèches en épis : courtes et larges, inclinées vers l'extérieur, tout autour de la calotte
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const tufts = [];
+  for (let i = 0; i < 9; i++) tufts.push([i / 9 * Math.PI * 2, 0.55]);             // couronne
+  for (let i = 0; i < 5; i++) tufts.push([i / 5 * Math.PI * 2 + 0.3, 0.2]);         // sommet
+  for (let i = 0; i < 4; i++) tufts.push([Math.PI + (i - 1.5) * 0.45, 0.95]);       // nuque
+  for (const [az, el] of tufts) {
+    const dir = new THREE.Vector3(Math.sin(az) * Math.sin(el), Math.cos(el), Math.cos(az) * Math.sin(el));
+    if (dir.z > 0.55 && el > 0.5) continue;                                        // dégager le visage
+    const sp = part(new THREE.ConeGeometry(0.1 + rnd() * 0.03, 0.17 + rnd() * 0.06, 5), rnd() > 0.65 ? heroMat.hairLight : heroMat.hair,
+                    dir.x * 0.22, 0.07 + dir.y * 0.2, -0.04 + dir.z * 0.22, head);
+    sp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.add(new THREE.Vector3(0, 0.35, 0)).normalize());
+  }
+  // frange : mèches qui retombent sur le front
+  for (const [x, rz] of [[-0.12, 0.5], [-0.03, 0.15], [0.07, -0.2], [0.15, -0.55]]) {
+    const f = part(new THREE.ConeGeometry(0.07, 0.17, 5), heroMat.hair, x, 0.13, 0.2, head);
+    f.rotation.set(Math.PI - 0.5, 0, rz);
+  }
+  return { hero, body, legs, arms, head, tail };
+}
+const H = makeHero();
+scene.add(H.hero);
+const blob = new THREE.Mesh(new THREE.CircleGeometry(0.32, 24), new THREE.MeshBasicMaterial({ color: 0x281838, transparent: true, opacity: 0.25, depthWrite: false }));
+blob.rotation.x = -Math.PI / 2; blob.scale.set(1, 0.7, 1); scene.add(blob);
+let heroYaw = Math.PI, walkPhase = 0;
+function animateHero(dt, now, airborne) {
+  // rotation fluide vers la direction de marche
+  let d = p.facing - heroYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+  heroYaw += d * Math.min(1, dt * 12);
+  H.hero.rotation.y = heroYaw;
+  H.hero.position.set(p.x, p.y, p.z);
+  const t = now / 1000;
+  if (airborne) {                                 // pose de saut : genoux pliés, bras levés
+    H.legs[0].rotation.x = -0.6; H.legs[1].rotation.x = 0.35;
+    H.arms[0].rotation.set(-0.4, 0, -0.9); H.arms[1].rotation.set(-0.4, 0, 0.9);
+    H.body.position.y = 0; H.tail.rotation.x = -0.9;
+  } else if (p.moving) {                          // marche : balancement opposé bras / jambes, petit rebond
+    walkPhase += dt * 11;
+    const sw = Math.sin(walkPhase);
+    H.legs[0].rotation.x = sw * 0.7; H.legs[1].rotation.x = -sw * 0.7;
+    H.arms[0].rotation.set(-sw * 0.6, 0, -0.12); H.arms[1].rotation.set(sw * 0.6, 0, 0.12);
+    H.body.position.y = Math.abs(Math.cos(walkPhase)) * 0.045;
+    H.tail.rotation.x = -0.5 - Math.abs(sw) * 0.3;
+    H.head.rotation.z = sw * 0.04;
+  } else {                                        // repos : respiration légère
+    const br = Math.sin(t * 2.2);
+    for (const l of H.legs) l.rotation.x *= 0.8;
+    H.arms[0].rotation.set(0, 0, -0.1 - br * 0.02); H.arms[1].rotation.set(0, 0, 0.1 + br * 0.02);
+    H.body.position.y = br * 0.008;
+    H.tail.rotation.x = -0.15 + br * 0.04;
+    H.head.rotation.z *= 0.9;
+  }
+}
+
+// ---------- État ----------
+let jumpRequested = false;
+const p = { x: 0, y: 0, vy: 0, z: 5, facing: Math.PI, t: 0, moving: false };   // facing : angle de la direction regardée
+const cam = { yaw: 0, pitch: 0.35, dist: 5.5 };
+
+// ---------- Entrées ----------
+const keys = new Set();
+addEventListener("keydown", e => {
+  keys.add(e.code);
+  if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault();
+  if (e.code === "Space" && !e.repeat) jumpRequested = true;
+});
+const jumpBtn = document.getElementById("jump");
+jumpBtn.addEventListener("pointerdown", e => { e.preventDefault(); jumpRequested = true; });
+addEventListener("keyup", e => keys.delete(e.code));
+addEventListener("blur", () => keys.clear());
+
+let stick = null, look = null;
+const knob = document.getElementById("knob"), ring = document.getElementById("ring");
+canvas.addEventListener("pointerdown", e => {
+  canvas.setPointerCapture(e.pointerId);
+  const r = canvas.getBoundingClientRect();
+  if (e.pointerType !== "mouse" && e.clientX - r.left < r.width / 2 && !stick) {
+    stick = { id: e.pointerId, ox: e.clientX, oy: e.clientY, dx: 0, dy: 0 };
+    ring.hidden = knob.hidden = false;
+    ring.style.left = knob.style.left = (e.clientX - r.left) + "px";
+    ring.style.top = knob.style.top = (e.clientY - r.top) + "px";
+  } else if (!look) look = { id: e.pointerId, x: e.clientX, y: e.clientY };
+});
+canvas.addEventListener("pointermove", e => {
+  if (stick && e.pointerId === stick.id) {
+    const r = canvas.getBoundingClientRect();
+    let dx = e.clientX - stick.ox, dy = e.clientY - stick.oy; const d = Math.hypot(dx, dy);
+    if (d > 50) { dx *= 50 / d; dy *= 50 / d; }
+    stick.dx = dx / 50; stick.dy = dy / 50;
+    knob.style.left = (stick.ox - r.left + dx) + "px"; knob.style.top = (stick.oy - r.top + dy) + "px";
+  } else if (look && e.pointerId === look.id) {
+    cam.yaw -= (e.clientX - look.x) * 0.006;
+    cam.pitch = Math.max(0.05, Math.min(1.25, cam.pitch + (e.clientY - look.y) * 0.004));
+    look.x = e.clientX; look.y = e.clientY;
+  }
+});
+const release = e => {
+  if (stick && e.pointerId === stick.id) { stick = null; ring.hidden = knob.hidden = true; }
+  if (look && e.pointerId === look.id) look = null;
+};
+canvas.addEventListener("pointerup", release); canvas.addEventListener("pointercancel", release);
+canvas.addEventListener("wheel", e => { e.preventDefault(); cam.dist = Math.max(2.5, Math.min(10, cam.dist * (1 + e.deltaY * 0.001))); }, { passive: false });
+
+function readMove() {
+  let f = 0, s = 0;
+  const k = c => keys.has(c);
+  if (k("KeyW") || k("ArrowUp")) f += 1;        // Z sur AZERTY
+  if (k("KeyS") || k("ArrowDown")) f -= 1;
+  if (k("KeyA")) s -= 1;                        // Q sur AZERTY
+  if (k("KeyD")) s += 1;
+  if (stick) { f = -stick.dy; s = stick.dx; }
+  const len = Math.hypot(f, s);
+  if (len > 1) { f /= len; s /= len; }
+  return [f, s];
+}
+
+// ---------- Boucle ----------
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * renderer.getPixelRatio()) || canvas.height !== Math.round(h * renderer.getPixelRatio())) {
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  resize();
+  if (keys.has("ArrowLeft")) cam.yaw += 2.2 * dt;
+  if (keys.has("ArrowRight")) cam.yaw -= 2.2 * dt;
+
+  const [f, s] = readMove();
+  p.moving = Math.hypot(f, s) > 0.05;
+  if (p.moving) {
+    // avant = direction de la caméra (à plat), droite = perpendiculaire
+    const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
+    const mx = fx * f + rx * s, mz = fz * f + rz * s;
+    const lim = HALF - WALL_CLEAR;                       // l'avatar reste devant les piliers et les arches
+    p.x = Math.max(-lim, Math.min(lim, p.x + mx * SPEED * dt));
+    p.z = Math.max(-lim, Math.min(lim, p.z + mz * SPEED * dt));
+    // on fait le tour de la fontaine sans la traverser
+    const fd = Math.hypot(p.x, p.z);
+    if (fd < FOUNT.collide) { const k = FOUNT.collide / (fd || 1); p.x *= k; p.z *= k; }
+    for (const o of OBSTACLES) {                         // contourner les bancs (sauf si on est dessus) et la bascule
+      if (o.standable && p.y >= o.top - 0.12) continue;
+      const x0 = o.minX - PLAYER_R, x1 = o.maxX + PLAYER_R, z0 = o.minZ - PLAYER_R, z1 = o.maxZ + PLAYER_R;
+      if (p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1) {
+        const pen = [p.x - x0, x1 - p.x, p.z - z0, z1 - p.z], i = pen.indexOf(Math.min(...pen));
+        if (i === 0) p.x = x0; else if (i === 1) p.x = x1; else if (i === 2) p.z = z0; else p.z = z1;
+      }
+    }
+    p.facing = Math.atan2(mx, mz);
+    p.t += dt;
+  } else p.t = 0;
+
+  // hauteur du sol sous l'avatar : pavés, ou dessus d'un banc
+  let ground = 0;
+  for (const o of OBSTACLES)
+    if (o.standable && p.x > o.minX - 0.1 && p.x < o.maxX + 0.1 && p.z > o.minZ - 0.1 && p.z < o.maxZ + 0.1 && p.y >= o.top - 0.12) ground = Math.max(ground, o.top);
+  // saut : impulsion vers le haut si l'avatar touche le sol, puis gravité
+  if (jumpRequested && p.y <= ground + 1e-3) p.vy = JUMP_SPEED;
+  jumpRequested = false;
+  p.vy -= GRAVITY * dt; p.y += p.vy * dt;
+  if (p.y < ground) { p.y = ground; p.vy = 0; }
+  const airborne = p.y > ground + 1e-3;
+
+  // caméra en orbite autour de l'avatar, gardée à l'intérieur de la pièce
+  const tx = p.x, ty = 1.1 + p.y * 0.5, tz = p.z;      // la caméra suit un peu le saut
+  let cx = tx + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
+  let cy = ty + Math.sin(cam.pitch) * cam.dist;
+  let cz = tz + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
+  const m = HALF - 0.45;                               // la caméra ne rentre pas dans les piliers
+  cx = Math.max(-m, Math.min(m, cx)); cz = Math.max(-m, Math.min(m, cz)); cy = Math.max(0.3, Math.min(WALL_H - 0.25, cy));
+  camera.position.set(cx, cy, cz); camera.lookAt(tx, ty, tz);
+
+  animateHero(dt, now, airborne);
+  const sh = 1 / (1 + (p.y - ground) * 0.7);            // l'ombre rétrécit et pâlit en hauteur
+  blob.position.set(p.x, ground + 0.01, p.z); blob.scale.set(sh, 0.7 * sh, 1); blob.material.opacity = 0.35 * sh;
+
+  updateFountain(dt, now);
+  updateBall(dt);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+
+</script>
