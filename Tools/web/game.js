@@ -1,5 +1,6 @@
 // Cour de château en 3D, de nuit, vue à la 3e personne : l'avatar se déplace par rapport à la caméra,
 // qu'on fait tourner autour de lui (souris / doigt / flèches).
+const AVATAR_URI = "data:image/png;base64,{{AVATAR}}";
 const BRICK_URI = "data:image/png;base64,{{BRICK}}";
 const FLOOR_URI = "data:image/png;base64,{{FLOOR}}";
 
@@ -762,110 +763,35 @@ function showCharacter(C, x, y, z, yaw, col, groundY = 0) {
   const fx = Math.sin(yaw), fz = Math.cos(yaw);
   const dot = (fx * vx + fz * vz) / vl, side = (fx * -vz + fz * vx) / vl;
   const row = dot < -0.7 ? 0 : dot > 0.7 ? 3 : side > 0 ? 2 : 1;
-  C.tex.offset.set(col / COLS, 1 - (row + 1) / 4);
+  const cols = C.cols || COLS, rows = C.rows || 4;
+  C.tex.offset.set((col + 1 / C.fw) / cols, 1 - (row + 1) / rows + 1 / (C.fh * rows));
   const sh = 1 / (1 + (y - groundY) * 0.7);
   C.shadow.position.set(x, groundY + 0.012, z); C.shadow.scale.set(sh, 0.7 * sh, 1); C.shadow.material.opacity = 0.32 * sh;
 }
 
-// ---------- Héros ----------
-const HERO = makeCharacter({ height: 1.72, skin: 0xe0ad8a, eyes: 0x5a3b22, hair: 0x4a2a18, hairStyle: "messy",
-  shirt: 0x2c2430, coat: 0x3b2233, trim: 0xc8a050, pants: 0x25222a, shoes: 0x5a3a24, highBoots: true, scarf: 0x6a35a6 });
+// ---------- Héros : la planche de sprites fournie (Assets/Resources/avatar_sheet.png) ----------
+// 4 lignes (face, gauche, droite, dos) x 4 colonnes (repos, pas A, repos, pas B), images de 172 x 303, pieds à 4 px du bas
+const HERO_FW = 172, HERO_FH = 303, HERO_H = 1.6;             // taille du personnage dans la cour (m)
+function makeSheetCharacter(uri, cols, rows, fw, fh, height, feetPx) {
+  const tex = new THREE.TextureLoader().load(uri);
+  tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.encoding = THREE.sRGBEncoding;
+  tex.repeat.set(1 / cols - 2 / (fw * cols), 1 / rows - 2 / (fh * rows));   // marge d'1 px : pas de débord entre images
+  const h = height * fh / (fh - feetPx - 8), w = h * fw / fh;
+  const geo = new THREE.PlaneGeometry(w, h); geo.translate(0, h / 2 - h * feetPx / fh, 0);
+  const m = new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, emissive: 0x4a4650, emissiveMap: tex });
+  const mesh = new THREE.Mesh(geo, m); scene.add(mesh);
+  const shadow = new THREE.Mesh(blobGeo, blobMat.clone()); shadow.rotation.x = -Math.PI / 2; shadow.scale.set(1, 0.7, 1); scene.add(shadow);
+  return { mesh, tex, shadow, phase: 0, cols, rows, fw, fh };
+}
+const HERO = makeSheetCharacter(AVATAR_URI, 4, 4, HERO_FW, HERO_FH, HERO_H, 4);
 let heroYaw = Math.PI;
 function animateHero(dt, now, airborne, ground) {
   let d = p.facing - heroYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
   heroYaw += d * Math.min(1, dt * 14);
   let col = 0;
-  if (airborne) col = 5;
-  else if (p.moving) { HERO.phase += dt * SPEED * 2.1; col = 1 + Math.floor(HERO.phase) % 4; }
+  if (airborne) col = 1;                                          // en l'air : jambes écartées
+  else if (p.moving) { HERO.phase += dt * SPEED * 2.0; col = Math.floor(HERO.phase) % 4; }
   showCharacter(HERO, p.x, p.y, p.z, heroYaw, col, ground);
-}
-
-// ---------- PNJ : élèves qui se promènent, discutent, s'assoient ----------
-const NPC_LOOKS = {
-  skin: [0xf1c7a8, 0xe0ad8a, 0xc68863, 0x9a6440, 0x6e4529, 0xf5d3bd],
-  hair: [0x17120f, 0x3b2416, 0x6b4426, 0xb98a4e, 0x7a2e1a, 0xd8c08a, 0x2a2420],
-  eyes: [0x3a2a1c, 0x4a6a8a, 0x5a6a3a, 0x2a1c14],
-  robe: [0x22242c, 0x1e2438, 0x203024, 0x3c1e24, 0x2e2622],
-  trim: [0x9aa0a8, 0xb08a4a, 0x8a6a4a],
-  tie: [0x8a2a30, 0x2a4a8a, 0x2e6a38, 0xa8902e, 0x55555c],
-};
-const pick = a => a[Math.floor(Math.random() * a.length)];
-const rnd = (a, b) => a + Math.random() * (b - a);
-const makeStudent = () => makeCharacter({ height: rnd(1.55, 1.85), skin: pick(NPC_LOOKS.skin), eyes: pick(NPC_LOOKS.eyes), hair: pick(NPC_LOOKS.hair),
-  hairStyle: pick(["short", "short", "messy", "long", "bun"]), shirt: 0xe6e2da, tie: pick(NPC_LOOKS.tie),
-  coat: pick(NPC_LOOKS.robe), trim: pick(NPC_LOOKS.trim), pants: 0x24242c, shoes: 0x1e1a18, highBoots: false });
-const NPCS = [];
-const WALL_DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];     // vers les 4 salles
-function randomCourtPoint() {
-  for (let i = 0; i < 60; i++) {
-    const x = rnd(-HALF + 2.3, HALF - 2.3), z = rnd(-HALF + 2.3, HALF - 2.3);
-    if (Math.hypot(x, z) > FOUNT.collide + 1.0 && canStand(x, z)) return [x, z];
-  }
-  return [0, 7];
-}
-function roomTrip() {                                    // aller dans une salle par son arche, puis revenir
-  const [dx, dz] = pick(WALL_DIRS), px = -dz, pz = dx;
-  const depth = HALF + ARCH.depth, off = rnd(-3.5, 3.5), far = rnd(2.5, RD - 1.5);
-  return { path: [[dx * (HALF - 2), dz * (HALF - 2)], [dx * (depth + 0.6), dz * (depth + 0.6)], [dx * (depth + far) + px * off, dz * (depth + far) + pz * off]],
-           back: [[dx * (depth + 0.6), dz * (depth + 0.6)], [dx * (HALF - 2), dz * (HALF - 2)]] };
-}
-function planNext(n) {
-  if (n.back) { n.path = n.back.concat([randomCourtPoint()]); n.back = null; return; }
-  if (Math.random() < 0.25) { const tr = roomTrip(); n.path = tr.path; n.back = tr.back; }
-  else n.path = [randomCourtPoint()];
-}
-function spawnNpcs() {
-  for (let i = 0; i < 12; i++) {
-    const [x, z] = randomCourtPoint();
-    NPCS.push({ C: makeStudent(), x, z, yaw: Math.random() * 6.28, speed: rnd(1.1, 1.5), wait: rnd(0, 4), path: [], back: null, stuck: 0 });
-  }
-  for (const [x, z, yaw] of [[-6.5, -HALF + 1.2, 0], [6.5, HALF - 1.2, Math.PI], [11.2, -HALF + 1.2, 0]])   // élèves assis sur les bancs
-    NPCS.push({ C: makeStudent(), x, z, yaw, seated: true });
-}
-function updateNpcs(dt, now) {
-  for (const n of NPCS) {
-    if (n.seated) { showCharacter(n.C, n.x, 0, n.z, n.yaw, 6); continue; }
-    let moving = false;
-    if (n.wait > 0) {
-      n.wait -= dt;
-      // en pause : se tourner vers un élève proche (discussion) ou vers le joueur s'il est tout près
-      let best = Math.hypot(p.x - n.x, p.z - n.z) < 2.0 ? { x: p.x, z: p.z } : null, bd = 2.2;
-      if (!best) for (const m of NPCS) if (m !== n && !m.seated) { const d = Math.hypot(m.x - n.x, m.z - n.z); if (d < bd) { bd = d; best = m; } }
-      if (best) { let d = Math.atan2(best.x - n.x, best.z - n.z) - n.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); n.yaw += d * Math.min(1, dt * 3); }
-      if (n.wait <= 0) planNext(n);
-    } else {
-      if (!n.path.length) planNext(n);
-      const [tx, tz] = n.path[0];
-      const dx = tx - n.x, dz = tz - n.z, d = Math.hypot(dx, dz);
-      if (d < 0.45) {
-        n.path.shift();
-        if (!n.path.length) n.wait = n.back ? rnd(2, 5) : rnd(1.5, 7);
-      } else {
-        let vx = dx / d, vz = dz / d;
-        const fr = Math.hypot(n.x, n.z), RR = FOUNT.collide + 1.0;        // contourner la fontaine
-        if (fr < RR + 1.5 && fr > 1e-3) {
-          const rx = n.x / fr, rz = n.z / fr;
-          if (vx * rx + vz * rz < 0.2) {
-            let tnx = -rz, tnz = rx; if (tnx * vx + tnz * vz < 0) { tnx = -tnx; tnz = -tnz; }
-            const w = Math.min(1, (RR + 1.5 - fr) / 1.5);
-            vx = vx * (1 - w) + (tnx + rx * 0.4) * w; vz = vz * (1 - w) + (tnz + rz * 0.4) * w;
-          }
-        }
-        for (const m of [...NPCS, { x: p.x, z: p.z }]) {                   // garder ses distances
-          if (m === n || m.seated) continue;
-          const ex = n.x - m.x, ez = n.z - m.z, ed = Math.hypot(ex, ez);
-          if (ed < 1.0 && ed > 1e-3) { const w = (1.0 - ed) * 1.6; vx += ex / ed * w; vz += ez / ed * w; }
-        }
-        const vl = Math.hypot(vx, vz) || 1; vx /= vl; vz /= vl;
-        const nx = n.x + vx * n.speed * dt, nz = n.z + vz * n.speed * dt;
-        if (canStand(nx, nz) && Math.hypot(nx, nz) > FOUNT.collide - 0.1) { n.x = nx; n.z = nz; n.stuck = 0; moving = true; }
-        else if ((n.stuck += dt) > 1.5) { n.path = []; n.back = null; n.wait = 0.5; }
-        let a = Math.atan2(vx, vz) - n.yaw; a = Math.atan2(Math.sin(a), Math.cos(a)); n.yaw += a * Math.min(1, dt * 6);
-      }
-    }
-    if (moving) n.C.phase += dt * n.speed * 2.9;
-    showCharacter(n.C, n.x, 0, n.z, n.yaw, moving ? 1 + Math.floor(n.C.phase) % 4 : 0);
-  }
 }
 
 // ---------- État ----------
@@ -942,7 +868,6 @@ function camOk(x, y, z) {
   return y > 0.25 && CAM_ZONES.some(r => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ && y <= r.maxY);
 }
 
-spawnNpcs();
 
 // ---------- Boucle ----------
 function resize() {
@@ -981,10 +906,6 @@ function frame(now) {
         if (i === 0) p.x = x0; else if (i === 1) p.x = x1; else if (i === 2) p.z = z0; else p.z = z1;
       }
     }
-    for (const n of NPCS) {                              // on ne traverse pas les élèves
-      const ex = p.x - n.x, ez = p.z - n.z, ed = Math.hypot(ex, ez), min = n.seated ? 0 : 0.55;
-      if (ed < min && ed > 1e-4) { p.x = n.x + ex / ed * min; p.z = n.z + ez / ed * min; }
-    }
     p.facing = Math.atan2(mx, mz);
     p.t += dt;
   } else p.t = 0;
@@ -1019,7 +940,6 @@ function frame(now) {
 
   updateFountain(dt, now);
   updateLights(now);
-  updateNpcs(dt, now);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
