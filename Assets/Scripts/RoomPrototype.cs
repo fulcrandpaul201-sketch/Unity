@@ -4,8 +4,8 @@ using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Prototype 3D : pièce carrée (sol, 4 murs très hauts qui se perdent dans le noir, une arche en pierre
-/// avec alcôve sur chaque mur de côté, lumière) et avatar vu à la 3e personne.
+/// Prototype 3D : pièce carrée (sol, 4 murs très hauts qui se perdent dans le noir, 3 arches en pierre
+/// avec alcôve sur chaque mur, piliers, soubassement et corniche, lumière) et avatar vu à la 3e personne.
 /// - ZQSD / WASD (ou stick gauche) : se déplacer par rapport à la caméra
 /// - Souris en maintenant un bouton, flèches ← → (ou stick droit) : tourner la caméra ; molette : zoom
 /// L'avatar est un sprite 2D toujours tourné vers la caméra ; l'image (face / dos / profil) dépend de l'angle de vue.
@@ -25,6 +25,12 @@ public class RoomPrototype : MonoBehaviour
     const float Tile = 2f;          // mètres couverts par une texture
     // Arches des murs de côté : ouverture 3 m, montants 3 m, alcôve 1,4 m, encadrement qui dépasse de 0,2 m
     const float ArchW = 3f, ArchH = 3f, ArchDepth = 1.4f, ArchRing = 0.42f, ArchOut = 0.2f, AR = ArchW / 2f;
+    // Même structure sur les 4 murs : 3 arches, piliers entre elles et dans les angles, soubassement et corniche
+    static readonly float[] ArchX = { -6.5f, 0f, 6.5f };
+    static readonly float[] PillarX = { -Half + 0.35f, -3.25f, 3.25f, Half - 0.35f };
+    const float PillarW = 0.7f, PillarOut = 0.3f, PillarH = 5f;
+    const float PlinthH = 0.32f, PlinthOut = 0.1f, CorniceY = 5.35f, CorniceH = 0.26f, CorniceOut = 0.2f;
+    const float WallClear = 0.8f;   // distance minimale avatar / mur
     const int FrameW = 172, FrameH = 303;
     const int RowDown = 0, RowLeft = 1, RowRight = 2, RowUp = 3;
 
@@ -73,19 +79,19 @@ public class RoomPrototype : MonoBehaviour
         var paving = LoadTiled("tex_floor");
         // la mise à l'échelle des textures suit la taille de la face visible : 1 répétition tous les 2 m
         Box("Floor", new Vector3(0f, -0.05f, 0f), new Vector3(Room, 0.1f, Room), FloorColor, paving, new Vector2(Room / Tile, Room / Tile));
-        var wallTiling = new Vector2(Room / Tile, WallH / Tile);
-        Box("Wall N", new Vector3(0f, WallH / 2f, Half + WallT / 2f), new Vector3(Room, WallH, WallT), WallColor, brick, wallTiling);
-        Box("Wall S", new Vector3(0f, WallH / 2f, -Half - WallT / 2f), new Vector3(Room, WallH, WallT), WallColor, brick, wallTiling);
-        BuildArchWall(-1f, brick);
-        BuildArchWall(1f, brick);
+        BuildWall("Wall N", new Vector3(0f, 0f, Half), 180f, brick);
+        BuildWall("Wall S", new Vector3(0f, 0f, -Half), 0f, brick);
+        BuildWall("Wall W", new Vector3(-Half, 0f, 0f), 90f, brick);
+        BuildWall("Wall E", new Vector3(Half, 0f, 0f), -90f, brick);
 
         // voile noir dégradé devant chaque mur : transparent en bas, noir en haut (pas de plafond visible)
         var fade = MakeFadeSprite();
-        Fade(fade, new Vector3(0f, 0f, Half - 0.01f), 180f);
-        Fade(fade, new Vector3(0f, 0f, -Half + 0.01f), 0f);
-        // murs de côté : voile posé juste devant les encadrements des arches, pour les assombrir aussi
-        Fade(fade, new Vector3(Half - ArchOut - 0.08f, 0f, 0f), -90f);
-        Fade(fade, new Vector3(-Half + ArchOut + 0.08f, 0f, 0f), 90f);
+        // voile posé juste devant les piliers et la corniche, pour les assombrir aussi
+        float f = Half - PillarOut - 0.08f;
+        Fade(fade, new Vector3(0f, 0f, f), 180f);
+        Fade(fade, new Vector3(0f, 0f, -f), 0f);
+        Fade(fade, new Vector3(f, 0f, 0f), -90f);
+        Fade(fade, new Vector3(-f, 0f, 0f), 90f);
 
         var lamp = new GameObject("Lamp").AddComponent<Light>();
         lamp.type = LightType.Point;
@@ -117,76 +123,126 @@ public class RoomPrototype : MonoBehaviour
         return m;
     }
 
-    void BuildArchWall(float sideSign, Texture2D brick)
+    void BuildWall(string name, Vector3 position, float yRot, Texture2D brick)
     {
-        var root = new GameObject(sideSign < 0 ? "Arch wall W" : "Arch wall E").transform;
-        root.position = new Vector3(sideSign * Half, 0f, 0f);
-        root.rotation = Quaternion.Euler(0f, sideSign < 0 ? 90f : -90f, 0f);   // z local -> intérieur de la pièce
-
-        // surface du mur avec l'ouverture découpée (UV en mètres : briques continues, jamais étirées)
-        var wall = new MeshBuilder();
+        var root = new GameObject(name).transform;
+        root.position = position;
+        root.rotation = Quaternion.Euler(0f, yRot, 0f);   // z local -> intérieur de la pièce
         Vector3 into = Vector3.forward;
-        wall.WallRect(-Half, 0f, -AR, WallH, 0f, into);
-        wall.WallRect(AR, 0f, Half, WallH, 0f, into);
-        wall.WallRect(-AR, ArchH + AR, AR, WallH, 0f, into);
-        const int slices = 24;
-        for (int k = 0; k < slices; k++)                 // écoinçons au-dessus de l'arc
-        {
-            float y0 = ArchH + k * AR / slices, y1 = y0 + AR / slices;
-            float w0 = Mathf.Sqrt(Mathf.Max(0f, AR * AR - (y0 - ArchH) * (y0 - ArchH)));
-            wall.WallRect(-AR, y0, -w0, y1, 0f, into);
-            wall.WallRect(w0, y0, AR, y1, 0f, into);
-        }
-        AddMesh(root, "Wall", wall, NewMaterial(brick != null ? Color.white : WallColor, brick));
 
-        // alcôve : fond, côtés et voûte, tournés vers l'intérieur
-        var niche = new MeshBuilder();
-        float zb = -ArchDepth;
-        niche.WallRect(-AR, 0f, AR, ArchH, zb, into);
-        const int seg = 20;
-        for (int i = 0; i < seg; i++)
+        // surface du mur avec les ouvertures découpées (UV en mètres : briques continues, jamais étirées)
+        var wall = new MeshBuilder();
+        float x = -Half;
+        foreach (float cx in ArchX)
         {
-            float a0 = Mathf.PI * i / seg, a1 = Mathf.PI * (i + 1) / seg;
-            Vector3 p0 = new Vector3(Mathf.Cos(a0) * AR, ArchH + Mathf.Sin(a0) * AR, 0f);
-            Vector3 p1 = new Vector3(Mathf.Cos(a1) * AR, ArchH + Mathf.Sin(a1) * AR, 0f);
-            Vector3 c = new Vector3(0f, ArchH, zb);
-            niche.Tri(c, p0 + Vector3.forward * zb, p1 + Vector3.forward * zb, into, UVxy(c), UVxy(p0), UVxy(p1));        // fond (demi-disque)
-            Vector3 back = Vector3.forward * zb;
-            Vector3 inward = -(p0 + p1) * 0.5f + new Vector3(0f, ArchH, 0f); inward.z = 0f;
-            float s0 = a0 * AR / Tile, s1 = a1 * AR / Tile;
-            niche.Quad(p0 + back, p1 + back, p1, p0, inward,
-                new Vector2(s0, zb / Tile), new Vector2(s1, zb / Tile), new Vector2(s1, 0f), new Vector2(s0, 0f));             // voûte
+            wall.WallRect(x, 0f, cx - AR, WallH, 0f, into);          // entre deux arches, toute la hauteur
+            wall.WallRect(cx - AR, ArchH + AR, cx + AR, WallH, 0f, into);   // au-dessus de l'arc
+            const int slices = 24;
+            for (int k = 0; k < slices; k++)                           // écoinçons autour de l'arc
+            {
+                float y0 = ArchH + k * AR / slices, y1 = y0 + AR / slices;
+                float w0 = Mathf.Sqrt(Mathf.Max(0f, AR * AR - (y0 - ArchH) * (y0 - ArchH)));
+                wall.WallRect(cx - AR, y0, cx - w0, y1, 0f, into);
+                wall.WallRect(cx + w0, y0, cx + AR, y1, 0f, into);
+            }
+            x = cx + AR;
         }
-        foreach (float sx in new[] { -AR, AR })
-        {
-            Vector3 n = new Vector3(-Mathf.Sign(sx), 0f, 0f);
-            niche.Quad(new Vector3(sx, 0f, zb), new Vector3(sx, 0f, 0f), new Vector3(sx, ArchH, 0f), new Vector3(sx, ArchH, zb), n,
-                new Vector2(zb / Tile, 0f), Vector2.zero, new Vector2(0f, ArchH / Tile), new Vector2(zb / Tile, ArchH / Tile));
-        }
-        AddMesh(root, "Niche", niche, NewMaterial(new Color32(143, 134, 168, 255), brick));
-        LocalCube(root, "Step", new Vector3(0f, 0.11f, zb / 2f), new Vector3(ArchW, 0.22f, ArchDepth), new Color32(194, 184, 214, 255));
+        wall.WallRect(x, 0f, Half, WallH, 0f, into);
+        AddMesh(root, "Bricks", wall, NewMaterial(brick != null ? Color.white : WallColor, brick));
 
-        // encadrement en pierre claire qui dépasse du mur
-        Color32[] stones = { new Color32(207, 198, 223, 255), new Color32(197, 186, 216, 255), new Color32(214, 206, 229, 255) };
-        const int rows = 6; const float gap = 0.035f; float bh = ArchH / rows;
-        for (int i = 0; i < rows; i++)                    // montants : blocs alternés large / étroit
+        Color32[] stones = { new Color32(207, 198, 223, 255), new Color32(197, 186, 216, 255), new Color32(214, 206, 229, 255), new Color32(194, 184, 214, 255) };
+        var nicheMat = NewMaterial(new Color32(143, 134, 168, 255), brick);
+        int ai = 0;
+        foreach (float cx in ArchX)
         {
-            float w = i % 2 == 1 ? 0.42f : 0.62f;
+            // alcôve : fond, côtés et voûte, tournés vers l'intérieur
+            var niche = new MeshBuilder();
+            float zb = -ArchDepth;
+            niche.WallRect(cx - AR, 0f, cx + AR, ArchH, zb, into);
+            const int seg = 20;
+            Vector3 c0 = new Vector3(cx, ArchH, 0f);
+            for (int i = 0; i < seg; i++)
+            {
+                float a0 = Mathf.PI * i / seg, a1 = Mathf.PI * (i + 1) / seg;
+                Vector3 p0 = c0 + new Vector3(Mathf.Cos(a0) * AR, Mathf.Sin(a0) * AR, 0f);
+                Vector3 p1 = c0 + new Vector3(Mathf.Cos(a1) * AR, Mathf.Sin(a1) * AR, 0f);
+                Vector3 back = Vector3.forward * zb, cb = c0 + back;
+                niche.Tri(cb, p0 + back, p1 + back, into, UVxy(cb), UVxy(p0), UVxy(p1));               // fond (demi-disque)
+                Vector3 inward = c0 - (p0 + p1) * 0.5f; inward.z = 0f;
+                float s0 = a0 * AR / Tile, s1 = a1 * AR / Tile;
+                niche.Quad(p0 + back, p1 + back, p1, p0, inward,
+                    new Vector2(s0, zb / Tile), new Vector2(s1, zb / Tile), new Vector2(s1, 0f), new Vector2(s0, 0f));   // voûte
+            }
+            foreach (float sx in new[] { cx - AR, cx + AR })
+            {
+                Vector3 n = new Vector3(sx < cx ? 1f : -1f, 0f, 0f);
+                niche.Quad(new Vector3(sx, 0f, zb), new Vector3(sx, 0f, 0f), new Vector3(sx, ArchH, 0f), new Vector3(sx, ArchH, zb), n,
+                    new Vector2(zb / Tile, 0f), Vector2.zero, new Vector2(0f, ArchH / Tile), new Vector2(zb / Tile, ArchH / Tile));
+            }
+            AddMesh(root, "Niche", niche, nicheMat);
+            LocalCube(root, "Step", new Vector3(cx, 0.11f, zb / 2f), new Vector3(ArchW, 0.22f, ArchDepth), stones[3]);
+
+            // encadrement : montants alternés, socles, claveaux en éventail et clé de voûte
+            const int rows = 6; const float gap = 0.035f; float bh = ArchH / rows;
+            for (int i = 0; i < rows; i++)
+            {
+                float w = i % 2 == 1 ? 0.42f : 0.62f;
+                foreach (float side in new[] { -1f, 1f })
+                    LocalCube(root, "Jamb", new Vector3(cx + side * (AR + w / 2f), i * bh + bh / 2f, ArchOut / 2f),
+                              new Vector3(w, bh - gap, ArchOut), stones[(i + ai + (side > 0 ? 1 : 0)) % 3]);
+            }
             foreach (float side in new[] { -1f, 1f })
-                LocalCube(root, "Jamb", new Vector3(side * (AR + w / 2f), i * bh + bh / 2f, ArchOut / 2f),
-                          new Vector3(w, bh - gap, ArchOut), stones[(i + (side > 0 ? 1 : 0)) % 3]);
+                LocalCube(root, "Base", new Vector3(cx + side * (AR + 0.36f), 0.13f, (ArchOut + 0.08f) / 2f), new Vector3(0.78f, 0.26f, ArchOut + 0.08f), stones[2]);
+            const int n9 = 9; const float ga = 0.018f;
+            for (int i = 0; i < n9; i++)
+            {
+                bool key = i == (n9 - 1) / 2;
+                float a0 = Mathf.PI - i * Mathf.PI / n9 - ga, a1 = Mathf.PI - (i + 1) * Mathf.PI / n9 + ga;
+                var mb = new MeshBuilder();
+                mb.Sector(c0, AR, AR + ArchRing + (key ? 0.16f : 0f), a1, a0, ArchOut + (key ? 0.06f : 0f));
+                AddMesh(root, key ? "Keystone" : "Voussoir", mb, NewMaterial(stones[(i + ai) % 3], null));
+            }
+            ai++;
         }
-        foreach (float side in new[] { -1f, 1f })        // socles
-            LocalCube(root, "Base", new Vector3(side * (AR + 0.36f), 0.13f, (ArchOut + 0.08f) / 2f), new Vector3(0.78f, 0.26f, ArchOut + 0.08f), stones[2]);
-        const int n9 = 9; const float ga = 0.018f;
-        for (int i = 0; i < n9; i++)                      // claveaux en éventail, clé de voûte plus grande
+
+        // piliers : base, blocs empilés en alternance, chapiteau
+        foreach (float px in PillarX)
         {
-            bool key = i == (n9 - 1) / 2;
-            float a0 = Mathf.PI - i * Mathf.PI / n9 - ga, a1 = Mathf.PI - (i + 1) * Mathf.PI / n9 + ga;
-            var mb = new MeshBuilder();
-            mb.Sector(new Vector3(0f, ArchH, 0f), AR, AR + ArchRing + (key ? 0.16f : 0f), a1, a0, ArchOut + (key ? 0.06f : 0f));
-            AddMesh(root, key ? "Keystone" : "Voussoir", mb, NewMaterial(stones[i % 3], null));
+            const int rows = 9; const float gap = 0.035f; float bh = (PillarH - 0.6f) / rows;
+            LocalCube(root, "Pillar base", new Vector3(px, 0.17f, (PillarOut + 0.1f) / 2f), new Vector3(PillarW + 0.22f, 0.34f, PillarOut + 0.1f), stones[2]);
+            for (int i = 0; i < rows; i++)
+            {
+                float w = i % 2 == 1 ? PillarW - 0.08f : PillarW;
+                LocalCube(root, "Pillar", new Vector3(px, 0.34f + i * bh + bh / 2f, PillarOut / 2f), new Vector3(w, bh - gap, PillarOut), stones[i % 3]);
+            }
+            LocalCube(root, "Capital", new Vector3(px, PillarH - 0.13f, (PillarOut + 0.12f) / 2f), new Vector3(PillarW + 0.24f, 0.26f, PillarOut + 0.12f), stones[2]);
         }
+
+        // soubassement : dalles au pied du mur, interrompues par les arches et les piliers
+        bool Free(float xx)
+        {
+            foreach (float cx in ArchX) if (xx > cx - AR - 0.75f && xx < cx + AR + 0.75f) return false;
+            foreach (float px in PillarX) if (xx > px - 0.46f && xx < px + 0.46f) return false;
+            return true;
+        }
+        const float step = 0.05f;
+        float? start = null;
+        for (float xx = -Half; xx <= Half + 1e-4f; xx += step)
+        {
+            bool ok = xx < Half - 1e-4f && Free(xx + step / 2f);
+            if (ok && start == null) start = xx;
+            if (!ok && start != null)
+            {
+                float len = xx - start.Value; int n = Mathf.Max(1, Mathf.RoundToInt(len / 1.1f)); float bl = len / n;
+                for (int i = 0; i < n; i++)
+                    LocalCube(root, "Plinth", new Vector3(start.Value + bl * (i + 0.5f), PlinthH / 2f, PlinthOut / 2f), new Vector3(bl - 0.035f, PlinthH, PlinthOut), stones[i % 3]);
+                start = null;
+            }
+        }
+        // corniche au-dessus des arches
+        const int cn = 16; float cl = Room / cn;
+        for (int i = 0; i < cn; i++)
+            LocalCube(root, "Cornice", new Vector3(-Half + cl * (i + 0.5f), CorniceY, CorniceOut / 2f), new Vector3(cl - 0.035f, CorniceH, CorniceOut), stones[i % 3]);
     }
 
     static Vector2 UVxy(Vector3 p) => new Vector2(p.x / Tile, p.y / Tile);
@@ -394,7 +450,7 @@ public class RoomPrototype : MonoBehaviour
             // avant = direction de la caméra à plat
             var rot = Quaternion.Euler(0f, yaw, 0f);
             Vector3 dir = rot * new Vector3(move.x, 0f, move.y);
-            float lim = Half - 0.35f - (Mathf.Abs(pos.z) < AR + 1f ? ArchOut + 0.1f : 0f);   // recul devant les arches
+            float lim = Half - WallClear;   // l'avatar reste devant les piliers et les arches
             pos.x = Mathf.Clamp(pos.x + dir.x * Speed * Time.deltaTime, -lim, lim);
             pos.z = Mathf.Clamp(pos.z + dir.z * Speed * Time.deltaTime, -lim, lim);
             facing = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
@@ -412,7 +468,7 @@ public class RoomPrototype : MonoBehaviour
         // caméra en orbite autour de l'avatar, gardée dans la pièce
         Vector3 target = pos + Vector3.up * 1.1f;
         Vector3 camPos = target + Quaternion.Euler(pitch, yaw, 0f) * new Vector3(0f, 0f, -dist);
-        float m = Half - 0.25f;
+        float m = Half - 0.45f;   // la caméra ne rentre pas dans les piliers
         camPos.x = Mathf.Clamp(camPos.x, -m, m);
         camPos.z = Mathf.Clamp(camPos.z, -m, m);
         camPos.y = Mathf.Clamp(camPos.y, 0.3f, WallH - 0.25f);

@@ -87,80 +87,139 @@ function withHeightFade(mat) {
   return mat;
 }
 
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), surface(tiled(FLOOR_URI, ROOM, ROOM)));
-floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-
-// Murs du fond et de devant : plans simples (UV 0..1 -> texture répétée selon la taille)
-const wallMat = withHeightFade(surface(tiled(BRICK_URI, ROOM, WALL_H)));
-for (const [z, ry] of [[-HALF, 0], [HALF, Math.PI]]) {
-  const wall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, WALL_H), wallMat);
-  wall.position.set(0, WALL_H / 2, z); wall.rotation.y = ry; wall.receiveShadow = true; scene.add(wall);
-}
-
-// ---------- Arches sur les murs de côté ----------
-// Repère local : x le long du mur, y vers le haut, z vers l'intérieur de la pièce (0 = surface du mur)
+// ---------- Architecture : la même structure en pierre sur les 4 murs ----------
+// Repère local d'un mur : x le long du mur, y vers le haut, z vers l'intérieur de la pièce (0 = surface du mur)
 const ARCH = { w: 3.0, h: 3.0, depth: 1.4, ring: 0.42, out: 0.2 };   // ouverture 3 m, montants de 3 m, alcôve de 1,4 m
 const AR = ARCH.w / 2;
+const ARCH_X = [-6.5, 0, 6.5];                                       // 3 arches par mur
+const PILLAR_X = [-HALF + 0.35, -3.25, 3.25, HALF - 0.35];           // piliers entre les arches et dans les angles
+const PILLAR = { w: 0.7, out: 0.3, h: 5.0 };
+const PLINTH = { h: 0.32, out: 0.1 }, CORNICE = { y: 5.35, h: 0.26, out: 0.2 };
+const WALL_CLEAR = 0.8;                                              // distance minimale avatar / mur
+
 const metersBrick = () => tiled(BRICK_URI, 1, 1);                    // UV en mètres -> 1 répétition tous les 2 m
-const sideWallMat = withHeightFade(surface(metersBrick()));
+const wallMat = withHeightFade(surface(metersBrick()));
 const nicheMat = withHeightFade(new THREE.MeshStandardMaterial({ map: metersBrick(), color: 0x8f86a8, roughness: 0.95, side: THREE.BackSide }));
-const stoneMats = [0xcfc6df, 0xc5bad8, 0xd6cee5].map(c => withHeightFade(new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 })));
-const stepMat = withHeightFade(new THREE.MeshStandardMaterial({ color: 0xc2b8d6, roughness: 0.9 }));
+const stoneMat = withHeightFade(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+const STONES = [0xcfc6df, 0xc5bad8, 0xd6cee5, 0xc2b8d6].map(c => new THREE.Color(c).convertSRGBToLinear());
 
-function sideWallGeometry() {          // mur entier avec l'ouverture de l'arche découpée
-  const s = new THREE.Shape();
-  s.moveTo(-HALF, 0); s.lineTo(-AR, 0); s.lineTo(-AR, ARCH.h);
-  s.absarc(0, ARCH.h, AR, Math.PI, 0, true);
-  s.lineTo(AR, 0); s.lineTo(HALF, 0); s.lineTo(HALF, WALL_H); s.lineTo(-HALF, WALL_H); s.closePath();
-  return new THREE.ShapeGeometry(s, 32);
-}
-function archOpening(r) {              // contour de l'ouverture (rectangle + demi-cercle)
-  const s = new THREE.Shape();
-  s.moveTo(-r, 0); s.lineTo(r, 0); s.lineTo(r, ARCH.h); s.absarc(0, ARCH.h, r, 0, Math.PI, false); s.closePath();
-  return s;
-}
-function block(geo, x, y, z, i) {
-  const m = new THREE.Mesh(geo, stoneMats[i % stoneMats.length]);
-  m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; return m;
-}
-
-function buildArchWall() {
-  const g = new THREE.Group();
-  const wall = new THREE.Mesh(sideWallGeometry(), sideWallMat); wall.receiveShadow = true; g.add(wall);
-
-  // alcôve : volume extrudé derrière le mur, vu de l'intérieur (faces arrière)
-  const niche = new THREE.Mesh(new THREE.ExtrudeGeometry(archOpening(AR), { depth: ARCH.depth, bevelEnabled: false, curveSegments: 32 }), nicheMat);
-  niche.position.z = -ARCH.depth; niche.receiveShadow = true; g.add(niche);
-  const step = new THREE.Mesh(new THREE.BoxGeometry(ARCH.w, 0.22, ARCH.depth), stepMat);   // marche en pierre au fond
-  step.position.set(0, 0.11, -ARCH.depth / 2); step.receiveShadow = true; g.add(step);
-
-  // montants : blocs alternés large / étroit, séparés par un joint fin
-  const rows = 6, bh = ARCH.h / rows, gap = 0.035;
-  for (let i = 0; i < rows; i++) {
-    const wdt = i % 2 ? 0.42 : 0.62;
-    const geo = new THREE.BoxGeometry(wdt, bh - gap, ARCH.out);
-    for (const side of [-1, 1])
-      g.add(block(geo, side * (AR + wdt / 2), i * bh + bh / 2, ARCH.out / 2, i + (side > 0 ? 1 : 0)));
+function wallGeometry() {                // mur entier avec les ouvertures des arches découpées
+  const sh = new THREE.Shape();
+  sh.moveTo(-HALF, 0);
+  for (const c of ARCH_X) {
+    sh.lineTo(c - AR, 0); sh.lineTo(c - AR, ARCH.h);
+    sh.absarc(c, ARCH.h, AR, Math.PI, 0, true);
+    sh.lineTo(c + AR, 0);
   }
-  // claveaux : pierres en éventail sur l'arc, clé de voûte plus grande au sommet
+  sh.lineTo(HALF, 0); sh.lineTo(HALF, WALL_H); sh.lineTo(-HALF, WALL_H); sh.closePath();
+  return new THREE.ShapeGeometry(sh, 32);
+}
+function archOpening(r) {                // contour d'une ouverture (rectangle + demi-cercle)
+  const sh = new THREE.Shape();
+  sh.moveTo(-r, 0); sh.lineTo(r, 0); sh.lineTo(r, ARCH.h); sh.absarc(0, ARCH.h, r, 0, Math.PI, false); sh.closePath();
+  return sh;
+}
+
+// Toutes les pierres de la pièce sont fusionnées en un seul maillage (rapide, même sur téléphone)
+const stoneParts = [];
+const tmpM = new THREE.Matrix4();
+function stone(geo, matrix, shade) { stoneParts.push([geo, matrix.clone(), STONES[shade % STONES.length]]); }
+function boxStone(wallM, w, h, d, x, y, z, shade) {
+  stone(new THREE.BoxGeometry(w, h, d), wallM.clone().multiply(tmpM.makeTranslation(x, y, z)), shade);
+}
+function mergeStones() {
+  const pos = [], nor = [], col = [];
+  const nm = new THREE.Matrix3();
+  for (const [g0, m, c] of stoneParts) {
+    const g = g0.index ? g0.toNonIndexed() : g0.clone();   // copie : les formes partagées ne doivent pas être déplacées
+    g.applyMatrix4(m);
+    const P = g.attributes.position, N = g.attributes.normal;
+    for (let i = 0; i < P.count; i++) {
+      pos.push(P.getX(i), P.getY(i), P.getZ(i)); nor.push(N.getX(i), N.getY(i), N.getZ(i)); col.push(c.r, c.g, c.b);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  const mesh = new THREE.Mesh(g, stoneMat); mesh.castShadow = mesh.receiveShadow = true; scene.add(mesh);
+}
+
+// claveaux : formes partagées par toutes les arches
+const VOUSSOIRS = [];
+{
   const n = 9, ga = 0.018;
   for (let i = 0; i < n; i++) {
     const a0 = Math.PI - i * Math.PI / n - ga, a1 = Math.PI - (i + 1) * Math.PI / n + ga;
     const key = i === (n - 1) / 2;
-    const r2 = AR + ARCH.ring + (key ? 0.16 : 0);
-    const s = new THREE.Shape();
-    s.absarc(0, 0, r2, a0, a1, true); s.absarc(0, 0, AR, a1, a0, false); s.closePath();
-    const geo = new THREE.ExtrudeGeometry(s, { depth: ARCH.out + (key ? 0.06 : 0), bevelEnabled: false, curveSegments: 6 });
-    g.add(block(geo, 0, ARCH.h, 0, i));
+    const sh = new THREE.Shape();
+    sh.absarc(0, 0, AR + ARCH.ring + (key ? 0.16 : 0), a0, a1, true); sh.absarc(0, 0, AR, a1, a0, false); sh.closePath();
+    VOUSSOIRS.push(new THREE.ExtrudeGeometry(sh, { depth: ARCH.out + (key ? 0.06 : 0), bevelEnabled: false, curveSegments: 6 }));
   }
-  // socles un peu plus larges au pied des montants
-  const base = new THREE.BoxGeometry(0.78, 0.26, ARCH.out + 0.08);
-  for (const side of [-1, 1]) g.add(block(base, side * (AR + 0.36), 0.13, (ARCH.out + 0.08) / 2, 2));
-  return g;
 }
-for (const [x, ry] of [[-HALF, Math.PI / 2], [HALF, -Math.PI / 2]]) {
-  const g = buildArchWall(); g.position.x = x; g.rotation.y = ry; scene.add(g);
+
+function buildWall(px, pz, ry) {
+  const g = new THREE.Group(); g.position.set(px, 0, pz); g.rotation.y = ry; scene.add(g);
+  g.updateMatrixWorld();
+  const W = g.matrixWorld;
+  const wall = new THREE.Mesh(wallGeometry(), wallMat); wall.receiveShadow = true; g.add(wall);
+
+  ARCH_X.forEach((cx, ai) => {
+    // alcôve : volume extrudé derrière le mur, vu de l'intérieur (faces arrière) + marche en pierre
+    const niche = new THREE.Mesh(new THREE.ExtrudeGeometry(archOpening(AR), { depth: ARCH.depth, bevelEnabled: false, curveSegments: 32 }), nicheMat);
+    niche.position.set(cx, 0, -ARCH.depth); niche.receiveShadow = true; g.add(niche);
+    boxStone(W, ARCH.w, 0.22, ARCH.depth, cx, 0.11, -ARCH.depth / 2, 3);
+    // montants : blocs alternés large / étroit
+    const rows = 6, bh = ARCH.h / rows, gap = 0.035;
+    for (let i = 0; i < rows; i++) {
+      const wdt = i % 2 ? 0.42 : 0.62;
+      for (const side of [-1, 1]) boxStone(W, wdt, bh - gap, ARCH.out, cx + side * (AR + wdt / 2), i * bh + bh / 2, ARCH.out / 2, i + ai + (side > 0 ? 1 : 0));
+    }
+    // claveaux en éventail + clé de voûte
+    VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, ARCH.h, 0)), i + ai));
+    // socles au pied des montants
+    for (const side of [-1, 1]) boxStone(W, 0.78, 0.26, ARCH.out + 0.08, cx + side * (AR + 0.36), 0.13, (ARCH.out + 0.08) / 2, 2);
+  });
+
+  // piliers : blocs empilés en alternance, base et chapiteau plus larges
+  for (const x of PILLAR_X) {
+    const rows = 9, bh = (PILLAR.h - 0.6) / rows, gap = 0.035;
+    boxStone(W, PILLAR.w + 0.22, 0.34, PILLAR.out + 0.1, x, 0.17, (PILLAR.out + 0.1) / 2, 2);              // base
+    for (let i = 0; i < rows; i++) {
+      const wdt = i % 2 ? PILLAR.w - 0.08 : PILLAR.w;
+      boxStone(W, wdt, bh - gap, PILLAR.out, x, 0.34 + i * bh + bh / 2, PILLAR.out / 2, i);
+    }
+    boxStone(W, PILLAR.w + 0.24, 0.26, PILLAR.out + 0.12, x, PILLAR.h - 0.13, (PILLAR.out + 0.12) / 2, 2); // chapiteau
+  }
+
+  // soubassement : rangée de dalles au pied du mur, interrompue par les arches et les piliers
+  const blocked = [...ARCH_X.map(c => [c - AR - 0.75, c + AR + 0.75]), ...PILLAR_X.map(x => [x - 0.46, x + 0.46])];
+  const free = x => !blocked.some(([a, b]) => x > a && x < b);
+  const step = 0.05;
+  let start = null;
+  for (let x = -HALF; x <= HALF + 1e-6; x += step) {
+    const ok = x < HALF - 1e-6 && free(x + step / 2);
+    if (ok && start === null) start = x;
+    if (!ok && start !== null) {
+      const len = x - start, n = Math.max(1, Math.round(len / 1.1)), bl = len / n;
+      for (let i = 0; i < n; i++) boxStone(W, bl - 0.035, PLINTH.h, PLINTH.out, start + bl * (i + 0.5), PLINTH.h / 2, PLINTH.out / 2, i);
+      start = null;
+    }
+  }
+  // corniche : bandeau de pierre au-dessus des arches, sur toute la longueur
+  const cn = 16, cl = ROOM / cn;
+  for (let i = 0; i < cn; i++) boxStone(W, cl - 0.035, CORNICE.h, CORNICE.out, -HALF + cl * (i + 0.5), CORNICE.y, CORNICE.out / 2, i);
 }
+
+// sol en pavés
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), surface(tiled(FLOOR_URI, ROOM, ROOM)));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+buildWall(0, -HALF, 0);
+buildWall(0, HALF, Math.PI);
+buildWall(-HALF, 0, Math.PI / 2);
+buildWall(HALF, 0, -Math.PI / 2);
+mergeStones();
 
 scene.add(new THREE.HemisphereLight(0xeee6ff, 0x4a3c66, 0.42));
 const lamp = new THREE.PointLight(0xfff1dc, 1.0, 34, 1.5);
@@ -259,7 +318,7 @@ function frame(now) {
     // avant = direction de la caméra (à plat), droite = perpendiculaire
     const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
     const mx = fx * f + rx * s, mz = fz * f + rz * s;
-    const lim = HALF - 0.35 - (Math.abs(p.z) < AR + 1.0 ? ARCH.out + 0.1 : 0);   // recul devant les arches
+    const lim = HALF - WALL_CLEAR;                       // l'avatar reste devant les piliers et les arches
     p.x = Math.max(-lim, Math.min(lim, p.x + mx * SPEED * dt));
     p.z = Math.max(-lim, Math.min(lim, p.z + mz * SPEED * dt));
     p.facing = Math.atan2(mx, mz);
@@ -271,7 +330,7 @@ function frame(now) {
   let cx = tx + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
   let cy = ty + Math.sin(cam.pitch) * cam.dist;
   let cz = tz + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
-  const m = HALF - 0.25;
+  const m = HALF - 0.45;                               // la caméra ne rentre pas dans les piliers
   cx = Math.max(-m, Math.min(m, cx)); cz = Math.max(-m, Math.min(m, cz)); cy = Math.max(0.3, Math.min(WALL_H - 0.25, cy));
   camera.position.set(cx, cy, cz); camera.lookAt(tx, ty, tz);
 
