@@ -9,3 +9,8 @@
 - **Textures** : `python3 Tools/generate_textures.py` (briques et pavés pixel art raccordables, répétés tous les 2 m).
 - **Avatar** : `python3 Tools/import_avatar.py` découpe la planche `Assets/Art/Source/avatar_source.png`.
 - **Page web** : `python3 Tools/build_web.py` (code du jeu dans `Tools/web/game.js`).
+
+## Versions
+
+À chaque modification, une copie figée de la version précédente est gardée dans `Web/versions/`
+(et publiée à part), puis la version de travail `Web/piece-3d-v2.html` est mise à jour.

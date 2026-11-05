@@ -66,7 +66,7 @@ const WIN = { w: 1.4, bottom: 1.5, spring: 2.7, depth: 0.45, ring: 0.3, out: 0.1
 const WR = WIN.w / 2;
 const WIN_X = [-6.5, 6.5];                                           // rez-de-chaussée : de part et d'autre de l'arche
 const UPPER_LEVELS = [6.3, 10.5];                                     // appuis des fenêtres des 2 étages
-const UPPER_X = [-11.2, -6.5, 0, 6.5, 11.2];
+const UPPER_X = [-6.5, 0, 6.5];                                        // pas de fenêtre trop près des angles
 const STRING_Y = 9.6, TOP_CORNICE_Y = 14.45;                          // bandeau entre les étages, corniche sommitale
 // Salles derrière les arches
 const RW = 12, RD = 10, RH = 5;                                       // largeur, profondeur, hauteur sous plafond
