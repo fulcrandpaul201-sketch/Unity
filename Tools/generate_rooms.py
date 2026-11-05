@@ -9,6 +9,7 @@ W, H = 320, 240            # résolution native (pixel art)
 SCALE = 3                  # version agrandie pour aperçu
 VPX, VPY = 160, 80         # point de fuite
 BL, BR, BT, BB = 80, 240, 20, 136   # mur du fond (gauche, droite, haut, bas)
+BARE = False
 FOC = 160                  # profondeur du mur du fond (unités monde)
 
 def hsh(*a):
@@ -74,7 +75,9 @@ EMBLEMS = {
 }
 ECOL = {"g": G_MD, "l": G_LT, "d": G_DK}
 
-def render(kind, emblem, door=True):
+def render(kind, emblem, door=True, bare=False):
+    global BARE
+    BARE = bare
     img = np.zeros((H, W, 3), float)
     for y in range(H):
         yc = y + 0.5
@@ -91,7 +94,7 @@ def render(kind, emblem, door=True):
                 if yc < BT: img[y, x] = above(kind, xc, yc); continue
                 if yc < BB: img[y, x] = back_wall(xc, yc, door); continue
             img[y, x] = floor_px(xc, yc, kind)
-    decorate(img, kind, emblem)
+    if not bare: decorate(img, kind, emblem)
     return np.clip(np.round(img), 0, 255).astype(np.uint8)
 
 def above(kind, xc, yc):
@@ -119,7 +122,7 @@ def back_wall(xc, yc, door):
     c = brick(xc, yc, 12, 6, WALL, MORTAR, 1)
     c = cap(c, yc)
     # fenêtres
-    for cx in (126, 194):
+    for cx in (() if BARE else (126, 194)):
         if in_arch(xc, yc, cx, 9.5, 49, 70):
             if in_arch(xc, yc, cx, 7, 49, 66):
                 g = (yc - 42) / 24
@@ -153,7 +156,7 @@ def side_wall(z, t, left):
     c = cap(c, t)
     # alcôve en arc
     cz, hw, tc = 118, 13, 88
-    if in_arch(z, t, cz, hw + 3, tc, BB):
+    if not BARE and in_arch(z, t, cz, hw + 3, tc, BB):
         if in_arch(z, t, cz, hw, tc, BB):
             inner = in_arch(z + 4, t, cz, hw, tc + 2, BB)
             if inner:
@@ -173,7 +176,7 @@ def floor_px(xc, yc, kind):
     c = brick(wx, z, 10, 7, FLOOR, FMORT, 21, round_corners=True)
     # lumière des fenêtres
     sun = 1.22 if kind == "courtyard" else 1.16
-    for cx in (126, 194):
+    for cx in (() if BARE else (126, 194)):
         sk = (140 - z) * 0.45
         if 92 <= z <= 140 and abs(wx - (cx - sk)) <= 8:
             on_mull = abs(wx - (cx - sk)) < 0.9 or abs(z - 118) < 1.4
@@ -310,14 +313,5 @@ def save(name, arr):
 
 if __name__ == "__main__":
     os.chdir(os.path.join(os.path.dirname(__file__), ".."))
-    rooms = [("room_courtyard", "courtyard", "castle", True),
-             ("room_classroom", "indoor", "book", False),
-             ("room_dormitory", "indoor", "bed", True),
-             ("room_potions", "indoor", "flask", True),
-             ("room_blank", "indoor", "none", True)]
-    ims = [save(n, render(k, e, d)) for n, k, e, d in rooms]
-    sheet = Image.new("RGB", (W * 2 + 4, H * 2 + 4), (255, 255, 255))
-    for i, im in enumerate(ims[:4]):
-        sheet.paste(im, ((i % 2) * (W + 4), (i // 2) * (H + 4)))
-    sheet.resize((sheet.width * SCALE, sheet.height * SCALE), Image.NEAREST).save("Assets/Art/Rooms/preview_sheet.png")
+    save("room_empty", render("indoor", "none", door=False, bare=True))
     print("ok")
