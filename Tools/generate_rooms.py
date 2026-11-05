@@ -305,10 +305,10 @@ def decorate(img, kind, emblem):
     curtain(img, False); curtain(img, True)
 
 def save(name, arr):
-    out = "Assets/Art/Rooms"
+    out = "Assets/Resources"
     im = Image.fromarray(arr)
     im.save(f"{out}/{name}.png")
-    im.resize((W * SCALE, H * SCALE), Image.NEAREST).save(f"{out}/{name}_x{SCALE}.png")
+    im.resize((W * SCALE, H * SCALE), Image.NEAREST).save(f"Assets/Art/Preview/{name}_x{SCALE}.png")
     return im
 
 if __name__ == "__main__":
