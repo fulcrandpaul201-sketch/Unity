@@ -64,7 +64,7 @@ const WALL_CLEAR = 0.8;                                              // distance
 // Fenêtres (murs de gauche et de droite) : plein cintre, appui à 1,5 m, sommet à 3,4 m
 const WIN = { w: 1.4, bottom: 1.5, spring: 2.7, depth: 0.45, ring: 0.3, out: 0.16 };
 const WR = WIN.w / 2;
-const WIN_X = [-6.5, 6.5];                                           // rez-de-chaussée : de part et d'autre de l'arche
+const WIN_X = [];                                                     // pas de fenêtre au rez-de-chaussée (arcades seulement)
 const UPPER_LEVELS = [6.3, 10.5];                                     // appuis des fenêtres des 2 étages
 const UPPER_X = [-6.5, 0, 6.5];                                        // pas de fenêtre trop près des angles
 const STRING_Y = 9.6, TOP_CORNICE_Y = 14.45;                          // bandeau entre les étages, corniche sommitale
