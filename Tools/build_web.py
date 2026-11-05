@@ -1,11 +1,11 @@
-"""Construit Web/play.html (prototype jouable autonome, images intégrées en base64)."""
+"""Construit le prototype jouable : Web/artifact.html (page publiée) et Web/play.html (fichier autonome)."""
 import base64, os
 os.chdir(os.path.join(os.path.dirname(__file__), ".."))
-b64 = lambda p: base64.b64encode(open(p, "rb").read()).decode()
-html = open("Tools/play_template.html").read()
-html = html.replace("{{ROOM}}", b64("Assets/Resources/room_empty.png")).replace("{{AVATAR}}", b64("Assets/Resources/avatar_sheet.png"))
-open("Web/play.html", "w").write(html)
+avatar = base64.b64encode(open("Assets/Resources/avatar_sheet.png", "rb").read()).decode()
+script = open("Tools/web/game.js").read().replace("{{AVATAR}}", avatar)
+page = open("Tools/web/page.html").read().replace("{{SCRIPT}}", script)
+open("Web/artifact.html", "w").write(page)
+open("Web/play.html", "w").write('<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n'
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n</head>\n<body>\n'
+    + page + '</body>\n</html>\n')
 print("ok")
-art = open("Tools/artifact_template.html").read()
-art = art.replace("{{ROOM}}", b64("Assets/Resources/room_empty.png")).replace("{{AVATAR}}", b64("Assets/Resources/avatar_sheet.png"))
-open("Web/artifact.html", "w").write(art)

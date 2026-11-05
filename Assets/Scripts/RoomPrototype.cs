@@ -4,33 +4,41 @@ using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Prototype : affiche la salle vide et un avatar déplaçable (flèches / ZQSD / manette).
+/// Prototype : salle carrée vue de dessus, sans texture, et un avatar qui se déplace librement
+/// (haut / bas / gauche / droite) avec les flèches, ZQSD ou une manette.
 /// Se lance tout seul quand on appuie sur Play, dans n'importe quelle scène.
-/// Images attendues dans Assets/Resources : room_empty.png (1240x480, pixel art) et avatar_sheet.png (688x1212, images de 172x303).
-/// La salle mesure 1240x480 unités Unity ; la caméra, rapprochée, suit l'avatar.
+/// Image attendue : Assets/Resources/avatar_sheet.png (688x1212, images de 172x303).
+/// 1 unité Unity = 1 pixel de la page web de référence (écran de 960x720).
 /// </summary>
 public class RoomPrototype : MonoBehaviour
 {
     public static bool AutoStart = true;
 
-    // Géométrie de la salle (mêmes valeurs que Tools/generate_rooms.py)
-    const float VPX = 620f, VPY = 130f, FloorY = 270f, Foc = 300f, WallL = 170f, WallR = 1070f;
-    const float RoomW = 1240f, RoomH = 480f;
-    const float Edge = 75f;         // distance minimale entre l'avatar et le bord de l'image
-    const float AvatarHeight = 84f; // hauteur de l'image de l'avatar au fond de la salle
-    const float Speed = 95f;        // unités "monde" par seconde
-    const float MinZ = 135f, MaxZ = 294f, Margin = 14f;
-    const int FrameW = 172, FrameH = 303;   // voir Assets/Resources/avatar_sheet.json
-    const float ViewH = 360f;       // hauteur visible (caméra rapprochée)
+    // Dimensions (mêmes valeurs que Tools/web/game.js)
+    const float ScreenW = 960f, ScreenH = 720f;
+    const float Floor = 560f;                           // côté du sol carré
+    const float Side = 40f, Top = 120f, Bottom = 40f;   // épaisseur des murs
+    const float Face = 64f;                             // face visible du mur du haut
+    const float AvatarHeight = 120f;
+    const float FootW = 22f, FootH = 24f;               // zone de collision aux pieds
+    const float Speed = 230f;
+    const int FrameW = 172, FrameH = 303;               // voir Assets/Resources/avatar_sheet.json
+
+    static readonly Color32 BgColor = new Color32(42, 32, 56, 255);
+    static readonly Color32 WallTopColor = new Color32(91, 76, 120, 255);
+    static readonly Color32 WallFaceColor = new Color32(135, 120, 166, 255);
+    static readonly Color32 FloorColor = new Color32(185, 176, 207, 255);
+    static readonly Color32 ShadeColor = new Color32(40, 28, 60, 41);
 
     enum Dir { Down = 0, Left = 1, Right = 2, Up = 3 }
 
     Sprite[,] frames = new Sprite[4, 4];
     SpriteRenderer body;
     Transform player;
-    float wx = 620f, z = 200f, animT;
-    Camera cam;
+    Vector2 pos = new Vector2(Floor / 2f, Floor / 2f + 60f);   // pieds, en pixels depuis le coin haut-gauche du sol
+    float animT;
     Dir dir = Dir.Down;
+    Sprite white;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
@@ -44,32 +52,37 @@ public class RoomPrototype : MonoBehaviour
         new GameObject("RoomPrototype").AddComponent<RoomPrototype>();
     }
 
+    // Convertit un point « écran de référence » (origine en haut à gauche) en position Unity
+    static Vector3 ToWorld(float x, float y, float zOrder = 0f) => new Vector3(x - ScreenW / 2f, ScreenH / 2f - y, zOrder);
+
     void Start()
     {
-        var roomTex = Load("room_empty");
-        if (roomTex != null) roomTex.filterMode = FilterMode.Point;   // salle en pixel art : pixels nets
-        var sheetTex = Load("avatar_sheet");
-        if (roomTex == null || sheetTex == null) { enabled = false; return; }
-
-        // Caméra rapprochée : on ne voit qu'une partie de la salle
-        cam = Camera.main;
+        var cam = Camera.main;
         if (cam == null) cam = new GameObject("Main Camera").AddComponent<Camera>();
         cam.orthographic = true;
-        cam.orthographicSize = ViewH / 2f;
+        cam.orthographicSize = ScreenH / 2f;
         cam.transform.position = new Vector3(0f, 0f, -10f);
-        cam.backgroundColor = new Color32(29, 21, 38, 255);
+        cam.backgroundColor = BgColor;
         cam.clearFlags = CameraClearFlags.SolidColor;
 
-        var bg = new GameObject("Room").AddComponent<SpriteRenderer>();
-        bg.sprite = Sprite.Create(roomTex, new Rect(0, 0, roomTex.width, roomTex.height), new Vector2(0.5f, 0.5f), roomTex.width / RoomW);
-        bg.sortingOrder = -100;
+        var tex = Texture2D.whiteTexture;
+        white = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0f, 1f), tex.width);   // 1x1 unité, pivot en haut à gauche
 
-        // Découpe de la planche : ligne 0 (en haut de l'image) = bas, 1 = gauche, 2 = droite, 3 = haut
+        float rx = (ScreenW - Floor) / 2f, ry = Top;
+        Rect("WallTop", rx - Side, 0f, Floor + Side * 2f, Top + Floor + Bottom, WallTopColor, -30);
+        Rect("WallFace", rx, Top - Face, Floor, Face, WallFaceColor, -20);
+        Rect("Floor", rx, ry, Floor, Floor, FloorColor, -10);
+        Rect("Shade", rx, ry, Floor, 14f, ShadeColor, -5);
+
+        var sheetTex = Resources.Load<Texture2D>("avatar_sheet");
+        if (sheetTex == null) { Debug.LogError("RoomPrototype : image 'avatar_sheet' introuvable dans Assets/Resources."); enabled = false; return; }
+        sheetTex.filterMode = FilterMode.Bilinear;
+        // ligne 0 (en haut de l'image) = bas, 1 = gauche, 2 = droite, 3 = haut ; marge de 1 px entre les images
         for (int row = 0; row < 4; row++)
             for (int col = 0; col < 4; col++)
             {
-                var r = new Rect(col * FrameW + 1, sheetTex.height - (row + 1) * FrameH + 1, FrameW - 2, FrameH - 2);   // marge de 1 px
-                frames[row, col] = Sprite.Create(sheetTex, r, new Vector2(0.5f, 0f), 1f);
+                var r = new Rect(col * FrameW + 1, sheetTex.height - (row + 1) * FrameH + 1, FrameW - 2, FrameH - 2);
+                frames[row, col] = Sprite.Create(sheetTex, r, new Vector2(0.5f, 0f), (FrameH - 2) / AvatarHeight);
             }
 
         player = new GameObject("Player").transform;
@@ -78,52 +91,34 @@ public class RoomPrototype : MonoBehaviour
 
         var shadow = new GameObject("Shadow").AddComponent<SpriteRenderer>();
         shadow.transform.SetParent(player, false);
-        shadow.sprite = MakeShadowSprite();
+        shadow.sprite = MakeShadowSprite(AvatarHeight * FrameW / FrameH);
         shadow.sortingOrder = 9;
 
         UpdateVisual(false);
-        SnapCamera();
     }
 
-    void SnapCamera()
+    void Rect(string name, float x, float y, float w, float h, Color32 color, int order)
     {
-        if (cam == null || player == null) return;
-        var t = CameraTarget();
-        cam.transform.position = new Vector3(t.x, t.y, cam.transform.position.z);
+        var sr = new GameObject(name).AddComponent<SpriteRenderer>();
+        sr.sprite = white;
+        sr.color = color;
+        sr.sortingOrder = order;
+        sr.transform.position = ToWorld(x, y);
+        sr.transform.localScale = new Vector3(w, h, 1f);
     }
 
-    Vector2 CameraTarget()
+    static Sprite MakeShadowSprite(float avatarW)
     {
-        float halfW = cam.orthographicSize * cam.aspect, halfH = cam.orthographicSize;
-        float maxX = Mathf.Max(0f, RoomW / 2f - halfW), maxY = Mathf.Max(0f, RoomH / 2f - halfH);
-        return new Vector2(Mathf.Clamp(player.position.x, -maxX, maxX),
-                           Mathf.Clamp(player.position.y + BodyOffset(), -maxY, maxY));
-    }
-
-    float BodyOffset() => AvatarHeight * (Foc / z) * 0.45f;
-
-
-    static Texture2D Load(string name)
-    {
-        var t = Resources.Load<Texture2D>(name);
-        if (t == null) { Debug.LogError($"RoomPrototype : image '{name}' introuvable dans Assets/Resources."); return null; }
-        t.filterMode = FilterMode.Bilinear;   // rendu lissé
-        t.wrapMode = TextureWrapMode.Clamp;
-        return t;
-    }
-
-    static Sprite MakeShadowSprite()
-    {
-        const int w = 80, h = 20;
+        int w = Mathf.RoundToInt(avatarW * 0.6f), h = Mathf.RoundToInt(avatarW * 0.2f);
         var t = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
             {
                 float dx = (x + 0.5f - w / 2f) / (w / 2f), dy = (y + 0.5f - h / 2f) / (h / 2f);
-                t.SetPixel(x, y, dx * dx + dy * dy <= 1f ? new Color(0.16f, 0.09f, 0.22f, 0.28f) : Color.clear);
+                t.SetPixel(x, y, dx * dx + dy * dy <= 1f ? new Color(0.16f, 0.09f, 0.22f, 0.25f) : Color.clear);
             }
         t.Apply();
-        return Sprite.Create(t, new Rect(0, 0, w, h), new Vector2(0.5f, 0.6f), 1f);
+        return Sprite.Create(t, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 1f);
     }
 
     Vector2 ReadInput()
@@ -152,12 +147,11 @@ public class RoomPrototype : MonoBehaviour
         bool moving = v.sqrMagnitude > 0.01f;
         if (moving)
         {
-            z = Mathf.Clamp(z + v.y * Speed * Time.deltaTime, MinZ, MaxZ);   // haut = vers le fond
-            float kz = Foc / z;
-            float lo = Mathf.Max(WallL + Margin, VPX + (Edge - VPX) / kz);
-            float hi = Mathf.Min(WallR - Margin, VPX + (RoomW - Edge - VPX) / kz);
-            wx = Mathf.Clamp(wx + v.x * Speed * Time.deltaTime, lo, hi);
-            dir = Mathf.Abs(v.x) > Mathf.Abs(v.y) ? (v.x < 0 ? Dir.Left : Dir.Right) : (v.y > 0 ? Dir.Up : Dir.Down);
+            // y de l'écran de référence vers le bas, y Unity vers le haut
+            pos.x = Mathf.Clamp(pos.x + v.x * Speed * Time.deltaTime, FootW, Floor - FootW);
+            pos.y = Mathf.Clamp(pos.y - v.y * Speed * Time.deltaTime, FootH, Floor);
+            if (Mathf.Abs(v.x) > Mathf.Abs(v.y)) dir = v.x < 0 ? Dir.Left : Dir.Right;
+            else if (Mathf.Abs(v.y) > Mathf.Abs(v.x)) dir = v.y > 0 ? Dir.Up : Dir.Down;
             animT += Time.deltaTime;
         }
         else animT = 0f;
@@ -166,24 +160,8 @@ public class RoomPrototype : MonoBehaviour
 
     void UpdateVisual(bool moving)
     {
-        // Projection perspective : position au sol -> pixel de l'image de la salle
-        float k = Foc / z;
-        float sx = VPX + (wx - VPX) * k;
-        float sy = VPY + (FloorY - VPY) * k;
-        player.position = new Vector3(sx - RoomW / 2f, RoomH / 2f - sy, 0f);
-
-        float s = AvatarHeight * k / FrameH;
-        player.localScale = new Vector3(s, s, 1f);
-
-        // La caméra suit l'avatar sans sortir de l'image
-        if (cam != null)
-        {
-            var t = CameraTarget();
-            var cp = cam.transform.position;
-            float f = Mathf.Min(1f, Time.deltaTime * 6f);
-            cam.transform.position = new Vector3(Mathf.Lerp(cp.x, t.x, f), Mathf.Lerp(cp.y, t.y, f), cp.z);
-        }
-
+        float rx = (ScreenW - Floor) / 2f, ry = Top;
+        player.position = ToWorld(rx + pos.x, ry + pos.y);
         int col = moving ? Mathf.FloorToInt(animT * 8f) % 4 : 0;
         body.sprite = frames[(int)dir, col];
     }
