@@ -94,12 +94,15 @@ function frame(now) {
   const ty = Math.max(0, Math.min(ROOM_H - VIEW_H, bodyY - VIEW_H / 2));
   if (camX === null) { camX = tx; camY = ty; }
   camX += (tx - camX) * Math.min(1, dt * 6); camY += (ty - camY) * Math.min(1, dt * 6);
-  const scale = room.naturalHeight / ROOM_H;
   ctx.fillStyle = "#0e0916"; ctx.fillRect(0, 0, cv.width, cv.height);
-  ctx.drawImage(room, camX * scale, camY * scale, VIEW_W * scale, VIEW_H * scale, 0, 0, cv.width, cv.height);
+  // salle en pixel art : pixels nets, caméra calée sur la grille de pixels de l'écran
+  const cx0 = Math.round(camX * DS) / DS, cy0 = Math.round(camY * DS) / DS;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(room, -cx0 * DS, -cy0 * DS, ROOM_W * DS, ROOM_H * DS);
+  ctx.imageSmoothingEnabled = true;
 
   const dh = AV_H * k * DS, dw = dh * FW / FH;                     // taille affichée
-  const fx = (sx - camX) * DS, fy = (sy - camY) * DS;
+  const fx = (sx - cx0) * DS, fy = (sy - cy0) * DS;
   ctx.fillStyle = "rgba(40,24,56,0.28)";
   ctx.beginPath(); ctx.ellipse(fx, fy - dh * 0.02, dw * 0.3, dw * 0.08, 0, 0, Math.PI * 2); ctx.fill();
   const col = p.moving ? Math.floor(p.t * 8) % 4 : 0;

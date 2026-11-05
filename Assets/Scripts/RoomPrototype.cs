@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// Prototype : affiche la salle vide et un avatar déplaçable (flèches / ZQSD / manette).
 /// Se lance tout seul quand on appuie sur Play, dans n'importe quelle scène.
-/// Images attendues dans Assets/Resources : room_empty.png (1860x720) et avatar_sheet.png (688x1212, images de 172x303).
+/// Images attendues dans Assets/Resources : room_empty.png (1240x480, pixel art) et avatar_sheet.png (688x1212, images de 172x303).
 /// La salle mesure 1240x480 unités Unity ; la caméra, rapprochée, suit l'avatar.
 /// </summary>
 public class RoomPrototype : MonoBehaviour
@@ -47,6 +47,7 @@ public class RoomPrototype : MonoBehaviour
     void Start()
     {
         var roomTex = Load("room_empty");
+        if (roomTex != null) roomTex.filterMode = FilterMode.Point;   // salle en pixel art : pixels nets
         var sheetTex = Load("avatar_sheet");
         if (roomTex == null || sheetTex == null) { enabled = false; return; }
 
