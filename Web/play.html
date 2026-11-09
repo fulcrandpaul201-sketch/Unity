@@ -403,6 +403,9 @@ function buildRoom(g) {                  // long couloir voûté, plus haut et p
   startShape.moveTo(-r, 0); startShape.lineTo(-AR, 0); startShape.lineTo(-AR, ARCH.h); startShape.absarc(0, ARCH.h, AR, Math.PI, 0, true);
   startShape.lineTo(AR, 0); startShape.lineTo(r, 0); startShape.lineTo(r, COR_H); startShape.absarc(0, COR_H, r, 0, Math.PI, false); startShape.closePath();
   const start = new THREE.Mesh(new THREE.ShapeGeometry(startShape, 40), roomWallMat); start.position.z = z0; start.rotation.y = Math.PI; start.receiveShadow = true; g.add(start);
+  // encadrement de l'arche d'entrée aussi côté couloir (même encadrement que côté cour, retourné)
+  g.updateMatrixWorld();
+  archFrame(g.matrixWorld.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, z0)).multiply(new THREE.Matrix4().makeRotationY(Math.PI)), 0, 1);
   // anneaux de pierre qui font tout le tour du couloir, montés comme l'encadrement de l'arche d'entrée :
   // blocs de tailles alternées (grand / petit) sur les montants, claveaux alternés sur l'arc, clé de voûte plus grande
   g.updateMatrixWorld();
