@@ -294,12 +294,18 @@ function buildWall(px, pz, ry, windows = false) {
   }
   // chemin de ronde puis créneaux : nombre impair de merlons, centrés sur le milieu du mur (même rythme sur les 4 côtés)
   boxStone(W, ROOM - 1.1, 0.5, 0.55, 0, WALL_H - 0.25, -0.12, 3);
-  const MERLONS = 15, span = ROOM - 2.6, gapM = span / (MERLONS - 1);
-  for (let i = 0; i < MERLONS; i++) boxStone(W, 0.9, 0.75, 0.55, -span / 2 + i * gapM, WALL_H + 0.37, -0.12, sym(i, MERLONS) % 2 ? 0 : 2);
-  // angle : une échauguette carrée posée sur le coin droit du mur (chaque coin en reçoit exactement une)
-  boxStone(W, 1.1, 0.5, 1.1, HALF - 0.55, WALL_H - 0.25, -0.55, 3);
-  boxStone(W, 1.3, 1.1, 1.3, HALF - 0.55, WALL_H + 0.55, -0.55, 2);
-  boxStone(W, 1.5, 0.18, 1.5, HALF - 0.55, WALL_H + 1.19, -0.55, 0);
+  // tours d'angle centrées sur la diagonale du coin (même débord sur les deux murs qui s'y rejoignent)
+  const T_OFF = 0.1, T_HALF = 0.65, tx = HALF + T_OFF, tz = -T_OFF;
+  // créneaux : merlons identiques, tous les vides de même largeur, y compris contre les tours
+  const MERLONS = 15, MW = 0.9, inner = tx - T_HALF;                 // bord intérieur de la tour
+  const half = (inner - MW / 2) / (1 + 1 / ((MERLONS - 1) / 2));      // centre du dernier merlon
+  const gapM = half / ((MERLONS - 1) / 2);                            // pas régulier ; vide = gapM - MW, partout
+  for (let i = 0; i < MERLONS; i++) boxStone(W, MW, 0.75, 0.55, -half + i * gapM, WALL_H + 0.37, -0.12, sym(i, MERLONS) % 2 ? 0 : 2);
+  for (const sx of [-1, 1]) {   // une tour à chaque bout ; le mur voisin pose la même au même endroit (blocs confondus)
+    boxStone(W, 1.1, 0.5, 1.1, sx * tx, WALL_H - 0.25, tz, 3);
+    boxStone(W, T_HALF * 2, 1.1, T_HALF * 2, sx * tx, WALL_H + 0.55, tz, 2);
+    boxStone(W, 1.5, 0.18, 1.5, sx * tx, WALL_H + 1.19, tz, 0);
+  }
   return g;
 }
 
