@@ -127,10 +127,10 @@ const UPPER_X = [];                                                    // plus d
 const STRING_Y = 9.6, TOP_CORNICE_Y = 14.45;                          // bandeau entre les étages, corniche sommitale
 // Salles derrière les arches
 // couloir : R = anneau de colonnes, O = ouvertures face à face vers 2 salles ; une position tous les 6 m
-const CPATTERN = ["R", "R", "O", "R", "R", "O", "R", "R"];
-const RD = 6 * (CPATTERN.length - 1);                                  // 42 m
-const OP = { r: 1.2, s: 1.75, t: 1.0 };                               // ouvertures latérales : 2,4 m de large, sommet à 2,95 m (sous la naissance de la voûte), mur de 1 m
-const SR = { w: 10, d: 8, h: 4.5 };                                   // salles : 10 m (le long du couloir) x 8 m, 4,5 m de haut
+const CPATTERN = ["R", "R", "O", "R", "R", "R", "O", "R", "R"];   // 2e paire d'ouvertures décalée d'une colonne : place pour de grandes salles
+const RD = 6 * (CPATTERN.length - 1);                                  // 48 m
+const OP = { r: AR, s: ARCH.h, t: 1.0 };                              // ouvertures latérales : même taille que l'arche d'entrée (3 m x 4,5 m), mur de 1 m
+const SR = { w: 20, d: 12, h: 7 };                                    // grandes salles : 20 m (le long du couloir) x 12 m, 7 m de haut
 
 const WALL_COLOR = 0x9c958a, FLOOR_COLOR = 0x7d7f86;
 const floorMat = () => plain(FLOOR_COLOR);
@@ -392,7 +392,8 @@ function roomWallGeometry(w, h, arch) {  // mur intérieur, avec ou sans ouvertu
 }
 const chandeliers = [];
 const COR_OFF = 5;                       // couloir = contour de l'ouverture agrandi de 5 m tout autour (sol au même niveau)
-const COR_W = ARCH.w + 2 * COR_OFF, COR_H = ARCH.h;   // 13 m de large, voûte qui naît à 3 m comme l'arche, sommet à 9,5 m
+const COR_W = 15, COR_H = 5.5;   // couloir élargi à 15 m, murs droits de 5,5 m pour loger les grandes ouvertures, sommet à 13 m
+//   // 13 m de large, voûte qui naît à 3 m comme l'arche, sommet à 9,5 m
 function corridorProfile() {
   const r = COR_W / 2, sh = new THREE.Shape();
   sh.moveTo(-r, 0); sh.lineTo(r, 0); sh.lineTo(r, COR_H); sh.absarc(0, COR_H, r, 0, Math.PI, false); sh.closePath();
@@ -427,7 +428,7 @@ function buildRoom(g) {                  // long couloir voûté ; rythme : 2 an
     if (c !== "R") return;
     const cz = posZ(s);
     for (const sx of [-1, 1]) {
-      const rows = 2, bh = COR_H / rows;
+      const rows = 4, bh = COR_H / rows;
       for (let i = 0; i < rows; i++) { const w = i % 2 ? SMALL : BIG; boxStone(W, w, bh - gap, D, sx * (R - w / 2), i * bh + bh / 2, cz, i + (sx > 0 ? 1 : 0)); }
     }
     for (let i = 0; i < NB; i++) {
@@ -467,8 +468,8 @@ function buildSideRoom(g, sx, cz) {
   const tun = add(new THREE.ExtrudeGeometry(opShape(), { depth: T, bevelEnabled: false, curveSegments: 24 }), [hiddenMat, nicheMat], 0, 0, -T);
   add(new THREE.PlaneGeometry(OP.r * 2, T), floorMat(), 0, 0.004, -T / 2, 0, -Math.PI / 2);
   const W = tg.matrixWorld;
-  sideArchFrame(W);                                                                                            // côté couloir
-  sideArchFrame(W.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, -T)).multiply(new THREE.Matrix4().makeRotationY(Math.PI)));   // côté salle
+  archFrame(W, 0, 0);                                                                                          // côté couloir (même encadrement que l'arche d'entrée)
+  archFrame(W.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, -T)).multiply(new THREE.Matrix4().makeRotationY(Math.PI)), 0, 1);   // côté salle
   // salle
   const zf = -T, zc = zf - SR.d / 2, zb = zf - SR.d;
   add(new THREE.PlaneGeometry(SR.w, SR.d), floorMat(), 0, 0.003, zc, 0, -Math.PI / 2);
