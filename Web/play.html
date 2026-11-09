@@ -260,13 +260,12 @@ function buildWall(px, pz, ry, windows = false) {
 
   // piliers : blocs empilés en alternance, base et chapiteau plus larges
   for (const x of PILLAR_X) {
-    const rows = 9, bh = (PILLAR.h - 0.6) / rows, gap = 0.035;
+    const top = TOP_CORNICE_Y - 0.17, rows = 27, bh = (top - 0.34) / rows, gap = 0.035;   // colonne continue jusqu'à la corniche
     boxStone(W, PILLAR.w + 0.22, 0.34, PILLAR.out + 0.1, x, 0.17, (PILLAR.out + 0.1) / 2, 2);              // base
     for (let i = 0; i < rows; i++) {
       const wdt = i % 2 ? PILLAR.w - 0.08 : PILLAR.w;
       boxStone(W, wdt, bh - gap, PILLAR.out, x, 0.34 + i * bh + bh / 2, PILLAR.out / 2, i);
     }
-    boxStone(W, PILLAR.w + 0.24, 0.26, PILLAR.out + 0.12, x, PILLAR.h - 0.13, (PILLAR.out + 0.12) / 2, 2); // chapiteau
   }
 
   // soubassement : rangée de dalles au pied du mur, interrompue par les arches et les piliers
@@ -285,17 +284,11 @@ function buildWall(px, pz, ry, windows = false) {
   }
   // corniche : bandeau de pierre au-dessus des arches, sur toute la longueur
   const cn = Math.round(ROOM / 1.25), cl = ROOM / cn;
-  for (let i = 0; i < cn; i++) boxStone(W, cl - 0.035, CORNICE.h, CORNICE.out, -HALF + cl * (i + 0.5), CORNICE.y, CORNICE.out / 2, Math.round(Math.abs(i - (cn - 1) / 2)) % 2);
   // étages : pilastres dans l'axe des piliers, bandeau intermédiaire, corniche sommitale et créneaux
-  for (const x of PILLAR_X) {
-    const rows = 12, y0 = CORNICE.y + CORNICE.h / 2, bh = (TOP_CORNICE_Y - y0) / rows;
-    for (let i = 0; i < rows; i++) boxStone(W, i % 2 ? 0.46 : 0.54, bh - 0.03, 0.14, x, y0 + i * bh + bh / 2, 0.07, i);
-  }
   // teinte symétrique : le bloc i et son vis-à-vis (même distance au centre du mur) ont la même couleur
   const sym = (k, n) => Math.round(Math.abs(k - (n - 1) / 2));
   for (let i = 0; i < cn; i++) {
     const x = -HALF + cl * (i + 0.5);
-    boxStone(W, cl - 0.035, 0.22, 0.16, x, STRING_Y, 0.08, sym(i, cn) % 2);
     boxStone(W, cl - 0.035, 0.34, 0.32, x, TOP_CORNICE_Y, 0.16, 2);
     boxStone(W, cl - 0.035, 0.18, 0.4, x, TOP_CORNICE_Y + 0.26, 0.05, sym(i, cn) % 2 ? 0 : 2);
   }
