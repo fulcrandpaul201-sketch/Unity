@@ -36,9 +36,16 @@
     width: 76px; height: 76px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.5); background: var(--glass); color: var(--fg); font: 600 13px system-ui, sans-serif; touch-action: none; display: none; }
   @media (pointer: coarse) { #jump, #down { display: block; } }
   [hidden] { display: none !important; }
+  .speed { position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px));
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 8px; background: var(--glass); color: var(--fg);
+    font: 600 13px system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  .speed input { width: 140px; accent-color: #b99cff; }
+  .speed input:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .speed output { min-width: 3ch; }
 </style>
 <main>
   <canvas id="c"></canvas>
+  <label class="speed" for="speed">Vitesse <input id="speed" type="range" min="0.5" max="4" step="0.1" value="1.6"> <output id="speedVal">×1.6</output></label>
   <div id="ring" class="stick" hidden></div>
   <div id="knob" class="stick" hidden></div>
   <button id="jump" type="button">Monter</button>
@@ -55,7 +62,8 @@ const AVATAR_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArAAAAS8CAYAAA
 // ---------- Réglages ----------
 const ROOM = 26, HALF = ROOM / 2, WALL_H = 15.6;             // cour carrée de 26 m entourée de façades à 3 niveaux
 const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
-const SPEED = 4.2;                                           // m/s
+const SPEED = 4.2;                                           // m/s (multipliée par la jauge de vitesse)
+let speedMul = 1.6;
 const FLY_SPEED = 7, CLIMB = 4.5;                             // vol libre : vitesse horizontale en l'air, montée / descente (m/s)
 const PLAYER_R = 0.3;                                        // rayon de collision de l'avatar
 const COLORS = { bg: 0x0b1020 };                             // ciel de nuit au-dessus des murs
@@ -125,7 +133,11 @@ const UPPER_LEVELS = [6.3, 10.5];                                     // appuis 
 const UPPER_X = [];                                                    // plus de fenêtres sur les façades
 const STRING_Y = 9.6, TOP_CORNICE_Y = 14.45;                          // bandeau entre les étages, corniche sommitale
 // Salles derrière les arches
-const RD = 30;                                                        // longueur du couloir derrière l'arche nord
+// couloir : R = anneau de colonnes, O = ouvertures face à face vers 2 salles ; une position tous les 6 m
+const CPATTERN = ["R", "R", "O", "R", "R", "O", "R", "R"];
+const RD = 6 * (CPATTERN.length - 1);                                  // 42 m
+const OP = { r: 1.2, s: 1.75, t: 1.0 };                               // ouvertures latérales : 2,4 m de large, sommet à 2,95 m (sous la naissance de la voûte), mur de 1 m
+const SR = { w: 10, d: 8, h: 4.5 };                                   // salles : 10 m (le long du couloir) x 8 m, 4,5 m de haut
 
 const WALL_COLOR = 0x9c958a, FLOOR_COLOR = 0x7d7f86;
 const floorMat = () => plain(FLOOR_COLOR);
@@ -393,47 +405,91 @@ function corridorProfile() {
   sh.moveTo(-r, 0); sh.lineTo(r, 0); sh.lineTo(r, COR_H); sh.absarc(0, COR_H, r, 0, Math.PI, false); sh.closePath();
   return sh;
 }
-function buildRoom(g) {                  // long couloir voûté, plus haut et plus large que l'arche d'entrée
-  const z0 = -ARCH.depth, zb = z0 - RD;
-  const vault = new THREE.Mesh(new THREE.ExtrudeGeometry(corridorProfile(), { depth: RD, bevelEnabled: false, curveSegments: 40 }), [hiddenMat, nicheMat]);
-  vault.position.z = zb; vault.receiveShadow = vault.castShadow = true; g.add(vault);
+function buildRoom(g) {                  // long couloir voûté ; rythme : 2 anneaux de colonnes puis une ouverture (de chaque côté) vers une salle
+  const z0 = -ARCH.depth, zb = z0 - RD, R = COR_W / 2, STEP = RD / (CPATTERN.length - 1);
+  const posZ = s => z0 - s * STEP + (s === 0 ? -COL / 2 : s === CPATTERN.length - 1 ? COL / 2 : 0);
+  const openZ = CPATTERN.map((c, s) => c === "O" ? z0 - s * STEP : null).filter(v => v !== null);
+  // voûte : demi-cylindre au-dessus des murs droits
+  const vg = new THREE.CylinderGeometry(R, R, RD, 64, 1, true, Math.PI / 2, Math.PI); vg.rotateX(Math.PI / 2);
+  const vault = new THREE.Mesh(vg, nicheMat); vault.position.set(0, COR_H, z0 - RD / 2); vault.receiveShadow = true; g.add(vault);
+  // murs droits (3 m) percés des ouvertures
+  const sideShape = (u0, u1, cs) => {
+    const sh = new THREE.Shape(); sh.moveTo(u0, 0);
+    for (const c of cs.slice().sort((a, b) => a - b)) { sh.lineTo(c - OP.r, 0); sh.lineTo(c - OP.r, OP.s); sh.absarc(c, OP.s, OP.r, Math.PI, 0, true); sh.lineTo(c + OP.r, 0); }
+    sh.lineTo(u1, 0); sh.lineTo(u1, COR_H); sh.lineTo(u0, COR_H); sh.closePath(); return sh;
+  };
+  const lw = new THREE.Mesh(new THREE.ShapeGeometry(sideShape(-z0, -zb, openZ.map(z => -z)), 24), roomWallMat); lw.rotation.y = Math.PI / 2; lw.position.x = -R; lw.receiveShadow = true; g.add(lw);
+  const rw = new THREE.Mesh(new THREE.ShapeGeometry(sideShape(zb, z0, openZ), 24), roomWallMat); rw.rotation.y = -Math.PI / 2; rw.position.x = R; rw.receiveShadow = true; g.add(rw);
   const fl = new THREE.Mesh(new THREE.PlaneGeometry(COR_W, RD), floorMat()); fl.rotation.x = -Math.PI / 2; fl.position.set(0, 0.003, z0 - RD / 2); fl.receiveShadow = true; g.add(fl);
   const end = new THREE.Mesh(new THREE.ShapeGeometry(corridorProfile(), 40), roomWallMat); end.position.z = zb; end.receiveShadow = true; g.add(end);   // fond du couloir
-  const startShape = new THREE.Shape(), r = COR_W / 2;                                                          // mur d'entrée, contour qui passe autour de l'arche (même taille)
-  startShape.moveTo(-r, 0); startShape.lineTo(-AR, 0); startShape.lineTo(-AR, ARCH.h); startShape.absarc(0, ARCH.h, AR, Math.PI, 0, true);
-  startShape.lineTo(AR, 0); startShape.lineTo(r, 0); startShape.lineTo(r, COR_H); startShape.absarc(0, COR_H, r, 0, Math.PI, false); startShape.closePath();
+  const startShape = new THREE.Shape();                                                                         // mur d'entrée, contour qui passe autour de l'arche
+  startShape.moveTo(-R, 0); startShape.lineTo(-AR, 0); startShape.lineTo(-AR, ARCH.h); startShape.absarc(0, ARCH.h, AR, Math.PI, 0, true);
+  startShape.lineTo(AR, 0); startShape.lineTo(R, 0); startShape.lineTo(R, COR_H); startShape.absarc(0, COR_H, R, 0, Math.PI, false); startShape.closePath();
   const start = new THREE.Mesh(new THREE.ShapeGeometry(startShape, 40), roomWallMat); start.position.z = z0; start.rotation.y = Math.PI; start.receiveShadow = true; g.add(start);
-  // encadrement de l'arche d'entrée aussi côté couloir (même encadrement que côté cour, retourné)
   g.updateMatrixWorld();
   archFrame(g.matrixWorld.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, z0)).multiply(new THREE.Matrix4().makeRotationY(Math.PI)), 0, 1);
-  // anneaux de pierre qui font tout le tour du couloir, montés comme l'encadrement de l'arche d'entrée :
-  // blocs de tailles alternées (grand / petit) sur les montants, claveaux alternés sur l'arc, clé de voûte plus grande
-  g.updateMatrixWorld();
-  const W = g.matrixWorld, BAYS = 5, R = COR_W / 2, D = COL, BIG = 1.0, SMALL = 0.7, NB = 13, ga = 0.014, gap = 0.035;   // 13 claveaux d'environ 1,5 m, comme les blocs des montants
-  for (let k = 0; k <= BAYS; k++) {
-    const cz = z0 - k * RD / BAYS + (k === 0 ? -D / 2 : k === BAYS ? D / 2 : 0);
+  // anneaux de pierre (montés comme l'arche d'entrée : blocs grand / petit, claveaux alternés, clé de voûte)
+  const W = g.matrixWorld, D = COL, BIG = 1.0, SMALL = 0.7, NB = 13, ga = 0.014, gap = 0.035;
+  CPATTERN.forEach((c, s) => {
+    if (c !== "R") return;
+    const cz = posZ(s);
     for (const sx of [-1, 1]) {
-      const rows = 2, bh = COR_H / rows;                                // montants : 2 blocs de 1,5 m, même taille que les pierres de l'arc
-      for (let i = 0; i < rows; i++) {                                  // grand / petit en alternance, qui se poursuit dans l'arc
-        const w = i % 2 ? SMALL : BIG;
-        boxStone(W, w, bh - gap, D, sx * (R - w / 2), i * bh + bh / 2, cz, i + (sx > 0 ? 1 : 0));
-      }
+      const rows = 2, bh = COR_H / rows;
+      for (let i = 0; i < rows; i++) { const w = i % 2 ? SMALL : BIG; boxStone(W, w, bh - gap, D, sx * (R - w / 2), i * bh + bh / 2, cz, i + (sx > 0 ? 1 : 0)); }
     }
-    for (let i = 0; i < NB; i++) {                                      // arc : claveaux grand / petit, clé de voûte plus longue
+    for (let i = 0; i < NB; i++) {
       const key = i === (NB - 1) / 2, len = key ? BIG + 0.3 : i % 2 ? SMALL : BIG;
       const a0 = i * Math.PI / NB + ga, a1 = (i + 1) * Math.PI / NB - ga, sh = new THREE.Shape();
       sh.absarc(0, 0, R, a0, a1, false); sh.absarc(0, 0, R - len, a1, a0, true); sh.closePath();
       stone(new THREE.ExtrudeGeometry(sh, { depth: D + (key ? 0.1 : 0), bevelEnabled: false, curveSegments: 4 }),
             W.clone().multiply(tmpM.makeTranslation(0, COR_H, cz - (D + (key ? 0.1 : 0)) / 2)), i);
     }
-  }
-  for (let z = z0 - 3; z > zb + 1; z -= 6) {                          // éclairage chaud le long du couloir (sans objet visible)
+  });
+  // ouvertures et salles (de chaque côté)
+  for (const cz of openZ) for (const sx of [-1, 1]) buildSideRoom(g, sx, cz);
+  for (let z = z0 - STEP / 2; z > zb; z -= STEP) {                   // éclairage chaud le long du couloir (sans objet visible)
     const l = new THREE.PointLight(0xffb260, 1.2, 15, 2); l.position.set(0, COR_H + 1.5, z); g.add(l); chandeliers.push({ l, seed: Math.random() * 100 });
   }
   WALKABLE.push(worldRect(g, -AR, AR, z0 - 0.6, 2.0, { maxFly: ARCH.h + AR - 2.0 }));                       // passage sous l'arche
-  WALKABLE.push(worldRect(g, -COR_W / 2 + 1.1, COR_W / 2 - 1.1, zb + 0.2, z0, { maxFly: COR_H + COR_W / 2 - 2.0 }));   // on reste entre les colonnes
+  WALKABLE.push(worldRect(g, -R + 1.1, R - 1.1, zb + 0.2, z0, { maxFly: COR_H + R - 2.0 }));               // on reste entre les colonnes
   CAM_ZONES.push(worldRect(g, -AR + 0.15, AR - 0.15, z0 - 0.3, 0.6, { maxY: ARCH.h + AR - 0.3 }));
-  CAM_ZONES.push(worldRect(g, -COR_W / 2 + 0.3, COR_W / 2 - 0.3, zb + 0.3, z0 - 0.05, { maxY: COR_H + COR_W / 2 - 1 }));
+  CAM_ZONES.push(worldRect(g, -R + 0.3, R - 0.3, zb + 0.3, z0 - 0.05, { maxY: COR_H + R - 1 }));
+}
+// encadrement de pierre d'une ouverture latérale (même principe que l'arche d'entrée, à son échelle)
+function sideArchFrame(Wm) {
+  const rows = 4, bh = OP.s / rows;
+  for (let i = 0; i < rows; i++) { const w = i % 2 ? 0.3 : 0.45; for (const side of [-1, 1]) boxStone(Wm, w, bh - 0.03, 0.18, side * (OP.r + w / 2), i * bh + bh / 2, 0.09, i + (side > 0 ? 1 : 0)); }
+  const n = 7;
+  for (let i = 0; i < n; i++) {
+    const key = i === (n - 1) / 2, a0 = Math.PI - i * Math.PI / n - 0.018, a1 = Math.PI - (i + 1) * Math.PI / n + 0.018, sh = new THREE.Shape();
+    sh.absarc(0, 0, OP.r + 0.32 + (key ? 0.1 : 0), a0, a1, true); sh.absarc(0, 0, OP.r, a1, a0, false); sh.closePath();
+    stone(new THREE.ExtrudeGeometry(sh, { depth: 0.18 + (key ? 0.04 : 0), bevelEnabled: false, curveSegments: 6 }), Wm.clone().multiply(tmpM.makeTranslation(0, OP.s, 0)), i);
+  }
+}
+function opShape() { const s = new THREE.Shape(); s.moveTo(-OP.r, 0); s.lineTo(OP.r, 0); s.lineTo(OP.r, OP.s); s.absarc(0, OP.s, OP.r, 0, Math.PI, false); s.closePath(); return s; }
+function buildSideRoom(g, sx, cz) {
+  const R = COR_W / 2, T = OP.t, tg = new THREE.Group();
+  tg.position.set(sx * R, 0, cz); tg.rotation.y = sx < 0 ? Math.PI / 2 : -Math.PI / 2; g.add(tg); tg.updateMatrixWorld();   // z local > 0 : vers le couloir
+  const add = (geo, mat, x, y, z, ry = 0, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); m.receiveShadow = true; tg.add(m); return m; };
+  const tun = add(new THREE.ExtrudeGeometry(opShape(), { depth: T, bevelEnabled: false, curveSegments: 24 }), [hiddenMat, nicheMat], 0, 0, -T);
+  add(new THREE.PlaneGeometry(OP.r * 2, T), floorMat(), 0, 0.004, -T / 2, 0, -Math.PI / 2);
+  const W = tg.matrixWorld;
+  sideArchFrame(W);                                                                                            // côté couloir
+  sideArchFrame(W.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, -T)).multiply(new THREE.Matrix4().makeRotationY(Math.PI)));   // côté salle
+  // salle
+  const zf = -T, zc = zf - SR.d / 2, zb = zf - SR.d;
+  add(new THREE.PlaneGeometry(SR.w, SR.d), floorMat(), 0, 0.003, zc, 0, -Math.PI / 2);
+  add(new THREE.PlaneGeometry(SR.w, SR.d), ceilingMat, 0, SR.h, zc, 0, Math.PI / 2);
+  add(new THREE.PlaneGeometry(SR.w, SR.h), roomWallMat, 0, SR.h / 2, zb);                                     // fond
+  for (const s2 of [-1, 1]) add(new THREE.PlaneGeometry(SR.d, SR.h), roomWallMat, s2 * SR.w / 2, SR.h / 2, zc, -s2 * Math.PI / 2);
+  const fw = new THREE.Shape(), hw = SR.w / 2;                                                                 // mur côté couloir, percé de l'ouverture
+  fw.moveTo(-hw, 0); fw.lineTo(-OP.r, 0); fw.lineTo(-OP.r, OP.s); fw.absarc(0, OP.s, OP.r, Math.PI, 0, true); fw.lineTo(OP.r, 0); fw.lineTo(hw, 0); fw.lineTo(hw, SR.h); fw.lineTo(-hw, SR.h); fw.closePath();
+  add(new THREE.ShapeGeometry(fw, 24), roomWallMat, 0, 0, zf, Math.PI);
+  const l = new THREE.PointLight(0xffb260, 1.1, 12, 2); l.position.set(0, SR.h - 1, zc); tg.add(l); chandeliers.push({ l, seed: Math.random() * 100 });
+  WALKABLE.push(worldRect(tg, -OP.r + 0.05, OP.r - 0.05, -T - 0.6, 2.6, { maxFly: OP.s + OP.r - 1.9 }));    // passage (chevauche le couloir)
+  WALKABLE.push(worldRect(tg, -hw + 0.2, hw - 0.2, zb + 0.2, zf, { maxFly: SR.h - 2 }));                    // salle
+  CAM_ZONES.push(worldRect(tg, -OP.r + 0.15, OP.r - 0.15, -T - 0.3, 0.4, { maxY: OP.s + OP.r - 0.2 }));
+  CAM_ZONES.push(worldRect(tg, -hw + 0.3, hw - 0.3, zb + 0.3, zf - 0.05, { maxY: SR.h - 0.4 }));
 }
 const IRON = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x26221f).convertSRGBToLinear(), roughness: 0.6, metalness: 0.4 });
 const FLAME = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc56e).convertSRGBToLinear() });
@@ -768,7 +824,7 @@ function animateHero(dt, now, airborne, ground) {
   heroYaw += d * Math.min(1, dt * 14);
   let col = 0;
   if (airborne) col = 1;                                          // en l'air : jambes écartées
-  else if (p.moving) { HERO.phase += dt * SPEED * 2.0; col = Math.floor(HERO.phase) % 4; }
+  else if (p.moving) { HERO.phase += dt * SPEED * speedMul * 2.0; col = Math.floor(HERO.phase) % 4; }
   showCharacter(HERO, p.x, p.y, p.z, heroYaw, col, ground);
 }
 
@@ -777,6 +833,11 @@ const p = { x: 0, y: 0, vy: 0, z: 5, facing: Math.PI, t: 0, moving: false };   /
 const cam = { yaw: 0, pitch: 0.35, dist: 5.5 };
 
 // ---------- Entrées ----------
+{ // jauge de vitesse
+  const sl = document.getElementById("speed"), out = document.getElementById("speedVal");
+  const upd = () => { speedMul = +sl.value; out.textContent = "×" + speedMul.toFixed(1); };
+  sl.addEventListener("input", upd); sl.addEventListener("change", () => sl.blur()); upd();
+}
 const keys = new Set();
 addEventListener("keydown", e => {
   keys.add(e.code);
@@ -887,7 +948,7 @@ function frame(now) {
     const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
     const mx = fx * f + rx * s, mz = fz * f + rz * s;
     // déplacement limité aux zones praticables (cour, passages sous les arches, salles)
-    const sp = p.y > groundAt(p.x, p.z, p.y) + 0.05 ? FLY_SPEED : SPEED;   // plus rapide en vol
+    const sp = (p.y > groundAt(p.x, p.z, p.y) + 0.05 ? FLY_SPEED : SPEED) * speedMul;   // plus rapide en vol, réglable avec la jauge
     const nx = p.x + mx * sp * dt, nz = p.z + mz * sp * dt;
     if (canMove(nx, nz, p.y)) { p.x = nx; p.z = nz; }
     else if (canMove(nx, p.z, p.y)) p.x = nx;
