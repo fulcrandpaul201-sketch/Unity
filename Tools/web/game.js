@@ -359,14 +359,12 @@ function buildRoom(g) {                  // long couloir voûté, plus haut et p
   // anneaux de pierre qui font tout le tour du couloir, montés comme l'encadrement de l'arche d'entrée :
   // blocs de tailles alternées (grand / petit) sur les montants, claveaux alternés sur l'arc, clé de voûte plus grande
   g.updateMatrixWorld();
-  const W = g.matrixWorld, BAYS = 5, R = COR_W / 2, D = COL, BIG = 1.0, SMALL = 0.7, NB = 15, ga = 0.014, gap = 0.035;
+  const W = g.matrixWorld, BAYS = 5, R = COR_W / 2, D = COL, BIG = 1.0, SMALL = 0.7, NB = 13, ga = 0.014, gap = 0.035;   // 13 claveaux d'environ 1,5 m, comme les blocs des montants
   for (let k = 0; k <= BAYS; k++) {
     const cz = z0 - k * RD / BAYS + (k === 0 ? -D / 2 : k === BAYS ? D / 2 : 0);
     for (const sx of [-1, 1]) {
-      const rows = 5, bh = COR_H / rows;
-      // bloc du bas : socle d'avant, mais de la même hauteur que les autres blocs (plus de fine dalle)
-      boxStone(W, BIG + 0.16, bh - gap, D + 0.08, sx * (R - (BIG + 0.16) / 2), bh / 2, cz, 2);
-      for (let i = 1; i < rows; i++) {                                  // montants : grand / petit en alternance au-dessus
+      const rows = 2, bh = COR_H / rows;                                // montants : 2 blocs de 1,5 m, même taille que les pierres de l'arc
+      for (let i = 0; i < rows; i++) {                                  // grand / petit en alternance, qui se poursuit dans l'arc
         const w = i % 2 ? SMALL : BIG;
         boxStone(W, w, bh - gap, D, sx * (R - w / 2), i * bh + bh / 2, cz, i + (sx > 0 ? 1 : 0));
       }
