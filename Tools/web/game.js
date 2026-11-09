@@ -353,34 +353,33 @@ function buildRoom(g) {                  // long couloir voûté, plus haut et p
   startShape.moveTo(-r, 0); startShape.lineTo(-AR, 0); startShape.lineTo(-AR, ARCH.h); startShape.absarc(0, ARCH.h, AR, Math.PI, 0, true);
   startShape.lineTo(AR, 0); startShape.lineTo(r, 0); startShape.lineTo(r, COR_H); startShape.absarc(0, COR_H, r, 0, Math.PI, false); startShape.closePath();
   const start = new THREE.Mesh(new THREE.ShapeGeometry(startShape, 40), roomWallMat); start.position.z = z0; start.rotation.y = Math.PI; start.receiveShadow = true; g.add(start);
-  // anneaux de pierre qui font tout le tour du couloir (colonne + arc d'un seul profil, sans coupure),
-  // chacun en 3 épaisseurs emboîtées : bande large et fine contre le mur, couche moyenne, nervure étroite plus saillante
+  // anneaux de pierre qui font tout le tour du couloir, montés comme l'encadrement de l'arche d'entrée :
+  // blocs de tailles alternées (grand / petit) sur les montants, claveaux alternés sur l'arc, clé de voûte plus grande
   g.updateMatrixWorld();
-  const W = g.matrixWorld, BAYS = 5, R = COR_W / 2, NB = 15, ga = 0.012;
-  const WALL_TONE = new THREE.Color(0x8f887d).convertSRGBToLinear();             // proche du mur : la première couche se fond dedans
-  const LAYERS = [{ d: 1.5, p: 0.22, c: WALL_TONE, rows: 5 }, { d: 1.05, p: 0.5, c: 3, rows: 7 }, { d: 0.6, p: 0.8, c: 2, rows: 9 }];
+  const W = g.matrixWorld, BAYS = 5, R = COR_W / 2, D = COL, BIG = 1.0, SMALL = 0.7, NB = 15, ga = 0.014, gap = 0.035;
   for (let k = 0; k <= BAYS; k++) {
-    const half = LAYERS[0].d / 2, cz = z0 - k * RD / BAYS + (k === 0 ? -half : k === BAYS ? half : 0);
-    LAYERS.forEach((L, li) => {
-      for (const sx of [-1, 1]) {                                        // partie droite, de la base à la naissance de la voûte
-        const x = sx * (R - L.p / 2), bh = COR_H / L.rows;
-        for (let i = 0; i < L.rows; i++) boxStone(W, L.p, bh - 0.025, L.d, x, i * bh + bh / 2, cz, li === 0 ? L.c : (i + li) % 2 ? L.c : (L.c + 2) % 4);
-        boxStone(W, L.p + 0.12, 0.28, L.d + 0.12, sx * (R - (L.p + 0.12) / 2), 0.14, cz, 3);   // socle de chaque couche
+    const cz = z0 - k * RD / BAYS + (k === 0 ? -D / 2 : k === BAYS ? D / 2 : 0);
+    for (const sx of [-1, 1]) {
+      const rows = 5, bh = COR_H / rows;
+      for (let i = 0; i < rows; i++) {                                  // montants : grand / petit en alternance
+        const w = i % 2 ? SMALL : BIG;
+        boxStone(W, w, bh - gap, D, sx * (R - w / 2), i * bh + bh / 2, cz, i + (sx > 0 ? 1 : 0));
       }
-      const n = NB + li * 2;                                             // arc : claveaux en éventail, plus fins sur les couches saillantes
-      for (let i = 0; i < n; i++) {
-        const a0 = i * Math.PI / n + ga, a1 = (i + 1) * Math.PI / n - ga, sh = new THREE.Shape();
-        sh.absarc(0, 0, R, a0, a1, false); sh.absarc(0, 0, R - L.p, a1, a0, true); sh.closePath();
-        stone(new THREE.ExtrudeGeometry(sh, { depth: L.d, bevelEnabled: false, curveSegments: 4 }),
-              W.clone().multiply(tmpM.makeTranslation(0, COR_H, cz - L.d / 2)), li === 0 ? L.c : (i + li) % 2 ? L.c : (L.c + 2) % 4);
-      }
-    });
+      boxStone(W, BIG + 0.16, 0.26, D + 0.08, sx * (R - (BIG + 0.16) / 2), 0.13, cz, 2);   // socle
+    }
+    for (let i = 0; i < NB; i++) {                                      // arc : claveaux grand / petit, clé de voûte plus longue
+      const key = i === (NB - 1) / 2, len = key ? BIG + 0.3 : i % 2 ? SMALL : BIG;
+      const a0 = i * Math.PI / NB + ga, a1 = (i + 1) * Math.PI / NB - ga, sh = new THREE.Shape();
+      sh.absarc(0, 0, R, a0, a1, false); sh.absarc(0, 0, R - len, a1, a0, true); sh.closePath();
+      stone(new THREE.ExtrudeGeometry(sh, { depth: D + (key ? 0.1 : 0), bevelEnabled: false, curveSegments: 4 }),
+            W.clone().multiply(tmpM.makeTranslation(0, COR_H, cz - (D + (key ? 0.1 : 0)) / 2)), i);
+    }
   }
   for (let z = z0 - 3; z > zb + 1; z -= 6) {                          // éclairage chaud le long du couloir (sans objet visible)
     const l = new THREE.PointLight(0xffb260, 1.2, 15, 2); l.position.set(0, COR_H + 1.5, z); g.add(l); chandeliers.push({ l, seed: Math.random() * 100 });
   }
   WALKABLE.push(worldRect(g, -AR, AR, z0 - 0.6, 2.0, { maxFly: ARCH.h + AR - 2.0 }));                       // passage sous l'arche
-  WALKABLE.push(worldRect(g, -COR_W / 2 + COL + 0.1, COR_W / 2 - COL - 0.1, zb + 0.2, z0, { maxFly: COR_H + COR_W / 2 - 2.0 }));   // on reste entre les colonnes
+  WALKABLE.push(worldRect(g, -COR_W / 2 + 1.1, COR_W / 2 - 1.1, zb + 0.2, z0, { maxFly: COR_H + COR_W / 2 - 2.0 }));   // on reste entre les colonnes
   CAM_ZONES.push(worldRect(g, -AR + 0.15, AR - 0.15, z0 - 0.3, 0.6, { maxY: ARCH.h + AR - 0.3 }));
   CAM_ZONES.push(worldRect(g, -COR_W / 2 + 0.3, COR_W / 2 - 0.3, zb + 0.3, z0 - 0.05, { maxY: COR_H + COR_W / 2 - 1 }));
 }
