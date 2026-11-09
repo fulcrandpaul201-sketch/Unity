@@ -102,6 +102,7 @@ const AR = ARCH.w / 2;
 const ARCH_X = [0];                                                  // une arche au centre de chaque mur
 const PILLAR_X = [-ROOM / 6, ROOM / 6];                                // 2 colonnes par façade : le mur est partagé en 3 parts égales
 const PILLAR = { w: 0.7, out: 0.3, h: 5.0 };
+const CORNER_COL = 0.8;                                              // colonne carrée dans chaque angle
 const PLINTH = { h: 0.32, out: 0.1 }, CORNICE = { y: 5.35, h: 0.26, out: 0.2 };
 const WALL_CLEAR = 0.8;                                              // distance minimale avatar / mur
 // Fenêtres (murs de gauche et de droite) : plein cintre, appui à 1,5 m, sommet à 3,4 m
@@ -136,10 +137,10 @@ function windowShape(cx, bottom = WIN.bottom) {   // contour d'une fenêtre (rec
   sh.absarc(cx, spring, WR, 0, Math.PI, false); sh.lineTo(cx - WR, bottom);
   return sh;
 }
-function wallGeometry(windows) {         // mur entier avec les ouvertures des arches (et des fenêtres) découpées
+function wallGeometry(windows, arches = ARCH_X) {         // mur entier avec les ouvertures des arches (et des fenêtres) découpées
   const sh = new THREE.Shape();
   sh.moveTo(-HALF, 0);
-  for (const c of ARCH_X) {
+  for (const c of arches) {
     sh.lineTo(c - AR, 0); sh.lineTo(c - AR, ARCH.h);
     sh.absarc(c, ARCH.h, AR, Math.PI, 0, true);
     sh.lineTo(c + AR, 0);
@@ -222,18 +223,18 @@ function buildWindow(g, W, cx, bottom = WIN.bottom, glassM = glassMat) {
   WIN_VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, S, 0)), i));
 }
 
-function buildWall(px, pz, ry, windows = false) {
+function buildWall(px, pz, ry, windows = false, arches = ARCH_X) {
   const g = new THREE.Group(); g.position.set(px, 0, pz); g.rotation.y = ry; scene.add(g);
   g.updateMatrixWorld();
   const W = g.matrixWorld;
-  const wall = new THREE.Mesh(wallGeometry(windows), wallMat); wall.receiveShadow = wall.castShadow = true; g.add(wall);
+  const wall = new THREE.Mesh(wallGeometry(windows, arches), wallMat); wall.receiveShadow = wall.castShadow = true; g.add(wall);
   if (windows) for (const cx of WIN_X) buildWindow(g, W, cx);
   UPPER_LEVELS.forEach((b, li) => UPPER_X.forEach((cx, i) => {
     const lit = true;                                                 // même motif sur les 4 façades : toutes les fenêtres éclairées
     buildWindow(g, W, cx, b, lit ? glassMat : glassDark);
   }));
 
-  ARCH_X.forEach((cx, ai) => {
+  arches.forEach((cx, ai) => {
     // passage voûté à travers le mur (ouvert aux deux bouts) vers la salle de derrière
     const tunnel = new THREE.Mesh(new THREE.ExtrudeGeometry(archOpening(AR), { depth: ARCH.depth, bevelEnabled: false, curveSegments: 32 }), [hiddenMat, nicheMat]);
     tunnel.position.set(cx, 0, -ARCH.depth); tunnel.receiveShadow = tunnel.castShadow = true; g.add(tunnel);
@@ -262,7 +263,14 @@ function buildWall(px, pz, ry, windows = false) {
   }
 
   // soubassement : rangée de dalles au pied du mur, interrompue par les arches et les piliers
-  const blocked = [...ARCH_X.map(c => [c - AR - 0.75, c + AR + 0.75]), ...PILLAR_X.map(x => [x - 0.46, x + 0.46])];
+  // colonne d'angle : carrée, logée dans le coin droit du mur (chaque coin en reçoit une, centrée sur la diagonale)
+  {
+    const CW = CORNER_COL, top = TOP_CORNICE_Y - 0.17, rows = 27, bh = (top - 0.34) / rows, gap = 0.035, cx = HALF - CW / 2, cz = CW / 2;
+    boxStone(W, CW + 0.2, 0.34, CW + 0.2, cx + 0.1, 0.17, cz - 0.1, 2);                                     // base
+    for (let i = 0; i < rows; i++) { const w = i % 2 ? CW - 0.08 : CW; boxStone(W, w, bh - gap, w, cx + (CW - w) / 2, 0.34 + i * bh + bh / 2, cz - (CW - w) / 2, i); }
+  }
+  const blocked = [...arches.map(c => [c - AR - 0.75, c + AR + 0.75]), ...PILLAR_X.map(x => [x - 0.46, x + 0.46]),
+                   [-HALF - 1, -HALF + CORNER_COL + 0.12], [HALF - CORNER_COL - 0.12, HALF + 1]];
   const free = x => !blocked.some(([a, b]) => x > a && x < b);
   const step = 0.05;
   let start = null;
@@ -355,10 +363,16 @@ const FLAME = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc56e).con
 
 WALKABLE.push({ minX: -HALF + 0.5, maxX: HALF - 0.5, minZ: -HALF + 0.5, maxZ: HALF - 0.5, court: true, maxFly: 13.5 });   // la cour (on vole sous les créneaux)
 CAM_ZONES.push({ minX: -HALF + 0.45, maxX: HALF - 0.45, minZ: -HALF + 0.45, maxZ: HALF - 0.45, maxY: 40 });
-for (const [px, pz, ry, win] of [[0, -HALF, 0, false], [0, HALF, Math.PI, false], [-HALF, 0, Math.PI / 2, true], [HALF, 0, -Math.PI / 2, true]])
-  buildRoom(buildWall(px, pz, ry, win));      // fenêtres du rez-de-chaussée sur les deux murs parallèles de gauche et de droite
+// une seule ouverture (au nord, face au départ) avec sa salle ; les 3 autres murs sont pleins
+buildRoom(buildWall(0, -HALF, 0, false));
+buildWall(0, HALF, Math.PI, false, []);
+buildWall(-HALF, 0, Math.PI / 2, false, []);
+buildWall(HALF, 0, -Math.PI / 2, false, []);
 // obstacles en boîtes alignées (vide pour l'instant : pièce vide)
 const OBSTACLES = [];
+for (const sx of [-1, 1]) for (const sz of [-1, 1])   // colonnes d'angle : on ne les traverse pas
+  OBSTACLES.push({ minX: sx > 0 ? HALF - CORNER_COL : -HALF, maxX: sx > 0 ? HALF : -HALF + CORNER_COL,
+                   minZ: sz > 0 ? HALF - CORNER_COL : -HALF, maxZ: sz > 0 ? HALF : -HALF + CORNER_COL, top: 99, standable: false });
 
 mergeStones();   // toutes les pierres (piliers, encadrements, corniches, poutres) en un seul maillage
 
