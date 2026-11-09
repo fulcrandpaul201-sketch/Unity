@@ -102,6 +102,11 @@ const AR = ARCH.w / 2;
 const ARCH_X = [0];                                                  // une arche au centre de chaque mur
 const PILLAR_X = [-ROOM / 6, ROOM / 6];                                // 2 colonnes par façade : le mur est partagé en 3 parts égales
 const PILLAR = { w: 0.7, out: 0.3, h: 5.0 };
+// créneaux : 15 merlons par mur + merlons d'angle ; même pas sur la muraille intérieure et la muraille extérieure
+const MERL_N = 15, MERL_W = 0.9, MERL_C = 0.55, MERL_EDGE = HALF - MERL_C / 2 + 0.12;
+const MERL_GAP = (2 * MERL_EDGE - MERL_N * MERL_W) / (MERL_N + 1), MERL_P = MERL_W + MERL_GAP;
+// muraille extérieure parallèle, à ~3 m : son merlon d'angle tombe à 2 pas au-delà du dernier merlon intérieur (vides tous égaux)
+const OUT_OFF = (MERL_EDGE - MERL_GAP - MERL_W / 2) + 2 * MERL_P + MERL_W / 2 + MERL_GAP + MERL_C / 2 - HALF;
 const COL = 0.8;                                                     // toutes les colonnes : fût carré de 0,8 m (murs et angles)
 const PLINTH = { h: 0.32, out: 0.1 }, CORNICE = { y: 5.35, h: 0.26, out: 0.2 };
 const WALL_CLEAR = 0.8;                                              // distance minimale avatar / mur
@@ -335,6 +340,19 @@ function buildWall(px, pz, ry, windows = false, arches = ARCH_X, gate = false) {
   const gapC = (2 * edge - MERLONS * MW) / (MERLONS + 1);
   for (let i = 0; i < MERLONS; i++) boxStone(W, MW, 0.75, 0.55, -edge + gapC + MW / 2 + i * (MW + gapC), WALL_H + 0.37, -0.12, sym(i, MERLONS) % 2 ? 0 : 2);
   for (const sx of [-1, 1]) boxStone(W, CW, 0.75, CW, sx * (HALF + 0.12), WALL_H + 0.37, -0.12, 2);   // merlon d'angle (partagé avec le mur voisin)
+  // chemin de ronde entre les deux murailles (sol en pierre au niveau du haut des murs)
+  boxStone(W, 2 * (HALF + OUT_OFF), 0.5, OUT_OFF - 0.395 + MERL_C / 2, 0, WALL_H - 0.25, -(0.395 + OUT_OFF + MERL_C / 2) / 2, 3);
+  // muraille extérieure : parallèle, mêmes merlons en vis-à-vis + 2 de plus de chaque côté, merlon d'angle sur la diagonale
+  const zo = -OUT_OFF;
+  for (let i = -2; i < MERLONS + 2; i++) boxStone(W, MW, 0.75, MERL_C, -edge + gapC + MW / 2 + i * (MW + gapC), WALL_H + 0.37, zo, sym(Math.max(0, Math.min(MERLONS - 1, i)), MERLONS) % 2 ? 0 : 2);
+  for (const sx of [-1, 1]) boxStone(W, CW, 0.75, CW, sx * (HALF + OUT_OFF), WALL_H + 0.37, zo, 2);
+  // zones du chemin de ronde : on s'y pose en volant (au-dessus des créneaux pour passer de la cour au chemin)
+  if (typeof WALKABLE !== "undefined") {
+    WALKABLE.push(worldRect(g, -HALF - OUT_OFF, HALF + OUT_OFF, zo + MERL_C / 2, -0.4, { minY: WALL_H - 0.05, maxFly: WALL_H + 3 }));
+    WALKABLE.push(worldRect(g, -HALF, HALF, -1.3, 1.4, { minY: WALL_H + 0.85, maxFly: WALL_H + 3 }));   // passage au-dessus des créneaux intérieurs
+    WALKWAYS.push(worldRect(g, -HALF - OUT_OFF, HALF + OUT_OFF, zo, -0.395));
+    CAM_ZONES.push(worldRect(g, -HALF - OUT_OFF, HALF + OUT_OFF, zo - 0.2, 0.5, { maxY: 40 }));
+  }
   return g;
 }
 
@@ -347,7 +365,8 @@ floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 const roomWallMat = withHeightFade(plain(WALL_COLOR)); roomWallMat.shadowSide = THREE.DoubleSide;
 const ceilingMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x2c2017).convertSRGBToLinear(), roughness: 0.9, side: THREE.DoubleSide });
 const WALKABLE = [];                     // zones où l'avatar peut marcher (cour, passages, salles), en coordonnées monde
-const CAM_ZONES = [];                    // volumes où la caméra peut se placer
+const CAM_ZONES = [];
+const WALKWAYS = [];                     // sols du chemin de ronde                    // volumes où la caméra peut se placer
 function worldRect(g, x0, x1, z0, z1, extra = {}) {
   const a = g.localToWorld(new THREE.Vector3(x0, 0, z0)), b = g.localToWorld(new THREE.Vector3(x1, 0, z1));
   return { minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z), ...extra };
@@ -396,7 +415,7 @@ function buildRoom(g) {
 const IRON = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x26221f).convertSRGBToLinear(), roughness: 0.6, metalness: 0.4 });
 const FLAME = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc56e).convertSRGBToLinear() });
 
-WALKABLE.push({ minX: -HALF + 0.5, maxX: HALF - 0.5, minZ: -HALF + 0.5, maxZ: HALF - 0.5, court: true, maxFly: 13.5 });   // la cour (on vole sous les créneaux)
+WALKABLE.push({ minX: -HALF + 0.5, maxX: HALF - 0.5, minZ: -HALF + 0.5, maxZ: HALF - 0.5, court: true, maxFly: WALL_H + 3 });   // la cour (on peut voler jusqu'au chemin de ronde)
 CAM_ZONES.push({ minX: -HALF + 0.45, maxX: HALF - 0.45, minZ: -HALF + 0.45, maxZ: HALF - 0.45, maxY: 40 });
 // une seule ouverture (au nord, face au départ) avec sa salle ; les 3 autres murs sont pleins
 buildRoom(buildWall(0, -HALF, 0, false));
@@ -412,13 +431,17 @@ for (const c of [-HALF + COL / 2, ...PILLAR_X, HALF - COL / 2]) for (const e of 
 
 // ---------- Entrée du château : porte ouverte, passage voûté, herse relevée, pont-levis, douves, extérieur ----------
 const lanterns = [];                                                 // lumières chaudes qui vacillent
-const SHELL = 0.4;                                                    // épaisseur du parement extérieur
-const FP = { x0: -HALF - ARCH.depth - SHELL, x1: HALF + ARCH.depth + SHELL, z0: -HALF - ARCH.depth - RD - SHELL, z1: HALF + ARCH.depth + SHELL };   // emprise du château
+const SHELL = MERL_C;                                                 // épaisseur de la muraille extérieure (= profondeur des merlons)
+const FP = { x0: -HALF - OUT_OFF - SHELL / 2, x1: HALF + OUT_OFF + SHELL / 2, z0: -HALF - ARCH.depth - RD - 0.4, z1: HALF + OUT_OFF + SHELL / 2 };   // emprise du château
 const MO = FP;                                                       // zone exclue de l'extérieur : l'emprise du château
 const OUT = 90;                                                       // terrain extérieur
 {
   const southG = buildWall(0, HALF, Math.PI, false, [0]);           // mur sud : ouverture d'arche + passage voûté
   const W = southG.matrixWorld;                                       // repère du mur : z < 0 = vers l'extérieur
+  { const ext = OUT_OFF - SHELL / 2 - ARCH.depth;                    // prolongement du passage jusqu'à la muraille extérieure
+    const t = new THREE.Mesh(new THREE.ExtrudeGeometry(archOpening(AR), { depth: ext, bevelEnabled: false, curveSegments: 32 }), [hiddenMat, nicheMat]);
+    t.position.z = -ARCH.depth - ext; t.receiveShadow = t.castShadow = true; southG.add(t);
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(ARCH.w, ext + SHELL), floorMat()); f.rotation.x = -Math.PI / 2; f.position.set(0, 0.003, -ARCH.depth - (ext + SHELL) / 2); southG.add(f); }
   const shellMat = withHeightFade(plain(WALL_COLOR));
   // parement extérieur : 4 murs épais, celui du sud percé de l'arche d'entrée
   const outerWall = (x0, x1, z0, z1, hole) => {
@@ -429,13 +452,12 @@ const OUT = 90;                                                       // terrain
     m.position.z = z0; m.castShadow = m.receiveShadow = true; scene.add(m);
   };
   outerWall(FP.x0, FP.x1, FP.z1 - SHELL, FP.z1, true);
-  outerWall(FP.x0, FP.x1, FP.z0, FP.z0 + SHELL);
+  outerWall(FP.x0, FP.x1, FP.z0, FP.z0 + 0.4);
   outerWall(FP.x0, FP.x0 + SHELL, FP.z0, FP.z1);
   outerWall(FP.x1 - SHELL, FP.x1, FP.z0, FP.z1);
   // créneaux extérieurs, même rythme que dans la cour
   const merl = (x, z, rot) => boxStone(new THREE.Matrix4(), rot ? 0.55 : 0.9, 0.75, rot ? 0.9 : 0.55, x, WALL_H + 0.37, z, 2);
-  for (let x = FP.x0 + 0.9; x < FP.x1 - 0.5; x += 1.6) { merl(x, FP.z1 - 0.28, false); merl(x, FP.z0 + 0.28, false); }
-  for (let z = FP.z0 + 0.9; z < FP.z1 - 0.5; z += 1.6) { merl(FP.x0 + 0.28, z, true); merl(FP.x1 - 0.28, z, true); }
+  for (let x = FP.x0 + 0.9; x < FP.x1 - 0.5; x += 1.6) merl(x, FP.z0 + 0.28, false);
 
   // terrain extérieur (sol plein autour du château)
   const gm = new THREE.Mesh(new THREE.PlaneGeometry(OUT * 2, OUT * 2), plain(0x3d4636)); gm.rotation.x = -Math.PI / 2; gm.position.y = -0.01; gm.receiveShadow = true; scene.add(gm);
@@ -798,12 +820,13 @@ function canMove(x, z, y) {               // position atteignable à cette haute
   if (y <= 13 && outsideOk(x, z, PLAYER_R)) return true;   // dehors
   return WALKABLE.some(r => {
     const m = r.court ? PLAYER_R + COURT_CLEAR : PLAYER_R;
-    return x >= r.minX + m && x <= r.maxX - m && z >= r.minZ + m && z <= r.maxZ - m && y <= (r.maxFly || 0) + 1e-3;
+    return x >= r.minX + m && x <= r.maxX - m && z >= r.minZ + m && z <= r.maxZ - m && y <= (r.maxFly || 0) + 1e-3 && y >= (r.minY ?? -1);
   });
 }
 function ceilingAt(x, z) { let c = outsideOk(x, z) ? 13 : 0; for (const r of WALKABLE) if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) c = Math.max(c, r.maxFly || 0); return c; }
 function groundAt(x, z, y) {               // pavés, ou dessus d'un banc / du socle sous cette position
   let g = 0;
+  for (const r of WALKWAYS) if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ && y >= WALL_H - 0.15) g = Math.max(g, WALL_H);
   for (const o of OBSTACLES) if (o.standable && x > o.minX - 0.1 && x < o.maxX + 0.1 && z > o.minZ - 0.1 && z < o.maxZ + 0.1 && y >= o.top - 0.12) g = Math.max(g, o.top);
   return g;
 }
@@ -865,7 +888,7 @@ function frame(now) {
   // vol libre : Espace (ou Monter) pour s'élever, Maj / C (ou Descendre) pour descendre ; sinon on reste en l'air, sans gravité
   const up = keys.has("Space") || touchUp, down = keys.has("ShiftLeft") || keys.has("ShiftRight") || keys.has("KeyC") || touchDown;
   p.vy += (((up ? 1 : 0) - (down ? 1 : 0)) * CLIMB - p.vy) * Math.min(1, dt * 6);
-  p.y = Math.max(ground, Math.min(ceilingAt(p.x, p.z), p.y + p.vy * dt));
+  { const ny = Math.max(ground, Math.min(ceilingAt(p.x, p.z), p.y + p.vy * dt)); if (canMove(p.x, p.z, ny) || ny > p.y) p.y = ny; else p.vy = 0; }   // pas de descente dans un mur
   if (p.y <= ground && p.vy < 0) p.vy = 0;
   const airborne = p.y > ground + 1e-3;
 
