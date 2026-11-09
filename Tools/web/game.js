@@ -66,7 +66,7 @@ const WIN = { w: 1.4, bottom: 1.5, spring: 2.7, depth: 0.45, ring: 0.3, out: 0.1
 const WR = WIN.w / 2;
 const WIN_X = [];                                                     // pas de fenêtre au rez-de-chaussée (arcades seulement)
 const UPPER_LEVELS = [6.3, 10.5];                                     // appuis des fenêtres des 2 étages
-const UPPER_X = [-6.5, 0, 6.5];                                        // pas de fenêtre trop près des angles
+const UPPER_X = [];                                                    // plus de fenêtres sur les façades
 const STRING_Y = 9.6, TOP_CORNICE_Y = 14.45;                          // bandeau entre les étages, corniche sommitale
 // Salles derrière les arches
 const RW = 12, RD = 10, RH = 5;                                       // largeur, profondeur, hauteur sous plafond
@@ -249,20 +249,13 @@ function buildWall(px, pz, ry, windows = false) {
     boxStone(W, cl - 0.035, 0.34, 0.32, x, TOP_CORNICE_Y, 0.16, 2);
     boxStone(W, cl - 0.035, 0.18, 0.4, x, TOP_CORNICE_Y + 0.26, 0.05, sym(i, cn) % 2 ? 0 : 2);
   }
-  // chemin de ronde puis créneaux : nombre impair de merlons, centrés sur le milieu du mur (même rythme sur les 4 côtés)
-  boxStone(W, ROOM - 1.1, 0.5, 0.55, 0, WALL_H - 0.25, -0.12, 3);
-  // tours d'angle centrées sur la diagonale du coin (même débord sur les deux murs qui s'y rejoignent)
-  const T_OFF = 0.1, T_HALF = 0.65, tx = HALF + T_OFF, tz = -T_OFF;
-  // créneaux : merlons identiques, tous les vides de même largeur, y compris contre les tours
-  const MERLONS = 15, MW = 0.9, inner = tx - T_HALF;                 // bord intérieur de la tour
-  const half = (inner - MW / 2) / (1 + 1 / ((MERLONS - 1) / 2));      // centre du dernier merlon
-  const gapM = half / ((MERLONS - 1) / 2);                            // pas régulier ; vide = gapM - MW, partout
-  for (let i = 0; i < MERLONS; i++) boxStone(W, MW, 0.75, 0.55, -half + i * gapM, WALL_H + 0.37, -0.12, sym(i, MERLONS) % 2 ? 0 : 2);
-  for (const sx of [-1, 1]) {   // une tour à chaque bout ; le mur voisin pose la même au même endroit (blocs confondus)
-    boxStone(W, 1.1, 0.5, 1.1, sx * tx, WALL_H - 0.25, tz, 3);
-    boxStone(W, T_HALF * 2, 1.1, T_HALF * 2, sx * tx, WALL_H + 0.55, tz, 2);
-    boxStone(W, 1.5, 0.18, 1.5, sx * tx, WALL_H + 1.19, tz, 0);
-  }
+  // chemin de ronde puis créneaux, sans tour d'angle : un merlon carré dans chaque coin (centré sur la diagonale),
+  // puis 15 merlons identiques et 16 vides égaux entre les deux coins — même motif sur les 4 murs
+  boxStone(W, ROOM + 0.79, 0.5, 0.55, 0, WALL_H - 0.25, -0.12, 3);
+  const MERLONS = 15, MW = 0.9, CW = 0.55, edge = HALF - CW / 2 + 0.12;     // bord intérieur du merlon d'angle
+  const gapC = (2 * edge - MERLONS * MW) / (MERLONS + 1);
+  for (let i = 0; i < MERLONS; i++) boxStone(W, MW, 0.75, 0.55, -edge + gapC + MW / 2 + i * (MW + gapC), WALL_H + 0.37, -0.12, sym(i, MERLONS) % 2 ? 0 : 2);
+  for (const sx of [-1, 1]) boxStone(W, CW, 0.75, CW, sx * (HALF + 0.12), WALL_H + 0.37, -0.12, 2);   // merlon d'angle (partagé avec le mur voisin)
   return g;
 }
 
@@ -295,7 +288,7 @@ function buildRoom(g) {
   };
   add(new THREE.PlaneGeometry(RW, RD), floorMat(RW, RD), 0, 0.002, zc, 0, -Math.PI / 2);                       // sol
   add(new THREE.ShapeGeometry(roomWallGeometry(RW, RH, true), 32), roomWallMat, 0, 0, z0, Math.PI);            // mur côté cour (arche)
-  const back = roomWallGeometry(RW, RH, false); back.holes.push(windowShape(0));
+  const back = roomWallGeometry(RW, RH, false);
   add(new THREE.ShapeGeometry(back, 24), roomWallMat, 0, 0, zb);                                              // mur du fond (fenêtre)
   for (const sx of [-1, 1])                                                                                   // murs latéraux
     add(new THREE.ShapeGeometry(roomWallGeometry(RD, RH, false)), roomWallMat, sx * RW / 2, 0, zc, -sx * Math.PI / 2);
@@ -305,8 +298,6 @@ function buildRoom(g) {
   for (let x = -RW / 2 + 1; x < RW / 2; x += 2) boxStone(W, 0.26, 0.32, RD, x, RH - 0.16, zc, WOOD[(x + 7) % 3 | 0]);   // poutres
   for (const sx of [-1, 1]) boxStone(W, 0.3, 0.36, RD, sx * (RW / 2 - 0.15), RH - 0.18, zc, WOOD_DARK);           // sablières
   // fenêtre au fond (vue sur la nuit) : construite dans un repère tourné vers l'intérieur de la salle
-  const wg = new THREE.Group(); wg.position.z = zb; g.add(wg); wg.updateMatrixWorld();
-  buildWindow(wg, wg.matrixWorld, 0, WIN.bottom, glassMoon);
   // plinthe en pierre autour de la salle
   for (const [w, x, z, ry] of [[RW, 0, zb, 0], [RD, -RW / 2, zc, Math.PI / 2], [RD, RW / 2, zc, -Math.PI / 2], [RW / 2 - AR - 0.2, -(RW / 2 + AR + 0.2) / 2, z0, Math.PI], [RW / 2 - AR - 0.2, (RW / 2 + AR + 0.2) / 2, z0, Math.PI]]) {
     const m = W.clone().multiply(new THREE.Matrix4().makeTranslation(x, 0, z)).multiply(new THREE.Matrix4().makeRotationY(ry))
