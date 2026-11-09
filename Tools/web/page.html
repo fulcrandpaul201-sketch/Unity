@@ -25,16 +25,19 @@
   #prompt { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); margin: 0;
     max-width: calc(100% - 32px); box-sizing: border-box; padding: 8px 14px; border-radius: 8px; background: rgba(60, 30, 110, 0.75);
     color: #f1e8ff; font: 600 14px system-ui, sans-serif; text-align: center; pointer-events: none; }
-  @media (pointer: coarse) { #jump, #broomBtn, #down { display: block; } }
+  #down { position: absolute; right: calc(max(16px, env(safe-area-inset-right, 0px)) + 88px); bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    width: 76px; height: 76px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.5); background: var(--glass); color: var(--fg); font: 600 13px system-ui, sans-serif; touch-action: none; display: none; }
+  @media (pointer: coarse) { #jump, #down { display: block; } }
   [hidden] { display: none !important; }
 </style>
 <main>
   <canvas id="c"></canvas>
   <div id="ring" class="stick" hidden></div>
   <div id="knob" class="stick" hidden></div>
-  <button id="jump" type="button">Sauter</button>
-  <p class="help">Ordinateur : ZQSD ou WASD pour bouger, glisser la souris ou ← → pour tourner, molette pour zoomer, Espace pour sauter.
-    Téléphone : doigt à gauche pour bouger, doigt à droite pour tourner, bouton Sauter.</p>
+  <button id="jump" type="button">Monter</button>
+  <button id="down" type="button">Descendre</button>
+  <p class="help">Ordinateur : ZQSD ou WASD pour bouger, glisser la souris ou ← → pour tourner, molette pour zoomer, Espace pour monter, Maj ou C pour descendre.
+    Téléphone : doigt à gauche pour bouger, doigt à droite pour tourner, boutons Monter et Descendre.</p>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>

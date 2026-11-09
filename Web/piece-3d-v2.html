@@ -25,16 +25,19 @@
   #prompt { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); margin: 0;
     max-width: calc(100% - 32px); box-sizing: border-box; padding: 8px 14px; border-radius: 8px; background: rgba(60, 30, 110, 0.75);
     color: #f1e8ff; font: 600 14px system-ui, sans-serif; text-align: center; pointer-events: none; }
-  @media (pointer: coarse) { #jump, #broomBtn, #down { display: block; } }
+  #down { position: absolute; right: calc(max(16px, env(safe-area-inset-right, 0px)) + 88px); bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    width: 76px; height: 76px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.5); background: var(--glass); color: var(--fg); font: 600 13px system-ui, sans-serif; touch-action: none; display: none; }
+  @media (pointer: coarse) { #jump, #down { display: block; } }
   [hidden] { display: none !important; }
 </style>
 <main>
   <canvas id="c"></canvas>
   <div id="ring" class="stick" hidden></div>
   <div id="knob" class="stick" hidden></div>
-  <button id="jump" type="button">Sauter</button>
-  <p class="help">Ordinateur : ZQSD ou WASD pour bouger, glisser la souris ou ← → pour tourner, molette pour zoomer, Espace pour sauter.
-    Téléphone : doigt à gauche pour bouger, doigt à droite pour tourner, bouton Sauter.</p>
+  <button id="jump" type="button">Monter</button>
+  <button id="down" type="button">Descendre</button>
+  <p class="help">Ordinateur : ZQSD ou WASD pour bouger, glisser la souris ou ← → pour tourner, molette pour zoomer, Espace pour monter, Maj ou C pour descendre.
+    Téléphone : doigt à gauche pour bouger, doigt à droite pour tourner, boutons Monter et Descendre.</p>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -46,7 +49,7 @@ const AVATAR_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAArAAAAS8CAYAAA
 const ROOM = 26, HALF = ROOM / 2, WALL_H = 15.6;             // cour carrée de 26 m entourée de façades à 3 niveaux
 const TILE = 2;                                              // une texture couvre 2 m x 2 m (répétée, jamais étirée)
 const SPEED = 4.2;                                           // m/s
-const JUMP_SPEED = 5.4, GRAVITY = 15;                        // saut : environ 1 m de haut
+const FLY_SPEED = 7, CLIMB = 4.5;                             // vol libre : vitesse horizontale en l'air, montée / descente (m/s)
 const PLAYER_R = 0.3;                                        // rayon de collision de l'avatar
 const COLORS = { bg: 0x0b1020 };                             // ciel de nuit au-dessus des murs
 
@@ -642,7 +645,6 @@ function animateHero(dt, now, airborne, ground) {
 }
 
 // ---------- État ----------
-let jumpRequested = false;
 const p = { x: 0, y: 0, vy: 0, z: 5, facing: Math.PI, t: 0, moving: false };   // facing : angle de la direction regardée
 const cam = { yaw: 0, pitch: 0.35, dist: 5.5 };
 
@@ -651,10 +653,14 @@ const keys = new Set();
 addEventListener("keydown", e => {
   keys.add(e.code);
   if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault();
-  if (e.code === "Space" && !e.repeat) jumpRequested = true;
 });
-const jumpBtn = document.getElementById("jump");
-jumpBtn.addEventListener("pointerdown", e => { e.preventDefault(); jumpRequested = true; });
+// boutons tactiles maintenus : Monter / Descendre
+let touchUp = false, touchDown = false;
+for (const [id, set] of [["jump", v => touchUp = v], ["down", v => touchDown = v]]) {
+  const b = document.getElementById(id);
+  b.addEventListener("pointerdown", e => { e.preventDefault(); set(true); });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => set(false));
+}
 addEventListener("keyup", e => keys.delete(e.code));
 addEventListener("blur", () => keys.clear());
 
@@ -750,7 +756,7 @@ function frame(now) {
     const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
     const mx = fx * f + rx * s, mz = fz * f + rz * s;
     // déplacement limité aux zones praticables (cour, passages sous les arches, salles)
-    const sp = SPEED;
+    const sp = p.y > groundAt(p.x, p.z, p.y) + 0.05 ? FLY_SPEED : SPEED;   // plus rapide en vol
     const nx = p.x + mx * sp * dt, nz = p.z + mz * sp * dt;
     if (canMove(nx, nz, p.y)) { p.x = nx; p.z = nz; }
     else if (canMove(nx, p.z, p.y)) p.x = nx;
@@ -771,15 +777,15 @@ function frame(now) {
 
   // hauteur du sol sous l'avatar : pavés, ou dessus d'un banc
   const ground = groundAt(p.x, p.z, p.y);
-  // saut : impulsion vers le haut si l'avatar touche le sol, puis gravité
-  if (jumpRequested && p.y <= ground + 1e-3) p.vy = JUMP_SPEED;
-  p.vy -= GRAVITY * dt; p.y += p.vy * dt;
-  if (p.y < ground) { p.y = ground; p.vy = 0; }
-  jumpRequested = false;
+  // vol libre : Espace (ou Monter) pour s'élever, Maj / C (ou Descendre) pour descendre ; sinon on reste en l'air, sans gravité
+  const up = keys.has("Space") || touchUp, down = keys.has("ShiftLeft") || keys.has("ShiftRight") || keys.has("KeyC") || touchDown;
+  p.vy += (((up ? 1 : 0) - (down ? 1 : 0)) * CLIMB - p.vy) * Math.min(1, dt * 6);
+  p.y = Math.max(ground, Math.min(ceilingAt(p.x, p.z), p.y + p.vy * dt));
+  if (p.y <= ground && p.vy < 0) p.vy = 0;
   const airborne = p.y > ground + 1e-3;
 
   // caméra en orbite autour de l'avatar, gardée à l'intérieur de la pièce
-  const tx = p.x, ty = 1.1 + p.y * 0.5, tz = p.z;      // la caméra suit un peu le saut
+  const tx = p.x, ty = 1.1 + p.y, tz = p.z;            // la caméra suit l'altitude
   let cx = tx + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
   let cy = ty + Math.sin(cam.pitch) * cam.dist;
   let cz = tz + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist;
