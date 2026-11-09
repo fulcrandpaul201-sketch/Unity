@@ -400,7 +400,6 @@ WALKABLE.push({ minX: -HALF + 0.5, maxX: HALF - 0.5, minZ: -HALF + 0.5, maxZ: HA
 CAM_ZONES.push({ minX: -HALF + 0.45, maxX: HALF - 0.45, minZ: -HALF + 0.45, maxZ: HALF - 0.45, maxY: 40 });
 // une seule ouverture (au nord, face au départ) avec sa salle ; les 3 autres murs sont pleins
 buildRoom(buildWall(0, -HALF, 0, false));
-buildWall(0, HALF, Math.PI, false, [], true);   // grande porte fermée en face de l'arche
 buildWall(-HALF, 0, Math.PI / 2, false, []);
 buildWall(HALF, 0, -Math.PI / 2, false, []);
 // obstacles en boîtes alignées (vide pour l'instant : pièce vide)
@@ -410,6 +409,100 @@ for (const c of [-HALF + COL / 2, ...PILLAR_X, HALF - COL / 2]) for (const e of 
   OBSTACLES.push({ minX: along[0], maxX: along[1], minZ: across[0], maxZ: across[1], top: 99, standable: false });
   OBSTACLES.push({ minX: across[0], maxX: across[1], minZ: along[0], maxZ: along[1], top: 99, standable: false });
 }
+
+// ---------- Entrée du château : porte ouverte, passage voûté, herse relevée, pont-levis, douves, extérieur ----------
+const lanterns = [];                                                 // lumières chaudes qui vacillent
+const SHELL = 0.4;                                                    // épaisseur du parement extérieur
+const FP = { x0: -HALF - ARCH.depth - SHELL, x1: HALF + ARCH.depth + SHELL, z0: -HALF - ARCH.depth - RD - SHELL, z1: HALF + ARCH.depth + SHELL };   // emprise du château
+const MOAT = 6, MO = { x0: FP.x0 - MOAT, x1: FP.x1 + MOAT, z0: FP.z0 - MOAT, z1: FP.z1 + MOAT };                 // douves tout autour
+const OUT = 90;                                                       // terrain extérieur
+const BRIDGE = { x0: -1.7, x1: 1.7, z0: FP.z1 - 0.4, z1: MO.z1 + 0.8 };
+{
+  const southG = buildWall(0, HALF, Math.PI, false, [0]);           // mur sud : ouverture d'arche + passage voûté
+  const W = southG.matrixWorld;                                       // repère du mur : z < 0 = vers l'extérieur
+  const shellMat = withHeightFade(plain(WALL_COLOR));
+  // parement extérieur : 4 murs épais, celui du sud percé de l'arche d'entrée
+  const outerWall = (x0, x1, z0, z1, hole) => {
+    if (!hole) { const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, WALL_H, z1 - z0), shellMat); m.position.set((x0 + x1) / 2, WALL_H / 2, (z0 + z1) / 2); m.castShadow = m.receiveShadow = true; scene.add(m); return; }
+    const sh = new THREE.Shape(); sh.moveTo(x0, 0); sh.lineTo(x1, 0); sh.lineTo(x1, WALL_H); sh.lineTo(x0, WALL_H); sh.closePath();
+    const h = new THREE.Shape(); h.moveTo(-AR, 0); h.lineTo(-AR, ARCH.h); h.absarc(0, ARCH.h, AR, Math.PI, 0, true); h.lineTo(AR, 0); h.closePath(); sh.holes.push(h);
+    const m = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: z1 - z0, bevelEnabled: false, curveSegments: 32 }), shellMat);
+    m.position.z = z0; m.castShadow = m.receiveShadow = true; scene.add(m);
+  };
+  outerWall(FP.x0, FP.x1, FP.z1 - SHELL, FP.z1, true);
+  outerWall(FP.x0, FP.x1, FP.z0, FP.z0 + SHELL);
+  outerWall(FP.x0, FP.x0 + SHELL, FP.z0, FP.z1);
+  outerWall(FP.x1 - SHELL, FP.x1, FP.z0, FP.z1);
+  // créneaux extérieurs, même rythme que dans la cour
+  const merl = (x, z, rot) => boxStone(new THREE.Matrix4(), rot ? 0.55 : 0.9, 0.75, rot ? 0.9 : 0.55, x, WALL_H + 0.37, z, 2);
+  for (let x = FP.x0 + 0.9; x < FP.x1 - 0.5; x += 1.6) { merl(x, FP.z1 - 0.28, false); merl(x, FP.z0 + 0.28, false); }
+  for (let z = FP.z0 + 0.9; z < FP.z1 - 0.5; z += 1.6) { merl(FP.x0 + 0.28, z, true); merl(FP.x1 - 0.28, z, true); }
+
+  // encadrement d'arche côté extérieur (repère retourné)
+  archFrame(W.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, -(ARCH.depth + SHELL))).multiply(new THREE.Matrix4().makeRotationY(Math.PI)), 0, 1);
+  // porte en chêne ouverte : deux battants rabattus contre les parois du passage
+  for (const sx of [-1, 1]) {
+    const x = sx * (AR - 0.08), L = ARCH.depth - 0.1, H = ARCH.h + 0.38;
+    for (let k = 0; k < 6; k++) boxStone(W, 0.1, H, L / 6 - 0.02, x, H / 2, -0.06 - (k + 0.5) * L / 6, GATE_WOOD[k % 3]);
+    for (const y of [0.55, 1.6, 2.65]) boxStone(W, 0.03, 0.1, L - 0.2, x - sx * 0.065, y, -0.06 - L / 2, GATE_IRON);
+    stone(new THREE.TorusGeometry(0.11, 0.02, 6, 16), W.clone().multiply(tmpM.makeTranslation(x - sx * 0.08, 1.25, -0.06 - L + 0.3)).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)), GATE_IRON);
+  }
+  // herse relevée : grille de fer, dents pointues visibles sous la voûte
+  const PZ = -(ARCH.depth - 0.35), PB = ARCH.h + AR - 0.75;
+  for (let x = -1.35; x <= 1.36; x += 0.27) {
+    boxStone(W, 0.07, 4.2, 0.07, x, PB + 2.1, PZ, GATE_IRON);
+    const tooth = new THREE.ConeGeometry(0.05, 0.22, 4); tooth.rotateX(Math.PI);
+    stone(tooth, W.clone().multiply(tmpM.makeTranslation(x, PB - 0.11, PZ)), GATE_IRON);
+  }
+  for (const y of [PB + 0.15, PB + 0.9, PB + 1.7]) boxStone(W, 2.8, 0.07, 0.08, 0, y, PZ, GATE_IRON);
+  // tours de la porte, de part et d'autre de l'entrée
+  const slate = plain(0x3a3f4a), tw = withHeightFade(plain(WALL_COLOR));
+  const tower = (x, z, r, h) => {
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.08, h + 1.2, 20), tw); t.position.set(x, (h + 1.2) / 2 - 1.2, z); t.castShadow = t.receiveShadow = true; scene.add(t);
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.25, r + 0.15, 0.4, 20), tw); ring.position.set(x, h + 0.2, z); scene.add(ring);
+    for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; boxStone(new THREE.Matrix4(), 0.55, 0.7, 0.4, x + Math.cos(a) * (r + 0.05), h + 0.75, z + Math.sin(a) * (r + 0.05), i); }
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(r + 0.35, r * 1.9, 20), slate); roof.position.set(x, h + 0.5 + r * 0.95, z); roof.castShadow = true; scene.add(roof);
+    for (let i = 0; i < 3; i++) arrowSlitWorld(x, z, r, 3 + i * 3.4, i);
+  };
+  // meurtrière sur une tour ronde (tournée vers l'extérieur)
+  function arrowSlitWorld(x, z, r, y, i) {
+    const a = Math.atan2(z, x) + (i - 1) * 0.5, m = new THREE.Matrix4().makeTranslation(x + Math.cos(a) * r, y, z + Math.sin(a) * r).multiply(new THREE.Matrix4().makeRotationY(-a + Math.PI / 2));
+    stone(new THREE.BoxGeometry(0.42, 1.5, 0.14), m, 2);
+    stone(new THREE.BoxGeometry(0.12, 1.2, 0.18), m, new THREE.Color(0x0d0b10));
+  }
+  tower(-4.1, FP.z1 + 0.4, 1.9, WALL_H + 1.2); tower(4.1, FP.z1 + 0.4, 1.9, WALL_H + 1.2);
+  for (const x of [FP.x0, FP.x1]) for (const z of [FP.z0, FP.z1]) tower(x, z, 2.6, WALL_H + 2.6);   // grosses tours d'angle
+  // terrain, douves (eau en contrebas), murs des douves
+  const rectShape = (x0, x1, z0, z1) => { const s = new THREE.Shape(); s.moveTo(x0, -z0); s.lineTo(x1, -z0); s.lineTo(x1, -z1); s.lineTo(x0, -z1); s.closePath(); return s; };
+  const ground = rectShape(-OUT, OUT, -OUT, OUT); ground.holes.push(rectShape(MO.x0, MO.x1, MO.z0, MO.z1));
+  const gm = new THREE.Mesh(new THREE.ShapeGeometry(ground), plain(0x3d4636)); gm.rotation.x = -Math.PI / 2; gm.receiveShadow = true; scene.add(gm);
+  const water = rectShape(MO.x0, MO.x1, MO.z0, MO.z1); water.holes.push(rectShape(FP.x0, FP.x1, FP.z0, FP.z1));
+  const wm = new THREE.Mesh(new THREE.ShapeGeometry(water), new THREE.MeshStandardMaterial({ color: new THREE.Color(0x1c3a52).convertSRGBToLinear(), roughness: 0.15, metalness: 0.3 }));
+  wm.rotation.x = -Math.PI / 2; wm.position.y = -1.0; scene.add(wm);
+  const bank = (x0, x1, z0, z1) => boxStone(new THREE.Matrix4(), x1 - x0, 1.2, z1 - z0, (x0 + x1) / 2, -0.6, (z0 + z1) / 2, 3);
+  bank(MO.x0 - 0.3, MO.x1 + 0.3, MO.z1, MO.z1 + 0.3); bank(MO.x0 - 0.3, MO.x1 + 0.3, MO.z0 - 0.3, MO.z0);
+  bank(MO.x0 - 0.3, MO.x0, MO.z0, MO.z1); bank(MO.x1, MO.x1 + 0.3, MO.z0, MO.z1);
+  // pont-levis abaissé : tablier en planches, poutres, chaînes jusqu'au-dessus de l'arche
+  const bw = BRIDGE.x1 - BRIDGE.x0, n = Math.round((BRIDGE.z1 - BRIDGE.z0) / 0.3);
+  for (let i = 0; i < n; i++) { const z = BRIDGE.z0 + (i + 0.5) * (BRIDGE.z1 - BRIDGE.z0) / n; boxStone(new THREE.Matrix4(), bw, 0.12, (BRIDGE.z1 - BRIDGE.z0) / n - 0.025, 0, -0.06, z, GATE_WOOD[i % 3]); }
+  for (const sx of [-1, 1]) {
+    boxStone(new THREE.Matrix4(), 0.2, 0.25, BRIDGE.z1 - BRIDGE.z0, sx * (bw / 2 - 0.1), -0.2, (BRIDGE.z0 + BRIDGE.z1) / 2, GATE_WOOD[0]);
+    const a = new THREE.Vector3(sx * (bw / 2 - 0.1), 0.05, BRIDGE.z1 - 0.3), b = new THREE.Vector3(sx * (AR + 0.7), ARCH.h + AR + 1.2, FP.z1 + 0.05);
+    const len = a.distanceTo(b), c = new THREE.CylinderGeometry(0.035, 0.035, len, 6);
+    const m = new THREE.Matrix4().compose(a.clone().add(b).multiplyScalar(0.5), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()), new THREE.Vector3(1, 1, 1));
+    stone(c, m, GATE_IRON);
+  }
+  // torches de l'entrée (lumière chaude) et lueur dans le passage
+  for (const sx of [-1, 1]) { const l = new THREE.PointLight(0xffa654, 1.1, 12, 2); l.position.set(sx * 2.6, 3.2, FP.z1 + 0.8); scene.add(l); lanterns.push({ l, seed: Math.random() * 100 }); }
+  const pl = new THREE.PointLight(0xffb060, 0.8, 6, 2); pl.position.set(0, 3, HALF + 0.7); scene.add(pl);
+  // zones praticables : passage, pont, extérieur
+  WALKABLE.push({ minX: -AR, maxX: AR, minZ: HALF - 2.0, maxZ: FP.z1 + 0.6, maxFly: ARCH.h + AR - 2.0 });
+  WALKABLE.push({ minX: BRIDGE.x0, maxX: BRIDGE.x1, minZ: BRIDGE.z0, maxZ: BRIDGE.z1 + 0.5, maxFly: 13 });
+  CAM_ZONES.push({ minX: -AR + 0.15, maxX: AR - 0.15, minZ: HALF - 0.6, maxZ: FP.z1 + 0.3, maxY: ARCH.h + AR - 0.3 });
+}
+// extérieur : tout le terrain hors douves et hors château
+const outsideOk = (x, z, m = 0) => Math.abs(x) <= OUT - 1 && Math.abs(z) <= OUT - 1 && !(x > MO.x0 - m && x < MO.x1 + m && z > MO.z0 - m && z < MO.z1 + m);
+const inBridge = (x, z) => x >= BRIDGE.x0 && x <= BRIDGE.x1 && z >= BRIDGE.z0 && z <= BRIDGE.z1 + 1;
 
 mergeStones();   // toutes les pierres (piliers, encadrements, corniches, poutres) en un seul maillage
 
@@ -432,7 +525,7 @@ scene.add(moon);
   moonDisk.position.set(27, 52, 21); moonDisk.lookAt(0, 0, 0); scene.add(moonDisk);
 }
 // lanternes en fer forgé sur les piliers : lueur chaude qui vacille
-const lanterns = [];
+
 function lantern(wallX, wallZ, ry, x, withLight) {   // éclairage chaud le long des murs (sans objet visible)
   if (!withLight) return;
   const g = new THREE.Group(); g.position.set(wallX, 0, wallZ); g.rotation.y = ry; scene.add(g);
@@ -760,12 +853,13 @@ function readMove() {
 // ---------- Collisions avec le décor ----------
 const COURT_CLEAR = WALL_CLEAR - 0.5;    // dans la cour : rester devant piliers et soubassement
 function canMove(x, z, y) {               // position atteignable à cette hauteur (vol : plafond des passages et des salles)
+  if (y <= 13 && outsideOk(x, z, PLAYER_R)) return true;   // dehors
   return WALKABLE.some(r => {
     const m = r.court ? PLAYER_R + COURT_CLEAR : PLAYER_R;
     return x >= r.minX + m && x <= r.maxX - m && z >= r.minZ + m && z <= r.maxZ - m && y <= (r.maxFly || 0) + 1e-3;
   });
 }
-function ceilingAt(x, z) { let c = 0; for (const r of WALKABLE) if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) c = Math.max(c, r.maxFly || 0); return c; }
+function ceilingAt(x, z) { let c = outsideOk(x, z) ? 13 : 0; for (const r of WALKABLE) if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) c = Math.max(c, r.maxFly || 0); return c; }
 function groundAt(x, z, y) {               // pavés, ou dessus d'un banc / du socle sous cette position
   let g = 0;
   for (const o of OBSTACLES) if (o.standable && x > o.minX - 0.1 && x < o.maxX + 0.1 && z > o.minZ - 0.1 && z < o.maxZ + 0.1 && y >= o.top - 0.12) g = Math.max(g, o.top);
@@ -778,6 +872,7 @@ function canStand(x, z) {
   });
 }
 function camOk(x, y, z) {
+  if (y > 0.25 && y < 40 && (outsideOk(x, z, 0.2) || inBridge(x, z))) return true;
   return y > 0.25 && CAM_ZONES.some(r => x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ && y <= r.maxY);
 }
 
