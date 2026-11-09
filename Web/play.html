@@ -411,12 +411,12 @@ function buildRoom(g) {                  // long couloir voûté, plus haut et p
     const cz = z0 - k * RD / BAYS + (k === 0 ? -D / 2 : k === BAYS ? D / 2 : 0);
     for (const sx of [-1, 1]) {
       const rows = 5, bh = COR_H / rows;
-      for (let i = 0; i < rows; i++) {                                  // montants : grand / petit en alternance
+      // bloc du bas : socle d'avant, mais de la même hauteur que les autres blocs (plus de fine dalle)
+      boxStone(W, BIG + 0.16, bh - gap, D + 0.08, sx * (R - (BIG + 0.16) / 2), bh / 2, cz, 2);
+      for (let i = 1; i < rows; i++) {                                  // montants : grand / petit en alternance au-dessus
         const w = i % 2 ? SMALL : BIG;
         boxStone(W, w, bh - gap, D, sx * (R - w / 2), i * bh + bh / 2, cz, i + (sx > 0 ? 1 : 0));
       }
-      const E = 0.15, BH = 0.45;                                         // pied : dépasse de 15 cm de façon égale sur les 3 côtés visibles
-      boxStone(W, BIG + E, BH, D + 2 * E, sx * (R - (BIG + E) / 2), BH / 2, cz, 2);
     }
     for (let i = 0; i < NB; i++) {                                      // arc : claveaux grand / petit, clé de voûte plus longue
       const key = i === (NB - 1) / 2, len = key ? BIG + 0.3 : i % 2 ? SMALL : BIG;
