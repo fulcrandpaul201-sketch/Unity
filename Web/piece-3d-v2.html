@@ -133,7 +133,7 @@ const OP = { r: AR, s: ARCH.h, t: 1.0 };                              // ouvertu
 const SR = { w: 20, d: 12, h: 7 };                                    // grandes salles : 20 m (le long du couloir) x 12 m, 7 m de haut
 
 const WALL_COLOR = 0x9c958a, FLOOR_COLOR = 0x7d7f86;
-const floorMat = () => plain(FLOOR_COLOR);
+const floorMat = () => plain(0x3a3b41);   // sol de dessous = couleur des joints du pavage
 const wallMat = withHeightFade(plain(WALL_COLOR));
 wallMat.shadowSide = THREE.DoubleSide;                               // les murs (plans) projettent leur ombre au clair de lune
 const nicheMat = withHeightFade(new THREE.MeshStandardMaterial({ color: new THREE.Color(0x857e74).convertSRGBToLinear(), roughness: 0.95, side: THREE.BackSide }));
@@ -184,6 +184,78 @@ function stone(geo, matrix, shade) {
 function boxStone(wallM, w, h, d, x, y, z, shade) {
   stone(new THREE.BoxGeometry(w, h, d), wallM.clone().multiply(tmpM.makeTranslation(x, y, z)), shade);
 }
+// ---------- Pavage texturé de tous les sols ----------
+// Texture de pierre générée (bruit sur plusieurs échelles, mouchetures, petites cavités), utilisée aussi en relief (bump).
+// Chaque pavé reçoit : teinte de la palette, hauteur et légère inclinaison aléatoires, décalage de texture.
+const stoneTex = (() => {
+  const N = 256, c = document.createElement("canvas"); c.width = c.height = N;
+  const ctx = c.getContext("2d"), img = ctx.createImageData(N, N), d = img.data;
+  let sd = 91; const rr = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  const grid = n => { const g = []; for (let i = 0; i < n * n; i++) g.push(rr()); return g; };
+  const octaves = [[4, 0.4], [8, 0.25], [16, 0.17], [32, 0.1], [64, 0.08]].map(([n, a]) => [n, a, grid(n)]);
+  const sample = (g, n, x, y) => {                          // bruit de valeur périodique, interpolé
+    const fx = x * n, fy = y * n, x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
+    const at = (i, j) => g[((j % n + n) % n) * n + ((i % n + n) % n)];
+    const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    return (at(x0, y0) * (1 - sx) + at(x0 + 1, y0) * sx) * (1 - sy) + (at(x0, y0 + 1) * (1 - sx) + at(x0 + 1, y0 + 1) * sx) * sy;
+  };
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let v = 0; for (const [n, a, g] of octaves) v += sample(g, n, x / N, y / N) * a;
+    v = 0.55 + (v - 0.5) * 0.9;
+    const r = rr(); if (r < 0.02) v *= 0.7; else if (r < 0.035) v *= 1.15;   // mouchetures
+    const k = Math.max(0, Math.min(255, v * 255)), i = (y * N + x) * 4;
+    d[i] = d[i + 1] = d[i + 2] = k; d[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  for (let i = 0; i < 70; i++) {                            // petites cavités et éclats
+    ctx.fillStyle = `rgba(30,30,34,${0.25 + rr() * 0.3})`; ctx.beginPath();
+    ctx.ellipse(rr() * N, rr() * N, 0.8 + rr() * 2.2, 0.6 + rr() * 1.6, rr() * 3, 0, Math.PI * 2); ctx.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t;
+})();
+const paveMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: stoneTex, bumpMap: stoneTex, bumpScale: 0.035, roughness: 0.92 });
+const PAVE_COLS = [0x8a8c93, 0x80828a, 0x93959b, 0x7a7c84, 0x8c8b87, 0x85878e].map(c => new THREE.Color(c).convertSRGBToLinear());
+const SLAB_COLS = [0xa4a5ab, 0x9a9ba2, 0xadaeb3, 0x96979e].map(c => new THREE.Color(c).convertSRGBToLinear());
+const paverParts = [];
+let pvSeed = 23; const pvr = () => (pvSeed = (pvSeed * 16807) % 2147483647) / 2147483647;
+// pose un pavé (dans le repère M : x travers, z long, y haut) ; x0<x1, z0<z1
+function paver(M, x0, x1, z0, z1, cols) {
+  const J = 0.035, w = x1 - x0 - J, dd = z1 - z0 - J; if (w < 0.05 || dd < 0.05) return;
+  const h = 0.05 + (pvr() - 0.5) * 0.03;                                    // hauteur : 3,5 à 6,5 cm
+  const m = M.clone().multiply(new THREE.Matrix4().compose(new THREE.Vector3((x0 + x1) / 2, h / 2 - 0.004, (z0 + z1) / 2),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler((pvr() - 0.5) * 0.02, (pvr() - 0.5) * 0.015, (pvr() - 0.5) * 0.02)), new THREE.Vector3(1, 1, 1)));
+  const shade = 0.93 + pvr() * 0.14, c = cols[Math.floor(pvr() * cols.length)].clone().multiplyScalar(shade);
+  paverParts.push([w, h, dd, m, c, pvr(), pvr()]);
+}
+// pave un rectangle : "bond" = pavés 80 x 50 cm en quinconce, "slab" = dalles carrées de taille s
+function paveRect(M, x0, x1, z0, z1, kind = "bond", s = 1.0) {
+  if (kind === "slab") {
+    for (let z = z0; z < z1 - 1e-3; z += s) for (let x = x0; x < x1 - 1e-3; x += s) paver(M, x, Math.min(x1, x + s), z, Math.min(z1, z + s), SLAB_COLS);
+    return;
+  }
+  const PW = 0.8, PD = 0.5; let row = 0;
+  for (let z = z0; z < z1 - 1e-3; z += PD, row++)
+    for (let x = x0 - (row % 2 ? PW / 2 : 0); x < x1 - 1e-3; x += PW) paver(M, Math.max(x0, x), Math.min(x1, x + PW), z, Math.min(z1, z + PD), PAVE_COLS);
+}
+function mergePavers() {
+  const pos = [], nor = [], col = [], uv = [], nm = new THREE.Matrix3();
+  for (const [w, h, d, m, c, uo, vo] of paverParts) {
+    const g = new THREE.BoxGeometry(w, h, d).toNonIndexed();
+    const L = g.attributes.position.clone();                               // coordonnées locales : texture projetée par le dessus (pas d'étirement sur les tranches)
+    g.applyMatrix4(m);
+    const P = g.attributes.position, Nn = g.attributes.normal;
+    for (let i = 0; i < P.count; i++) {
+      pos.push(P.getX(i), P.getY(i), P.getZ(i)); nor.push(Nn.getX(i), Nn.getY(i), Nn.getZ(i)); col.push(c.r, c.g, c.b);
+      uv.push(uo * 3 + (L.getX(i) + L.getY(i) * 0.6) * 0.7, vo * 3 + (L.getZ(i) + L.getY(i) * 0.6) * 0.7);   // ~0,7 répétition par mètre
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  const mesh = new THREE.Mesh(g, paveMat); mesh.receiveShadow = true; scene.add(mesh);
+}
+const ID = new THREE.Matrix4();
+
 function mergeStones() {
   const pos = [], nor = [], col = [];
   const nm = new THREE.Matrix3();
@@ -296,6 +368,7 @@ function buildWall(px, pz, ry, windows = false, arches = ARCH_X, gate = false) {
     tunnel.position.set(cx, 0, -ARCH.depth); tunnel.receiveShadow = tunnel.castShadow = true; g.add(tunnel);
     const tf = new THREE.Mesh(new THREE.PlaneGeometry(ARCH.w, ARCH.depth), floorMat(ARCH.w, ARCH.depth));
     tf.rotation.x = -Math.PI / 2; tf.position.set(cx, 0.003, -ARCH.depth / 2); tf.receiveShadow = true; g.add(tf);
+    paveRect(W, cx - AR, cx + AR, -ARCH.depth, 0, "bond");
     archFrame(W, cx, ai);
   });
 
@@ -371,6 +444,7 @@ function buildWall(px, pz, ry, windows = false, arches = ARCH_X, gate = false) {
 // sol en dalles
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM, ROOM), floorMat(ROOM, ROOM));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+paveRect(ID, -HALF, HALF, -HALF, HALF, "bond");   // cour pavée
 
 // ---------- Salles derrière les 4 arches ----------
 // Dans le repère du mur : le couloir va de z = -ARCH.depth à z = -ARCH.depth - RD
@@ -463,28 +537,9 @@ function buildRoom(g) {                  // long couloir voûté ; rythme : 2 an
   }
   // sol : allée centrale de dalles claires bordée de pierres, rangées de dalles qui marquent chaque travée
   const RUN = 5;
-  // pavage : joints sombres entre des pavés légèrement en relief, teintes variées
-  fl.material = plain(0x3e3f45);                                                        // le sol de dessous devient le joint
-  const PAVE = [0x7d7f86, 0x74767d, 0x878990, 0x6f7178, 0x81827f].map(c => new THREE.Color(c).convertSRGBToLinear());
-  const RUNC = [0x9a9ba1, 0x8f9097, 0xa3a4a9].map(c => new THREE.Color(c).convertSRGBToLinear());
-  let seed = 17; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const J = 0.04, TH = 0.05;                                                            // largeur des joints, épaisseur des pavés
-  const pave = (x0, x1, z0p, z1p, c) => { if (x1 - x0 > J && z0p - z1p > J) ALONG((x0 + x1) / 2, TH / 2, (z0p + z1p) / 2, x1 - x0 - J, TH * (0.85 + rnd() * 0.3), z0p - z1p - J, c); };
-  // allée centrale : grandes dalles carrées de 1,25 m
-  const TS = RUN / 4;
-  for (let z = z0; z > zb + 1e-3; z -= TS) for (let i = 0; i < 4; i++) pave(-RUN / 2 + i * TS, -RUN / 2 + (i + 1) * TS, z, Math.max(zb, z - TS), RUNC[Math.floor(rnd() * RUNC.length)]);
-  // bas-côtés : pavés rectangulaires en rangées décalées (appareil en quinconce)
-  const XS = RUN / 2 + 0.3, XE = R - 0.18, PW = 0.8, PD = 0.5;
-  for (const sx of [-1, 1]) {
-    let row = 0;
-    for (let z = z0; z > zb + 1e-3; z -= PD, row++) {
-      for (let x = XS - (row % 2 ? PW / 2 : 0); x < XE; x += PW) {
-        const a0 = Math.max(XS, x), a1 = Math.min(XE, x + PW);
-        if (sx > 0) pave(a0, a1, z, Math.max(zb, z - PD), PAVE[Math.floor(rnd() * PAVE.length)]);
-        else pave(-a1, -a0, z, Math.max(zb, z - PD), PAVE[Math.floor(rnd() * PAVE.length)]);
-      }
-    }
-  }
+  // pavage texturé : grandes dalles de 1,25 m dans l'allée, pavés en quinconce sur les bas-côtés
+  paveRect(W, -RUN / 2, RUN / 2, zb, z0, "slab", RUN / 4);
+  for (const sx of [-1, 1]) paveRect(W, sx > 0 ? RUN / 2 + 0.3 : -R, sx > 0 ? R : -RUN / 2 - 0.3, zb, z0, "bond");
   // bordures de l'allée et lignes de travée, en pierre claire, au-dessus des pavés
   for (const sx of [-1, 1]) ALONG(sx * (RUN / 2 + 0.15), 0.04, zMid, 0.3, 0.08, RD, 3);
   for (let s2 = 0; s2 < CPATTERN.length; s2++) ALONG(0, 0.04, posZ(s2), RUN, 0.08, 0.3, 3);
@@ -542,6 +597,8 @@ function buildSideRoom(g, sx, cz) {
   const tun = add(new THREE.ExtrudeGeometry(opShape(), { depth: T, bevelEnabled: false, curveSegments: 24 }), [hiddenMat, nicheMat], 0, 0, -T);
   add(new THREE.PlaneGeometry(OP.r * 2, T), floorMat(), 0, 0.004, -T / 2, 0, -Math.PI / 2);
   const W = tg.matrixWorld;
+  paveRect(W, -OP.r, OP.r, -T, 0, "bond");                                                                  // passage
+  paveRect(W, -SR.w / 2, SR.w / 2, -T - SR.d, -T, "slab", 1.0);                                              // salle : dalles de 1 m
   archFrame(W, 0, 0);                                                                                          // côté couloir (même encadrement que l'arche d'entrée)
   archFrame(W.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, -T)).multiply(new THREE.Matrix4().makeRotationY(Math.PI)), 0, 1);   // côté salle
   // salle
@@ -588,7 +645,8 @@ const OUT = 90;                                                       // terrain
   { const ext = OUT_OFF - SHELL / 2 - ARCH.depth;                    // prolongement du passage jusqu'à la muraille extérieure
     const t = new THREE.Mesh(new THREE.ExtrudeGeometry(archOpening(AR), { depth: ext, bevelEnabled: false, curveSegments: 32 }), [hiddenMat, nicheMat]);
     t.position.z = -ARCH.depth - ext; t.receiveShadow = t.castShadow = true; southG.add(t);
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(ARCH.w, ext + SHELL), floorMat()); f.rotation.x = -Math.PI / 2; f.position.set(0, 0.003, -ARCH.depth - (ext + SHELL) / 2); southG.add(f); }
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(ARCH.w, ext + SHELL), floorMat()); f.rotation.x = -Math.PI / 2; f.position.set(0, 0.003, -ARCH.depth - (ext + SHELL) / 2); southG.add(f);
+    paveRect(southG.matrixWorld, -AR, AR, -ARCH.depth - ext - SHELL, -ARCH.depth, "bond"); }
   const shellMat = withHeightFade(plain(WALL_COLOR));
   // parement extérieur : 4 murs épais, celui du sud percé de l'arche d'entrée
   const outerWall = (x0, x1, z0, z1, hole) => {
@@ -615,6 +673,7 @@ const OUT = 90;                                                       // terrain
 // extérieur : tout le terrain hors douves et hors château
 const outsideOk = (x, z, m = 0) => Math.abs(x) <= OUT - 1 && Math.abs(z) <= OUT - 1 && !(x > MO.x0 - m && x < MO.x1 + m && z > MO.z0 - m && z < MO.z1 + m);
 
+mergePavers();   // tous les pavés (texture + relief) en un seul maillage
 mergeStones();   // toutes les pierres (piliers, encadrements, corniches, poutres) en un seul maillage
 
 // ---------- Nuit : ciel étoilé, clair de lune, éclairage chaud ----------
