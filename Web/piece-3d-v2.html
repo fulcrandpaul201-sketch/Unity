@@ -229,7 +229,7 @@ function buildWall(px, pz, ry, windows = false) {
   const wall = new THREE.Mesh(wallGeometry(windows), wallMat); wall.receiveShadow = wall.castShadow = true; g.add(wall);
   if (windows) for (const cx of WIN_X) buildWindow(g, W, cx);
   UPPER_LEVELS.forEach((b, li) => UPPER_X.forEach((cx, i) => {
-    const lit = ((i * 7 + li * 3 + Math.round(px + pz * 3)) % 5) < 3;     // certaines pièces éclairées, d'autres éteintes
+    const lit = true;                                                 // même motif sur les 4 façades : toutes les fenêtres éclairées
     buildWindow(g, W, cx, b, lit ? glassMat : glassDark);
   }));
 
@@ -278,21 +278,28 @@ function buildWall(px, pz, ry, windows = false) {
   }
   // corniche : bandeau de pierre au-dessus des arches, sur toute la longueur
   const cn = Math.round(ROOM / 1.25), cl = ROOM / cn;
-  for (let i = 0; i < cn; i++) boxStone(W, cl - 0.035, CORNICE.h, CORNICE.out, -HALF + cl * (i + 0.5), CORNICE.y, CORNICE.out / 2, i);
+  for (let i = 0; i < cn; i++) boxStone(W, cl - 0.035, CORNICE.h, CORNICE.out, -HALF + cl * (i + 0.5), CORNICE.y, CORNICE.out / 2, Math.round(Math.abs(i - (cn - 1) / 2)) % 2);
   // étages : pilastres dans l'axe des piliers, bandeau intermédiaire, corniche sommitale et créneaux
   for (const x of PILLAR_X) {
     const rows = 12, y0 = CORNICE.y + CORNICE.h / 2, bh = (TOP_CORNICE_Y - y0) / rows;
     for (let i = 0; i < rows; i++) boxStone(W, i % 2 ? 0.46 : 0.54, bh - 0.03, 0.14, x, y0 + i * bh + bh / 2, 0.07, i);
   }
+  // teinte symétrique : le bloc i et son vis-à-vis (même distance au centre du mur) ont la même couleur
+  const sym = (k, n) => Math.round(Math.abs(k - (n - 1) / 2));
   for (let i = 0; i < cn; i++) {
     const x = -HALF + cl * (i + 0.5);
-    boxStone(W, cl - 0.035, 0.22, 0.16, x, STRING_Y, 0.08, i + 1);
-    boxStone(W, cl - 0.035, 0.34, 0.32, x, TOP_CORNICE_Y, 0.16, i + 2);
-    boxStone(W, cl - 0.035, 0.18, 0.4, x, TOP_CORNICE_Y + 0.26, 0.05, i);
+    boxStone(W, cl - 0.035, 0.22, 0.16, x, STRING_Y, 0.08, sym(i, cn) % 2);
+    boxStone(W, cl - 0.035, 0.34, 0.32, x, TOP_CORNICE_Y, 0.16, 2);
+    boxStone(W, cl - 0.035, 0.18, 0.4, x, TOP_CORNICE_Y + 0.26, 0.05, sym(i, cn) % 2 ? 0 : 2);
   }
-  for (let x = -HALF + 0.55; x < HALF - 0.3; x += 1.6) boxStone(W, 0.9, 0.75, 0.55, x, WALL_H + 0.37, -0.12, Math.round(x));   // merlons
-  boxStone(W, ROOM, 0.5, 0.55, 0, WALL_H - 0.25 + 0.0, -0.12, 3);                                                              // chemin de ronde
-  // gargouilles perchées au-dessus de la corniche, dans l'axe des pilastres
+  // chemin de ronde puis créneaux : nombre impair de merlons, centrés sur le milieu du mur (même rythme sur les 4 côtés)
+  boxStone(W, ROOM - 1.1, 0.5, 0.55, 0, WALL_H - 0.25, -0.12, 3);
+  const MERLONS = 15, span = ROOM - 2.6, gapM = span / (MERLONS - 1);
+  for (let i = 0; i < MERLONS; i++) boxStone(W, 0.9, 0.75, 0.55, -span / 2 + i * gapM, WALL_H + 0.37, -0.12, sym(i, MERLONS) % 2 ? 0 : 2);
+  // angle : une échauguette carrée posée sur le coin droit du mur (chaque coin en reçoit exactement une)
+  boxStone(W, 1.1, 0.5, 1.1, HALF - 0.55, WALL_H - 0.25, -0.55, 3);
+  boxStone(W, 1.3, 1.1, 1.3, HALF - 0.55, WALL_H + 0.55, -0.55, 2);
+  boxStone(W, 1.5, 0.18, 1.5, HALF - 0.55, WALL_H + 1.19, -0.55, 0);
   return g;
 }
 
