@@ -353,11 +353,21 @@ function buildRoom(g) {                  // long couloir voûté, plus haut et p
   startShape.moveTo(-r, 0); startShape.lineTo(-AR, 0); startShape.lineTo(-AR, ARCH.h); startShape.absarc(0, ARCH.h, AR, Math.PI, 0, true);
   startShape.lineTo(AR, 0); startShape.lineTo(r, 0); startShape.lineTo(r, COR_H); startShape.absarc(0, COR_H, r, 0, Math.PI, false); startShape.closePath();
   const start = new THREE.Mesh(new THREE.ShapeGeometry(startShape, 40), roomWallMat); start.position.z = z0; start.rotation.y = Math.PI; start.receiveShadow = true; g.add(start);
+  // colonnes comme dans la cour : une dans chaque angle et d'autres à écart égal le long des deux murs (5 travées de 6 m)
+  g.updateMatrixWorld();
+  const W = g.matrixWorld, S = COL, BAYS = 5;
+  for (let k = 0; k <= BAYS; k++) for (const sx of [-1, 1]) {
+    const cx = sx * (COR_W / 2 - S / 2), cz = z0 - k * RD / BAYS + (k === 0 ? -S / 2 : k === BAYS ? S / 2 : 0);
+    const top = COR_H, rows = 6, bh = (top - 0.45 - 0.22) / rows, gap = 0.035;
+    boxStone(W, S + 0.24, 0.3, S + 0.24, cx, 0.15, cz, 3); boxStone(W, S + 0.12, 0.15, S + 0.12, cx, 0.375, cz, 2);   // base moulurée
+    for (let i = 0; i < rows; i++) { const w = i % 2 ? S - 0.08 : S; boxStone(W, w, bh - gap, w, cx, 0.45 + i * bh + bh / 2, cz, i); }
+    boxStone(W, S + 0.16, 0.22, S + 0.16, cx, top - 0.11, cz, 2);                                                   // chapiteau
+  }
   for (let z = z0 - 3; z > zb + 1; z -= 6) {                          // éclairage chaud le long du couloir (sans objet visible)
     const l = new THREE.PointLight(0xffb260, 1.2, 15, 2); l.position.set(0, COR_H + 1.5, z); g.add(l); chandeliers.push({ l, seed: Math.random() * 100 });
   }
   WALKABLE.push(worldRect(g, -AR, AR, z0 - 0.6, 2.0, { maxFly: ARCH.h + AR - 2.0 }));                       // passage sous l'arche
-  WALKABLE.push(worldRect(g, -COR_W / 2 + 0.1, COR_W / 2 - 0.1, zb + 0.2, z0, { maxFly: COR_H + COR_W / 2 - 2.0 }));
+  WALKABLE.push(worldRect(g, -COR_W / 2 + COL + 0.1, COR_W / 2 - COL - 0.1, zb + 0.2, z0, { maxFly: COR_H + COR_W / 2 - 2.0 }));   // on reste entre les colonnes
   CAM_ZONES.push(worldRect(g, -AR + 0.15, AR - 0.15, z0 - 0.3, 0.6, { maxY: ARCH.h + AR - 0.3 }));
   CAM_ZONES.push(worldRect(g, -COR_W / 2 + 0.3, COR_W / 2 - 0.3, zb + 0.3, z0 - 0.05, { maxY: COR_H + COR_W / 2 - 1 }));
 }
