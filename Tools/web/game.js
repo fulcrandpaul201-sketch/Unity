@@ -336,17 +336,29 @@ function roomWallGeometry(w, h, arch) {  // mur intérieur, avec ou sans ouvertu
   return sh;
 }
 const chandeliers = [];
-function buildRoom(g) {                  // long couloir voûté, même profil que l'arche, qui prolonge le passage
+const COR_W = 6, COR_H = 5;               // couloir : 6 m de large, murs droits de 5 m puis voûte (sommet à 8 m) ; l'ouverture d'arche ne change pas
+function corridorProfile() {
+  const r = COR_W / 2, sh = new THREE.Shape();
+  sh.moveTo(-r, 0); sh.lineTo(r, 0); sh.lineTo(r, COR_H); sh.absarc(0, COR_H, r, 0, Math.PI, false); sh.closePath();
+  return sh;
+}
+function buildRoom(g) {                  // long couloir voûté, plus haut et plus large que l'arche d'entrée
   const z0 = -ARCH.depth, zb = z0 - RD;
-  const vault = new THREE.Mesh(new THREE.ExtrudeGeometry(archOpening(AR), { depth: RD, bevelEnabled: false, curveSegments: 32 }), [hiddenMat, nicheMat]);
+  const vault = new THREE.Mesh(new THREE.ExtrudeGeometry(corridorProfile(), { depth: RD, bevelEnabled: false, curveSegments: 40 }), [hiddenMat, nicheMat]);
   vault.position.z = zb; vault.receiveShadow = vault.castShadow = true; g.add(vault);
-  const fl = new THREE.Mesh(new THREE.PlaneGeometry(ARCH.w, RD), floorMat()); fl.rotation.x = -Math.PI / 2; fl.position.set(0, 0.003, z0 - RD / 2); fl.receiveShadow = true; g.add(fl);
-  const end = new THREE.Mesh(new THREE.ShapeGeometry(archOpening(AR), 32), roomWallMat); end.position.z = zb; end.receiveShadow = true; g.add(end);   // fond du couloir
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(COR_W, RD), floorMat()); fl.rotation.x = -Math.PI / 2; fl.position.set(0, 0.003, z0 - RD / 2); fl.receiveShadow = true; g.add(fl);
+  const end = new THREE.Mesh(new THREE.ShapeGeometry(corridorProfile(), 40), roomWallMat); end.position.z = zb; end.receiveShadow = true; g.add(end);   // fond du couloir
+  const startShape = new THREE.Shape(), r = COR_W / 2;                                                          // mur d'entrée, contour qui passe autour de l'arche (même taille)
+  startShape.moveTo(-r, 0); startShape.lineTo(-AR, 0); startShape.lineTo(-AR, ARCH.h); startShape.absarc(0, ARCH.h, AR, Math.PI, 0, true);
+  startShape.lineTo(AR, 0); startShape.lineTo(r, 0); startShape.lineTo(r, COR_H); startShape.absarc(0, COR_H, r, 0, Math.PI, false); startShape.closePath();
+  const start = new THREE.Mesh(new THREE.ShapeGeometry(startShape, 40), roomWallMat); start.position.z = z0; start.rotation.y = Math.PI; start.receiveShadow = true; g.add(start);
   for (let z = z0 - 3; z > zb + 1; z -= 6) {                          // éclairage chaud le long du couloir (sans objet visible)
-    const l = new THREE.PointLight(0xffb260, 0.8, 8, 2); l.position.set(0, ARCH.h, z); g.add(l); chandeliers.push({ l, seed: Math.random() * 100 });
+    const l = new THREE.PointLight(0xffb260, 1.0, 10, 2); l.position.set(0, COR_H, z); g.add(l); chandeliers.push({ l, seed: Math.random() * 100 });
   }
-  WALKABLE.push(worldRect(g, -AR, AR, zb + 0.2, 2.0, { maxFly: ARCH.h + AR - 2.0 }));
-  CAM_ZONES.push(worldRect(g, -AR + 0.15, AR - 0.15, zb + 0.3, 0.6, { maxY: ARCH.h + AR - 0.3 }));
+  WALKABLE.push(worldRect(g, -AR, AR, z0 - 0.6, 2.0, { maxFly: ARCH.h + AR - 2.0 }));                       // passage sous l'arche
+  WALKABLE.push(worldRect(g, -COR_W / 2 + 0.1, COR_W / 2 - 0.1, zb + 0.2, z0, { maxFly: COR_H + COR_W / 2 - 2.0 }));
+  CAM_ZONES.push(worldRect(g, -AR + 0.15, AR - 0.15, z0 - 0.3, 0.6, { maxY: ARCH.h + AR - 0.3 }));
+  CAM_ZONES.push(worldRect(g, -COR_W / 2 + 0.3, COR_W / 2 - 0.3, zb + 0.3, z0 - 0.05, { maxY: COR_H + 1.5 }));
 }
 const IRON = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x26221f).convertSRGBToLinear(), roughness: 0.6, metalness: 0.4 });
 const FLAME = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc56e).convertSRGBToLinear() });
