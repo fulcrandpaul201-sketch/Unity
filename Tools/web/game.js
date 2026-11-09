@@ -57,7 +57,7 @@ function withHeightFade(mat) {
 const ARCH = { w: 3.0, h: 3.0, depth: 1.4, ring: 0.42, out: 0.2 };   // ouverture 3 m, montants de 3 m, passage voûté de 1,4 m
 const AR = ARCH.w / 2;
 const ARCH_X = [0];                                                  // une arche au centre de chaque mur
-const PILLAR_X = [-HALF + 0.35, -9.75, -3.25, 3.25, 9.75, HALF - 0.35];   // piliers réguliers et dans les angles
+const PILLAR_X = [-ROOM / 6, ROOM / 6];                                // 2 colonnes par façade : le mur est partagé en 3 parts égales
 const PILLAR = { w: 0.7, out: 0.3, h: 5.0 };
 const PLINTH = { h: 0.32, out: 0.1 }, CORNICE = { y: 5.35, h: 0.26, out: 0.2 };
 const WALL_CLEAR = 0.8;                                              // distance minimale avatar / mur
@@ -353,7 +353,7 @@ function lantern(wallX, wallZ, ry, x, withLight) {   // éclairage chaud le long
   lanterns.push({ l, seed: Math.random() * 100 });
 }
 for (const [wx, wz, ry] of [[0, -HALF, 0], [0, HALF, Math.PI], [-HALF, 0, Math.PI / 2], [HALF, 0, -Math.PI / 2]])
-  for (const x of [-9.75, -3.25, 3.25, 9.75]) lantern(wx, wz, ry, x, Math.abs(x) < 5);
+  for (const x of PILLAR_X) lantern(wx, wz, ry, x, true);   // éclairage chaud sur chaque colonne
 function updateLights(now) {
   const t = now / 1000;
   for (const { l, seed } of [...lanterns, ...chandeliers])
