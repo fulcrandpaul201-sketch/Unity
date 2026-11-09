@@ -439,6 +439,58 @@ function buildRoom(g) {                  // long couloir voûté ; rythme : 2 an
             W.clone().multiply(tmpM.makeTranslation(0, COR_H, cz - (D + (key ? 0.1 : 0)) / 2)), i);
     }
   });
+  // ---------- mise en valeur du couloir ----------
+  const ALONG = (x, y, z, w, h, d, shade) => boxStone(W, w, h, d, x, y, z, shade);   // repère du couloir : x travers, z long
+  const zMid = z0 - RD / 2, gapAt = z => openZ.some(oz => Math.abs(z - oz) < OP.r + 0.75);
+  // corniche moulurée à la naissance de la voûte (3 ressauts), sur les deux murs, toute la longueur
+  for (const sx of [-1, 1]) {
+    ALONG(sx * (R - 0.14), COR_H - 0.45, zMid, 0.28, 0.22, RD, 3);
+    ALONG(sx * (R - 0.24), COR_H - 0.22, zMid, 0.48, 0.24, RD, 2);
+    ALONG(sx * (R - 0.32), COR_H + 0.02, zMid, 0.64, 0.16, RD, 0);
+  }
+  // nervure de faîte au sommet de la voûte
+  ALONG(0, COR_H + R - 0.2, zMid, 0.7, 0.4, RD, 2);
+  ALONG(0, COR_H + R - 0.45, zMid, 0.4, 0.2, RD, 0);
+  // plinthe en pierre au pied des murs, interrompue aux ouvertures
+  for (const sx of [-1, 1]) {
+    let st = null;
+    for (let z = z0; z >= zb - 0.01; z -= 0.1) {
+      const ok = z > zb + 0.05 && !gapAt(z);
+      if (ok && st === null) st = z;
+      if (!ok && st !== null) { const len = st - z, n = Math.max(1, Math.round(len / 1.2)), bl = len / n;
+        for (let i = 0; i < n; i++) ALONG(sx * (R - 0.09), 0.3, st - bl * (i + 0.5), 0.18, 0.6, bl - 0.03, i % 2 ? 3 : 2); st = null; }
+    }
+  }
+  // sol : allée centrale de dalles claires bordée de pierres, rangées de dalles qui marquent chaque travée
+  const RUN = 5;
+  const runner = new THREE.Mesh(new THREE.PlaneGeometry(RUN, RD), plain(0x8e8f96)); runner.rotation.x = -Math.PI / 2; runner.position.set(0, 0.006, zMid); runner.receiveShadow = true; g.add(runner);
+  for (const sx of [-1, 1]) ALONG(sx * (RUN / 2 + 0.15), 0.02, zMid, 0.3, 0.04, RD, 3);
+  for (let s2 = 0; s2 < CPATTERN.length; s2++) ALONG(0, 0.02, posZ(s2), RUN, 0.04, 0.3, 3);
+  // grande verrière au fond : arc en plein cintre, remplage en pierre (meneaux + rosace), lumière de lune
+  {
+    const ww = 4.4, wr = ww / 2, wb = 1.6, ws = 9.2, zf = zb + 0.02;
+    const shape = new THREE.Shape(); shape.moveTo(-wr, wb); shape.lineTo(wr, wb); shape.lineTo(wr, ws); shape.absarc(0, ws, wr, 0, Math.PI, false); shape.closePath();
+    const glass = new THREE.Mesh(new THREE.ShapeGeometry(shape, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fb8ec).convertSRGBToLinear() }));
+    glass.position.z = zf; g.add(glass);
+    const M = (x, y, w, h) => ALONG(x, y, zf + 0.08, w, h, 0.16, 2);
+    for (const x of [-wr / 3, wr / 3]) M(x, (wb + ws) / 2, 0.16, ws - wb);                  // meneaux
+    for (const y of [4.2, 6.8]) M(0, y, ww, 0.12);                                           // traverses
+    M(0, ws, ww, 0.16);
+    const rose = new THREE.TorusGeometry(1.0, 0.09, 8, 40); stone(rose, W.clone().multiply(tmpM.makeTranslation(0, ws + 0.95, zf + 0.08)), 2);
+    const inner = new THREE.TorusGeometry(0.35, 0.07, 8, 24); stone(inner, W.clone().multiply(tmpM.makeTranslation(0, ws + 0.95, zf + 0.08)), 2);
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; stone(new THREE.BoxGeometry(0.08, 0.65, 0.14), W.clone().multiply(tmpM.makeTranslation(Math.cos(a) * 0.68, ws + 0.95 + Math.sin(a) * 0.68, zf + 0.08)).multiply(new THREE.Matrix4().makeRotationZ(a + Math.PI / 2)), 0); }
+    // encadrement : montants en blocs alternés et claveaux, comme l'arche d'entrée mais à l'échelle de la verrière
+    const rows = 12, bh = (ws - wb) / rows;
+    for (let i = 0; i < rows; i++) { const w = i % 2 ? 0.4 : 0.6; for (const sx of [-1, 1]) ALONG(sx * (wr + w / 2), wb + i * bh + bh / 2, zf + 0.12, w, bh - 0.03, 0.24, i); }
+    ALONG(0, wb - 0.12, zf + 0.2, ww + 1.4, 0.24, 0.4, 3);                                  // appui
+    const n = 13;
+    for (let i = 0; i < n; i++) {
+      const key = i === (n - 1) / 2, a0 = i * Math.PI / n + 0.012, a1 = (i + 1) * Math.PI / n - 0.012, sh = new THREE.Shape();
+      sh.absarc(0, 0, wr + 0.55 + (key ? 0.2 : 0), a0, a1, false); sh.absarc(0, 0, wr, a1, a0, true); sh.closePath();
+      stone(new THREE.ExtrudeGeometry(sh, { depth: 0.24, bevelEnabled: false, curveSegments: 4 }), W.clone().multiply(tmpM.makeTranslation(0, ws, zf)), i);
+    }
+    const ml = new THREE.PointLight(0xa8c0ff, 1.6, 26, 2); ml.position.set(0, 6, zb + 2.5); g.add(ml);
+  }
   // ouvertures et salles (de chaque côté)
   for (const cz of openZ) for (const sx of [-1, 1]) buildSideRoom(g, sx, cz);
   for (let z = z0 - STEP / 2; z > zb; z -= STEP) {                   // éclairage chaud le long du couloir (sans objet visible)
