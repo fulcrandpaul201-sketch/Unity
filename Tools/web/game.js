@@ -413,9 +413,31 @@ function buildRoom(g) {                  // long couloir voûté ; rythme : 2 an
   }
   // sol : allée centrale de dalles claires bordée de pierres, rangées de dalles qui marquent chaque travée
   const RUN = 5;
-  const runner = new THREE.Mesh(new THREE.PlaneGeometry(RUN, RD), plain(0x8e8f96)); runner.rotation.x = -Math.PI / 2; runner.position.set(0, 0.006, zMid); runner.receiveShadow = true; g.add(runner);
-  for (const sx of [-1, 1]) ALONG(sx * (RUN / 2 + 0.15), 0.02, zMid, 0.3, 0.04, RD, 3);
-  for (let s2 = 0; s2 < CPATTERN.length; s2++) ALONG(0, 0.02, posZ(s2), RUN, 0.04, 0.3, 3);
+  // pavage : joints sombres entre des pavés légèrement en relief, teintes variées
+  fl.material = plain(0x3e3f45);                                                        // le sol de dessous devient le joint
+  const PAVE = [0x7d7f86, 0x74767d, 0x878990, 0x6f7178, 0x81827f].map(c => new THREE.Color(c).convertSRGBToLinear());
+  const RUNC = [0x9a9ba1, 0x8f9097, 0xa3a4a9].map(c => new THREE.Color(c).convertSRGBToLinear());
+  let seed = 17; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const J = 0.04, TH = 0.05;                                                            // largeur des joints, épaisseur des pavés
+  const pave = (x0, x1, z0p, z1p, c) => { if (x1 - x0 > J && z0p - z1p > J) ALONG((x0 + x1) / 2, TH / 2, (z0p + z1p) / 2, x1 - x0 - J, TH * (0.85 + rnd() * 0.3), z0p - z1p - J, c); };
+  // allée centrale : grandes dalles carrées de 1,25 m
+  const TS = RUN / 4;
+  for (let z = z0; z > zb + 1e-3; z -= TS) for (let i = 0; i < 4; i++) pave(-RUN / 2 + i * TS, -RUN / 2 + (i + 1) * TS, z, Math.max(zb, z - TS), RUNC[Math.floor(rnd() * RUNC.length)]);
+  // bas-côtés : pavés rectangulaires en rangées décalées (appareil en quinconce)
+  const XS = RUN / 2 + 0.3, XE = R - 0.18, PW = 0.8, PD = 0.5;
+  for (const sx of [-1, 1]) {
+    let row = 0;
+    for (let z = z0; z > zb + 1e-3; z -= PD, row++) {
+      for (let x = XS - (row % 2 ? PW / 2 : 0); x < XE; x += PW) {
+        const a0 = Math.max(XS, x), a1 = Math.min(XE, x + PW);
+        if (sx > 0) pave(a0, a1, z, Math.max(zb, z - PD), PAVE[Math.floor(rnd() * PAVE.length)]);
+        else pave(-a1, -a0, z, Math.max(zb, z - PD), PAVE[Math.floor(rnd() * PAVE.length)]);
+      }
+    }
+  }
+  // bordures de l'allée et lignes de travée, en pierre claire, au-dessus des pavés
+  for (const sx of [-1, 1]) ALONG(sx * (RUN / 2 + 0.15), 0.04, zMid, 0.3, 0.08, RD, 3);
+  for (let s2 = 0; s2 < CPATTERN.length; s2++) ALONG(0, 0.04, posZ(s2), RUN, 0.08, 0.3, 3);
   // grande verrière au fond : arc en plein cintre, remplage en pierre (meneaux + rosace), lumière de lune
   {
     const ww = 4.4, wr = ww / 2, wb = 1.6, ws = 9.2, zf = zb + 0.02;
