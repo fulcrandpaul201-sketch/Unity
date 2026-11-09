@@ -102,7 +102,7 @@ const AR = ARCH.w / 2;
 const ARCH_X = [0];                                                  // une arche au centre de chaque mur
 const PILLAR_X = [-ROOM / 6, ROOM / 6];                                // 2 colonnes par façade : le mur est partagé en 3 parts égales
 const PILLAR = { w: 0.7, out: 0.3, h: 5.0 };
-const CORNER_COL = 0.8;                                              // colonne carrée dans chaque angle
+const COL = 0.8;                                                     // toutes les colonnes : fût carré de 0,8 m (murs et angles)
 const PLINTH = { h: 0.32, out: 0.1 }, CORNICE = { y: 5.35, h: 0.26, out: 0.2 };
 const WALL_CLEAR = 0.8;                                              // distance minimale avatar / mur
 // Fenêtres (murs de gauche et de droite) : plein cintre, appui à 1,5 m, sommet à 3,4 m
@@ -223,7 +223,46 @@ function buildWindow(g, W, cx, bottom = WIN.bottom, glassM = glassMat) {
   WIN_VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, S, 0)), i));
 }
 
-function buildWall(px, pz, ry, windows = false, arches = ARCH_X) {
+// encadrement d'arche en pierre (montants alternés, claveaux, clé de voûte, socles)
+function archFrame(W, cx, ai) {
+  const rows = 6, bh = ARCH.h / rows, gap = 0.035;
+  for (let i = 0; i < rows; i++) {
+    const wdt = i % 2 ? 0.42 : 0.62;
+    for (const side of [-1, 1]) boxStone(W, wdt, bh - gap, ARCH.out, cx + side * (AR + wdt / 2), i * bh + bh / 2, ARCH.out / 2, i + ai + (side > 0 ? 1 : 0));
+  }
+  VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, ARCH.h, 0)), i + ai));
+  for (const side of [-1, 1]) boxStone(W, 0.78, 0.26, ARCH.out + 0.08, cx + side * (AR + 0.36), 0.13, (ARCH.out + 0.08) / 2, 2);
+}
+// grande porte de château en chêne cloutée, fermée, dans un encadrement d'arche
+const GATE_WOOD = [0x4a3020, 0x553824, 0x3f281b].map(c => new THREE.Color(c).convertSRGBToLinear());
+const GATE_IRON = new THREE.Color(0x2a2726).convertSRGBToLinear();
+function buildGate(W, cx) {
+  archFrame(W, cx, 0);
+  const n = 8, pw = ARCH.w / n;
+  for (let i = 0; i < n; i++) {                                   // planches verticales qui suivent l'arc
+    const x = cx - AR + pw * (i + 0.5), u = (x - cx) / AR, top = ARCH.h + AR * Math.sqrt(Math.max(0, 1 - u * u)) - 0.02;
+    boxStone(W, pw - 0.025, top, 0.1, x, top / 2, -0.06, GATE_WOOD[i % 3]);
+  }
+  boxStone(W, 0.05, ARCH.h + AR - 0.05, 0.12, cx, (ARCH.h + AR) / 2, -0.04, GATE_IRON);   // jointure des deux battants
+  for (const y of [0.55, 1.6, 2.65]) {                            // pentures en fer et clous
+    for (const sx of [-1, 1]) {
+      boxStone(W, AR - 0.25, 0.1, 0.03, cx + sx * (AR / 2 + 0.05), y, 0.0, GATE_IRON);
+      for (let k = 0; k < 4; k++) boxStone(W, 0.05, 0.05, 0.04, cx + sx * (0.25 + k * 0.33), y, 0.02, GATE_IRON);
+    }
+  }
+  for (const sx of [-1, 1]) {                                     // anneaux de tirage
+    const r = new THREE.TorusGeometry(0.11, 0.02, 6, 16);
+    stone(r, W.clone().multiply(tmpM.makeTranslation(cx + sx * 0.32, 1.25, 0.04)), GATE_IRON);
+  }
+}
+// meurtrière : fente étroite dans un encadrement de pierre
+function arrowSlit(W, x, y) {
+  boxStone(W, 0.42, 1.6, 0.12, x, y, 0.06, 2);
+  boxStone(W, 0.12, 1.25, 0.02, x, y, 0.125, new THREE.Color(0x0d0b10));
+  boxStone(W, 0.36, 0.06, 0.03, x, y, 0.13, new THREE.Color(0x0d0b10));   // croisillon (fente en croix)
+  boxStone(W, 0.52, 0.12, 0.2, x, y - 0.86, 0.1, 3);                       // appui
+}
+function buildWall(px, pz, ry, windows = false, arches = ARCH_X, gate = false) {
   const g = new THREE.Group(); g.position.set(px, 0, pz); g.rotation.y = ry; scene.add(g);
   g.updateMatrixWorld();
   const W = g.matrixWorld;
@@ -240,37 +279,33 @@ function buildWall(px, pz, ry, windows = false, arches = ARCH_X) {
     tunnel.position.set(cx, 0, -ARCH.depth); tunnel.receiveShadow = tunnel.castShadow = true; g.add(tunnel);
     const tf = new THREE.Mesh(new THREE.PlaneGeometry(ARCH.w, ARCH.depth), floorMat(ARCH.w, ARCH.depth));
     tf.rotation.x = -Math.PI / 2; tf.position.set(cx, 0.003, -ARCH.depth / 2); tf.receiveShadow = true; g.add(tf);
-    // montants : blocs alternés large / étroit
-    const rows = 6, bh = ARCH.h / rows, gap = 0.035;
-    for (let i = 0; i < rows; i++) {
-      const wdt = i % 2 ? 0.42 : 0.62;
-      for (const side of [-1, 1]) boxStone(W, wdt, bh - gap, ARCH.out, cx + side * (AR + wdt / 2), i * bh + bh / 2, ARCH.out / 2, i + ai + (side > 0 ? 1 : 0));
-    }
-    // claveaux en éventail + clé de voûte
-    VOUSSOIRS.forEach((geo, i) => stone(geo, W.clone().multiply(tmpM.makeTranslation(cx, ARCH.h, 0)), i + ai));
-    // socles au pied des montants
-    for (const side of [-1, 1]) boxStone(W, 0.78, 0.26, ARCH.out + 0.08, cx + side * (AR + 0.36), 0.13, (ARCH.out + 0.08) / 2, 2);
+    archFrame(W, cx, ai);
   });
 
-  // piliers : blocs empilés en alternance, base et chapiteau plus larges
-  for (const x of PILLAR_X) {
-    const top = TOP_CORNICE_Y - 0.17, rows = 27, bh = (top - 0.34) / rows, gap = 0.035;   // colonne continue jusqu'à la corniche
-    boxStone(W, PILLAR.w + 0.22, 0.34, PILLAR.out + 0.1, x, 0.17, (PILLAR.out + 0.1) / 2, 2);              // base
-    for (let i = 0; i < rows; i++) {
-      const wdt = i % 2 ? PILLAR.w - 0.08 : PILLAR.w;
-      boxStone(W, wdt, bh - gap, PILLAR.out, x, 0.34 + i * bh + bh / 2, PILLAR.out / 2, i);
-    }
-  }
-
-  // soubassement : rangée de dalles au pied du mur, interrompue par les arches et les piliers
-  // colonne d'angle : carrée, logée dans le coin droit du mur (chaque coin en reçoit une, centrée sur la diagonale)
-  {
-    const CW = CORNER_COL, top = TOP_CORNICE_Y - 0.17, rows = 27, bh = (top - 0.34) / rows, gap = 0.035, cx = HALF - CW / 2, cz = CW / 2;
-    boxStone(W, CW + 0.2, 0.34, CW + 0.2, cx + 0.1, 0.17, cz - 0.1, 2);                                     // base
-    for (let i = 0; i < rows; i++) { const w = i % 2 ? CW - 0.08 : CW; boxStone(W, w, bh - gap, w, cx + (CW - w) / 2, 0.34 + i * bh + bh / 2, cz - (CW - w) / 2, i); }
-  }
-  const blocked = [...arches.map(c => [c - AR - 0.75, c + AR + 0.75]), ...PILLAR_X.map(x => [x - 0.46, x + 0.46]),
-                   [-HALF - 1, -HALF + CORNER_COL + 0.12], [HALF - CORNER_COL - 0.12, HALF + 1]];
+  // colonnes : même modèle partout (2 sur le mur + 1 dans l'angle) — fût carré en blocs alternés, base, chapiteau,
+  // puis tourelle au-dessus du parapet avec petits créneaux
+  const column = (cx, cz) => {
+    const S = COL, top = TOP_CORNICE_Y - 0.2, rows = 26, bh = (top - 0.45) / rows, gap = 0.035;
+    boxStone(W, S + 0.24, 0.3, S + 0.24, cx, 0.15, cz, 3); boxStone(W, S + 0.12, 0.15, S + 0.12, cx, 0.375, cz, 2);   // base moulurée
+    for (let i = 0; i < rows; i++) { const w = i % 2 ? S - 0.08 : S; boxStone(W, w, bh - gap, w, cx, 0.45 + i * bh + bh / 2, cz, i); }
+    boxStone(W, S + 0.16, 0.22, S + 0.16, cx, top + 0.11, cz, 2);                                                   // chapiteau
+    for (let i = 0; i < 6; i++) { const w = i % 2 ? S - 0.08 : S; boxStone(W, w, 0.32, w, cx, top + 0.38 + i * 0.35, cz, i); }   // fût au-dessus de la corniche
+    const ty = top + 0.22 + 6 * 0.35;
+    boxStone(W, S + 0.3, 0.2, S + 0.3, cx, ty + 0.1, cz, 2);                                                        // plate-forme
+    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) boxStone(W, 0.3, 0.42, 0.3, cx + dx * (S / 2), ty + 0.41, cz + dz * (S / 2), 0);   // créneaux de la tourelle
+    stone(new THREE.ConeGeometry((S + 0.2) * 0.72, 0.9, 4), W.clone().multiply(tmpM.makeTranslation(cx, ty + 0.85, cz)).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 4)), 3);   // toit en pyramide
+  };
+  for (const x of PILLAR_X) column(x, COL / 2);
+  column(HALF - COL / 2, COL / 2);                                     // angle droit du mur (chaque coin en reçoit une)
+  // meurtrières au milieu des travées latérales, à deux hauteurs (même motif sur les 4 murs)
+  for (const x of [-(HALF + ROOM / 6) / 2, (HALF + ROOM / 6) / 2]) for (const y of [6.2, 10.6]) arrowSlit(W, x, y);
+  for (const y of [6.2, 10.6]) arrowSlit(W, 0, y + 1.2);
+  // mâchicoulis : consoles en pierre sous le parapet, régulièrement espacées
+  for (let k = -9; k <= 9; k++) { const x = k * (HALF - 0.9) / 9.5; if (Math.abs(Math.abs(x) - ROOM / 6) < 0.6) continue;
+    boxStone(W, 0.22, 0.35, 0.3, x, TOP_CORNICE_Y - 0.36, 0.15, 3); boxStone(W, 0.22, 0.2, 0.42, x, TOP_CORNICE_Y - 0.12, 0.21, 2); }
+  if (gate) buildGate(W, 0);
+  const blocked = [...(gate ? [0] : arches).map(c => [c - AR - 0.75, c + AR + 0.75]), ...PILLAR_X.map(x => [x - COL / 2 - 0.15, x + COL / 2 + 0.15]),
+                   [-HALF - 1, -HALF + COL + 0.15], [HALF - COL - 0.15, HALF + 1]];
   const free = x => !blocked.some(([a, b]) => x > a && x < b);
   const step = 0.05;
   let start = null;
@@ -365,14 +400,16 @@ WALKABLE.push({ minX: -HALF + 0.5, maxX: HALF - 0.5, minZ: -HALF + 0.5, maxZ: HA
 CAM_ZONES.push({ minX: -HALF + 0.45, maxX: HALF - 0.45, minZ: -HALF + 0.45, maxZ: HALF - 0.45, maxY: 40 });
 // une seule ouverture (au nord, face au départ) avec sa salle ; les 3 autres murs sont pleins
 buildRoom(buildWall(0, -HALF, 0, false));
-buildWall(0, HALF, Math.PI, false, []);
+buildWall(0, HALF, Math.PI, false, [], true);   // grande porte fermée en face de l'arche
 buildWall(-HALF, 0, Math.PI / 2, false, []);
 buildWall(HALF, 0, -Math.PI / 2, false, []);
 // obstacles en boîtes alignées (vide pour l'instant : pièce vide)
 const OBSTACLES = [];
-for (const sx of [-1, 1]) for (const sz of [-1, 1])   // colonnes d'angle : on ne les traverse pas
-  OBSTACLES.push({ minX: sx > 0 ? HALF - CORNER_COL : -HALF, maxX: sx > 0 ? HALF : -HALF + CORNER_COL,
-                   minZ: sz > 0 ? HALF - CORNER_COL : -HALF, maxZ: sz > 0 ? HALF : -HALF + CORNER_COL, top: 99, standable: false });
+for (const c of [-HALF + COL / 2, ...PILLAR_X, HALF - COL / 2]) for (const e of [-1, 1]) {   // colonnes (murs et angles) : on ne les traverse pas
+  const along = [c - COL / 2, c + COL / 2], across = e > 0 ? [HALF - COL, HALF] : [-HALF, -HALF + COL];
+  OBSTACLES.push({ minX: along[0], maxX: along[1], minZ: across[0], maxZ: across[1], top: 99, standable: false });
+  OBSTACLES.push({ minX: across[0], maxX: across[1], minZ: along[0], maxZ: along[1], top: 99, standable: false });
+}
 
 mergeStones();   // toutes les pierres (piliers, encadrements, corniches, poutres) en un seul maillage
 
@@ -399,7 +436,7 @@ const lanterns = [];
 function lantern(wallX, wallZ, ry, x, withLight) {   // éclairage chaud le long des murs (sans objet visible)
   if (!withLight) return;
   const g = new THREE.Group(); g.position.set(wallX, 0, wallZ); g.rotation.y = ry; scene.add(g);
-  const l = new THREE.PointLight(0xffa654, 0.9, 10, 2); l.position.set(x, 2.75, PILLAR.out + 0.6); g.add(l);
+  const l = new THREE.PointLight(0xffa654, 0.9, 10, 2); l.position.set(x, 2.75, COL + 0.5); g.add(l);
   lanterns.push({ l, seed: Math.random() * 100 });
 }
 for (const [wx, wz, ry] of [[0, -HALF, 0], [0, HALF, Math.PI], [-HALF, 0, Math.PI / 2], [HALF, 0, -Math.PI / 2]])
