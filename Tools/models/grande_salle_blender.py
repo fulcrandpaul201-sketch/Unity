@@ -7,6 +7,7 @@ import bpy, bmesh
 W, H, T = 250.0, 125.0, 10.0
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
 OW, OH, OA = 16.0, 77.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 77 m, puis demi-cercle (rayon 8 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
+OUVERTURES = False                    # False : arches et fenêtres retirées (configuration gardée ci-dessous) ; True pour les remettre
 ARC_SEG = 32                          # nombre de segments de l'arrondi
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Export"))
 
@@ -65,9 +66,10 @@ salle.data.materials.append(mat("Pierre", (0.43, 0.41, 0.37)))
 b, o, M = a - T, OW / 2, 5.0          # M : débord pour des découpes franches
 cutters = [
     box("Decoupe_interieur", -b, b, -b, b, T, H + M, origin=(0, 0, T)),
+] + ([
     arch("Decoupe_ouverture_avant", -a - M, -b + M, origin=(0, -a, T)),
     arch("Decoupe_ouverture_arriere", b - M, a + M, origin=(0, a, T)),
-]
+] if OUVERTURES else [])
 for c in cutters:
     col_cut.objects.link(c); c.display_type = "WIRE"; c.hide_render = True
 mod = salle.modifiers.new("Decoupes", "BOOLEAN")
@@ -178,7 +180,7 @@ print("moulures :", km, "blocs |", nm, "par face d'arche | écart", round(gm, 3)
 # fenêtres sans moulure : une seule par mur sans ouverture (murs gauche et droite), centrée, même forme que les arches :
 # 16 m de large, bas 10 m au-dessus de la corniche basse (40 m), sommet 10 m sous la corniche haute (95 m), arrondie en bas (40 -> 48 m) et en haut (87 -> 95 m)
 FZ = zb1 + 10.0; FH = T + OH - FZ
-for nom, rz in (("Decoupe_fenetre_gauche", -90), ("Decoupe_fenetre_droite", 90)):
+for nom, rz in ((("Decoupe_fenetre_gauche", -90), ("Decoupe_fenetre_droite", 90)) if OUVERTURES else ()):
     c = arch(nom, -a - M, -b + M, origin=(0, 0, FZ), zb=FZ, hs=FH, bas_rond=True); c.rotation_euler.z = math.radians(rz)
     col_cut.objects.link(c); c.display_type = "WIRE"; c.hide_render = True
 print("fenêtres : 2 (murs gauche et droite) | 16 m de large, de", FZ, "à", FZ + FH + OA, "m")
