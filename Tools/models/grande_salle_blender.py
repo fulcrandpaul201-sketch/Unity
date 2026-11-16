@@ -25,14 +25,14 @@ def box(name, x0, x1, y0, y1, z0, z1, origin=(0, 0, 0)):
     ob = bpy.data.objects.new(name, me); ob.location = origin
     return ob
 
-def arch(name, y0, y1, origin):
-    """forme de découpe d'une ouverture en arche : côtés droits sur OH, puis demi-ellipse (largeur OW, hauteur OA), extrudée en Y"""
+def arch(name, y0, y1, origin, cx=0.0, zb=T, hs=OH):
+    """forme de découpe d'une ouverture en arche (centre cx, bas zb) : côtés droits sur hs, puis demi-ellipse (largeur OW, hauteur OA), extrudée en Y"""
     ox, oy, oz = origin
-    prof = [(-OW / 2, T), (OW / 2, T), (OW / 2, T + OH)]
+    prof = [(cx - OW / 2, zb), (cx + OW / 2, zb), (cx + OW / 2, zb + hs)]
     for i in range(1, ARC_SEG):
         t = math.pi * i / ARC_SEG
-        prof.append((OW / 2 * math.cos(t), T + OH + OA * math.sin(t)))
-    prof.append((-OW / 2, T + OH))
+        prof.append((cx + OW / 2 * math.cos(t), zb + hs + OA * math.sin(t)))
+    prof.append((cx - OW / 2, zb + hs))
     n = len(prof)
     v = [(x - ox, y - oy, z - oz) for y in (y0, y1) for (x, z) in prof]
     f = [tuple(range(n)), tuple(range(2 * n - 1, n - 1, -1))] + [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
@@ -138,37 +138,52 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("
         L_ = [(E, r0), (r0, r0), (r0, E), (r1, E), (r1, r1), (E, r1)]   # L : bande du mur avant/arrière + bande du mur de côté
         ajoute(prisme("tmp", [(sx * x, sy * y) for x, y in L_], z0, z1))
     print(nom, ":", n, "morceaux | de", z0, "à", z1, "m")
-# moulures harpées autour des 2 arches (intérieur + extérieur) : blocs de 5 m de haut, 2,5 m d'épaisseur, 31 blocs (écart ~0,8 m),
-# s'avançant dans le mur de 5 m puis 3 m en alternance, tout le tour de l'arche (côtés droits + arrondi en éventail)
+# moulures harpées autour des 2 arches et des 4 fenêtres (intérieur + extérieur) : blocs de 5 m de haut, 2,5 m d'épaisseur,
+# s'avançant dans le mur de 5 m puis 3 m en alternance, tout le tour (côtés droits + arrondi en éventail),
+# nombre impair de blocs (alternance symétrique, un seul bloc au sommet), écart réajusté (~1 m) pour que le tour tombe juste
 MH, MS, MG, ML = 5.0, 2.5, 1.0, (5.0, 3.0)
 o = OW / 2
-Lc = 2 * OH + math.pi * o                                 # longueur du contour de l'arche
-nm = int((Lc + MG) // (MH + MG)) | 1; gm = (Lc - nm * MH) / (nm - 1)   # nombre de blocs, écart réajusté (~1 m)
-def contour(t):
-    """point du bord de l'arche (x, z) et direction vers le mur, à la distance t le long du contour (départ en bas à gauche)"""
-    if t <= OH: return (-o, T + t), (-1.0, 0.0)
-    if t >= OH + math.pi * o: return (o, T + OH - (t - OH - math.pi * o)), (1.0, 0.0)
-    th = math.pi - (t - OH) / o
-    return (o * math.cos(th), T + OH + o * math.sin(th)), (math.cos(th), math.sin(th))
-def moulure(name, t0, t1, L, y0, y1):
-    ts = [t0] + [t for t in (OH + i * math.pi * o / 32 for i in range(33)) if t0 < t < t1] + [t1]
+def contour(t, cx, zb, hs):
+    """point du bord de l'ouverture (x, z) et direction vers le mur, à la distance t le long du contour (départ en bas à gauche)"""
+    if t <= hs: return (cx - o, zb + t), (-1.0, 0.0)
+    if t >= hs + math.pi * o: return (cx + o, zb + hs - (t - hs - math.pi * o)), (1.0, 0.0)
+    th = math.pi - (t - hs) / o
+    return (cx + o * math.cos(th), zb + hs + o * math.sin(th)), (math.cos(th), math.sin(th))
+def moulure(name, t0, t1, L, y0, y1, cx, zb, hs):
+    ts = [t0] + [t for t in (hs + i * math.pi * o / 32 for i in range(33)) if t0 < t < t1] + [t1]
     pin, pout = [], []
     for t in ts:
-        (x, z), (nx, nz) = contour(t); pin.append((x, z)); pout.append((x + L * nx, z + L * nz))
-    ring = pin + pout[::-1]; m = len(ring); N = len(ts)
+        (x, z), (nx, nz) = contour(t, cx, zb, hs); pin.append((x, z)); pout.append((x + L * nx, z + L * nz))
+    ring = pin + pout[::-1]; m = len(ring)
     v = [(x, y0, z) for (x, z) in ring] + [(x, y1, z) for (x, z) in ring]
     f = [tuple(range(m)), tuple(m + i for i in range(m))[::-1]] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
     me = bpy.data.meshes.new(name); me.from_pydata(v, [], f); me.update(); me.validate()
     bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
     me.materials.append(bpy.data.materials["Pierre"])
     return bpy.data.objects.new(name, me)
+def entoure(prefixe, coll, cx, zb, hs):
+    """moulure complète (intérieur + extérieur) d'une ouverture du mur avant et du mur arrière"""
+    Lc = 2 * hs + math.pi * o
+    nm = int((Lc + MG) // (MH + MG)) | 1; gm = (Lc - nm * MH) / (nm - 1)
+    kk = 0
+    for nom, y0, y1 in (("avant_ext", -a - MS, -a), ("avant_int", -b, -b + MS), ("arriere_int", b - MS, b), ("arriere_ext", a, a + MS)):
+        for i in range(nm):
+            t0 = i * (MH + gm)
+            ob = moulure("%s_%s_%02d" % (prefixe, nom, i + 1), t0, t0 + MH, ML[min(i, nm - 1 - i) % 2], y0, y1, cx, zb, hs)
+            coll.objects.link(ob); kk += 1
+    print(prefixe, ":", kk, "blocs |", nm, "par face | écart", round(gm, 3), "m")
 col_moul = bpy.data.collections.new("Moulures"); scn.collection.children.link(col_moul)
-km = 0
-for nom, y0, y1 in (("avant_ext", -a - MS, -a), ("avant_int", -b, -b + MS), ("arriere_int", b - MS, b), ("arriere_ext", a, a + MS)):
-    for i in range(nm):
-        t0 = i * (MH + gm)
-        ob = moulure("Moulure_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[min(i, nm - 1 - i) % 2], y0, y1); col_moul.objects.link(ob); km += 1   # nombre impair : alternance symétrique, un seul bloc au sommet
-print("moulures :", km, "blocs |", nm, "par face d'arche | écart", round(gm, 3), "m")
+entoure("Moulure", col_moul, 0.0, T, OH)
+# fenêtres : à côté de chaque arche, au milieu des travées voisines (centre ±46 m), mêmes règles que les arches :
+# 16 m de large (10 m de mur jusqu'aux colonnes), sommet 10 m sous la corniche haute (95 m), bas 10 m au-dessus de la corniche basse (40 m)
+FZ = zb1 + 10.0; FH = T + OH - FZ                         # bas à 40 m, côtés droits sur 47 m, arrondi de 87 à 95 m
+col_fen = bpy.data.collections.new("Moulures_fenetres"); scn.collection.children.link(col_fen)
+for cote, cx in (("gauche", -pas), ("droite", pas)):
+    for mur, y0, y1, oy in (("avant", -a - M, -b + M, -a), ("arriere", b - M, a + M, a)):
+        c = arch("Decoupe_fenetre_%s_%s" % (mur, cote), y0, y1, origin=(cx, oy, FZ), cx=cx, zb=FZ, hs=FH)
+        col_cut.objects.link(c); c.display_type = "WIRE"; c.hide_render = True
+    entoure("Moulure_fenetre_%s" % cote, col_fen, cx, FZ, FH)
+print("fenêtres : 4 | 16 m de large, de", FZ, "à", FZ + FH + OA, "m")
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
 
