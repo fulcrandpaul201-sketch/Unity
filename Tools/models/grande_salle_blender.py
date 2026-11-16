@@ -219,6 +219,11 @@ if OUVERTURES:
     inutiles = [e for e in bm.edges if sur_coupe(e) and len(e.link_faces) == 2
                 and e.link_faces[0].normal.dot(e.link_faces[1].normal) > 0.9999 and max(v.co.z for v in e.verts) <= FZ + 1e-4]
     bmesh.ops.dissolve_edges(bm, edges=inutiles, use_verts=True)
+    # sol : le sol de la salle et le sol des passages sous les arches ne forment qu'une seule face (même surface plate)
+    sol = [e for e in bm.edges if all(abs(v.co.z - T) < 1e-4 for v in e.verts) and len(e.link_faces) == 2
+           and all(f.normal.z > 0.9999 for f in e.link_faces)]
+    bmesh.ops.dissolve_edges(bm, edges=sol, use_verts=True)
+    print("traits du sol enlevés :", len(sol))
     bm.to_mesh(me); bm.free(); me.update()
     print("traits droits restants (au-dessus et, si besoin, au-dessous des ouvertures) :", sum(1 for e in me.edges if all(abs(me.vertices[i].co.x) < 1e-4 for i in e.vertices) or all(abs(me.vertices[i].co.y) < 1e-4 for i in e.vertices)))
 
