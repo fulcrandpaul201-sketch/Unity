@@ -1,4 +1,4 @@
-"""Grande salle en .blend (250 x 250 m, 125 m de haut, 16 colonnes de 10 x 5 m à l'intérieur et 16 en vis-à-vis à l'extérieur, ouvertures en arche 16 m x 32 m) : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
+"""Grande salle en .blend (250 x 250 m, 125 m de haut, 16 colonnes de 10 x 5 m à l'intérieur et 16 en vis-à-vis à l'extérieur, reliées par-dessus le mur, ouvertures en arche 16 m x 32 m) : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
 modificateurs Booléens (formes de découpe modifiables, en fil de fer). Bloc d'échelle 0,5 x 0,5 x 2 m au centre.
 Blender (Z vers le haut, mètres). Lancer :  python3.11 avec le module bpy  ->  Assets/Export/grande_salle.blend"""
 import os, sys, math
@@ -93,6 +93,19 @@ for i in range(1, NCOL + 1):
         ke += 1; c = bpy.data.objects.new("Colonne_ext_%02d" % ke, me_ext); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
         col_ext.objects.link(c)
 print("colonnes extérieures :", ke)
+# ponts : relient chaque colonne intérieure à son vis-à-vis extérieur par-dessus le mur (20 m de long, 10 m de large, 5 m d'épaisseur)
+col_pont = bpy.data.collections.new("Ponts"); scn.collection.children.link(col_pont)
+L = T + 2 * DEP                                           # 5 + 10 + 5 = 20 m
+me_pont = box("Pont_maillage", -COL / 2, COL / 2, -L / 2, L / 2, H, H + DEP, origin=(0, 0, H)).data
+me_pont.name = "Pont"; me_pont.materials.append(bpy.data.materials["Pierre"])
+kp = 0
+mid = a - T / 2                                           # milieu de l'épaisseur du mur
+for i in range(1, NCOL + 1):
+    u = -b + i * pas
+    for (x, y, rz) in ((u, -mid, 0), (u, mid, 0), (-mid, u, 90), (mid, u, 90)):
+        kp += 1; c = bpy.data.objects.new("Pont_%02d" % kp, me_pont); c.location = (x, y, H); c.rotation_euler.z = math.radians(rz)
+        col_pont.objects.link(c)
+print("ponts :", kp, "| longueur", L, "m, épaisseur", DEP, "m")
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
 
@@ -100,7 +113,7 @@ print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL /
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 3
 sun.rotation_euler = (math.radians(50), math.radians(10), math.radians(35)); scn.collection.objects.link(sun)
 cam = bpy.data.objects.new("Camera", bpy.data.cameras.new("Camera")); cam.data.clip_end = 5000; cam.data.lens = 30
-cam.location = (330, -420, 260); scn.collection.objects.link(cam); scn.camera = cam
+cam.location = (210, -270, 200); scn.collection.objects.link(cam); scn.camera = cam
 cam.rotation_euler = (math.radians(62), 0, math.radians(38))
 scn.world = bpy.data.worlds.new("Ciel"); scn.world.color = (0.75, 0.78, 0.82)
 
