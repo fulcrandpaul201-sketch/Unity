@@ -1,10 +1,10 @@
-"""Grande salle en .blend : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
+"""Grande salle en .blend (100 x 100 m, 75 m de haut) : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
 modificateurs Booléens (formes de découpe modifiables, en fil de fer). Bloc d'échelle 0,5 x 0,5 x 2 m au centre.
 Blender (Z vers le haut, mètres). Lancer :  python3.11 avec le module bpy  ->  Assets/Export/grande_salle.blend"""
 import os, sys, math
 import bpy, bmesh
 
-W, H, T = 250.0, 175.0, 10.0          # largeur, hauteur, épaisseur des parois et du sol
+W, H, T = 100.0, 75.0, 10.0          # largeur, hauteur, épaisseur des parois et du sol
 OW, OH = 25.0, 25.0                   # ouvertures : largeur, hauteur
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Export"))
 
@@ -57,7 +57,7 @@ rep.data.materials.append(mat("Repere", (0.70, 0.05, 0.02)))
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 3
 sun.rotation_euler = (math.radians(50), math.radians(10), math.radians(35)); scn.collection.objects.link(sun)
 cam = bpy.data.objects.new("Camera", bpy.data.cameras.new("Camera")); cam.data.clip_end = 5000; cam.data.lens = 30
-cam.location = (330, -420, 300); scn.collection.objects.link(cam); scn.camera = cam
+cam.location = (135, -170, 125); scn.collection.objects.link(cam); scn.camera = cam
 cam.rotation_euler = (math.radians(62), 0, math.radians(38))
 scn.world = bpy.data.worlds.new("Ciel"); scn.world.color = (0.75, 0.78, 0.82)
 
@@ -81,7 +81,7 @@ for scr in bpy.data.screens:
         for sp in area.spaces:
             if sp.type == "VIEW_3D":
                 sp.clip_end = 5000; sp.clip_start = 0.1
-                r3 = sp.region_3d; r3.view_location = (0, 0, 70); r3.view_distance = 650
+                r3 = sp.region_3d; r3.view_location = (0, 0, 30); r3.view_distance = 260
                 r3.view_rotation = Euler((math.radians(62), 0, math.radians(38))).to_quaternion(); n += 1
 print("vues 3D réglées :", n)
 os.makedirs(OUT, exist_ok=True)
