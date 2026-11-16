@@ -1,4 +1,4 @@
-"""Grande salle en .blend (250 x 250 m, 125 m de haut, 16 colonnes de 10 x 5 m, ouvertures en arche 16 m x 32 m) : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
+"""Grande salle en .blend (250 x 250 m, 125 m de haut, 16 colonnes de 10 x 5 m à l'intérieur et 16 en vis-à-vis à l'extérieur, ouvertures en arche 16 m x 32 m) : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
 modificateurs Booléens (formes de découpe modifiables, en fil de fer). Bloc d'échelle 0,5 x 0,5 x 2 m au centre.
 Blender (Z vers le haut, mètres). Lancer :  python3.11 avec le module bpy  ->  Assets/Export/grande_salle.blend"""
 import os, sys, math
@@ -82,6 +82,17 @@ for i in range(1, NCOL + 1):
     for (x, y, rz) in ((u, -b + DEP / 2, 0), (u, b - DEP / 2, 0), (-b + DEP / 2, u, 90), (b - DEP / 2, u, 90)):   # avant, arrière, gauche, droite
         k += 1; c = bpy.data.objects.new("Colonne_%02d" % k, me_col); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
         col_cols.objects.link(c)
+# colonnes extérieures : mêmes dimensions et mêmes positions, en vis-à-vis des intérieures, du sol (0 m) jusqu'en haut
+col_ext = bpy.data.collections.new("Colonnes_exterieures"); scn.collection.children.link(col_ext)
+me_ext = box("Colonne_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H).data
+me_ext.name = "Colonne_exterieure"; me_ext.materials.append(bpy.data.materials["Pierre"])
+ke = 0
+for i in range(1, NCOL + 1):
+    u = -b + i * pas
+    for (x, y, rz) in ((u, -a - DEP / 2, 0), (u, a + DEP / 2, 0), (-a - DEP / 2, u, 90), (a + DEP / 2, u, 90)):
+        ke += 1; c = bpy.data.objects.new("Colonne_ext_%02d" % ke, me_ext); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
+        col_ext.objects.link(c)
+print("colonnes extérieures :", ke)
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
 
