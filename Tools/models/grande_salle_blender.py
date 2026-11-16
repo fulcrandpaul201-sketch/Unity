@@ -57,39 +57,16 @@ def mat(name, rgb):
 col_main = bpy.data.collections.new("Grande_salle"); scn.collection.children.link(col_main)
 col_cut = bpy.data.collections.new("Decoupes"); scn.collection.children.link(col_cut)
 
-# la salle : 250 x 250 x 125 m, creusée directement dans le maillage (parois et sol de 10 m), origine au centre du dessous ;
-# le haut du mur est découpé par des traits droits qui prolongent les murs intérieurs (pas de diagonale dans les angles)
-a = W / 2; b = a - T
-def salle_creuse(name):
-    v = {}
-    def p(x, y, z):
-        if (x, y, z) not in v: v[(x, y, z)] = len(v)
-        return v[(x, y, z)]
-    f = [
-        [p(-a, -a, 0), p(-a, a, 0), p(a, a, 0), p(a, -a, 0)],                                            # dessous
-        [p(-a, -a, 0), p(a, -a, 0), p(a, -a, H), p(-a, -a, H)],                                          # extérieur avant
-        [p(a, a, 0), p(-a, a, 0), p(-a, a, H), p(a, a, H)],                                              # extérieur arrière
-        [p(-a, a, 0), p(-a, -a, 0), p(-a, -a, H), p(-a, -b, H), p(-a, b, H), p(-a, a, H)],               # extérieur gauche
-        [p(a, -a, 0), p(a, a, 0), p(a, a, H), p(a, b, H), p(a, -b, H), p(a, -a, H)],                     # extérieur droit
-        [p(-a, -a, H), p(a, -a, H), p(a, -b, H), p(b, -b, H), p(-b, -b, H), p(-a, -b, H)],               # haut du mur avant (toute la largeur)
-        [p(a, a, H), p(-a, a, H), p(-a, b, H), p(-b, b, H), p(b, b, H), p(a, b, H)],                     # haut du mur arrière
-        [p(-a, -b, H), p(-b, -b, H), p(-b, b, H), p(-a, b, H)],                                          # haut du mur gauche
-        [p(a, b, H), p(b, b, H), p(b, -b, H), p(a, -b, H)],                                              # haut du mur droit
-        [p(-b, -b, T), p(-b, -b, H), p(b, -b, H), p(b, -b, T)],                                          # intérieur avant
-        [p(b, b, T), p(b, b, H), p(-b, b, H), p(-b, b, T)],                                              # intérieur arrière
-        [p(-b, b, T), p(-b, b, H), p(-b, -b, H), p(-b, -b, T)],                                          # intérieur gauche
-        [p(b, -b, T), p(b, -b, H), p(b, b, H), p(b, b, T)],                                              # intérieur droit
-        [p(-b, -b, T), p(b, -b, T), p(b, b, T), p(-b, b, T)],                                            # sol intérieur
-    ]
-    me = bpy.data.meshes.new(name); me.from_pydata(sorted(v, key=v.get), [], f); me.update(); me.validate()
-    bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
-    return bpy.data.objects.new(name, me)
-salle = salle_creuse("Grande_salle"); col_main.objects.link(salle)
+# le cube : 250 x 250 x 175 m, origine au centre du dessous
+a = W / 2
+salle = box("Grande_salle", -a, a, -a, a, 0, H); col_main.objects.link(salle)
 salle.data.materials.append(mat("Pierre", (0.43, 0.41, 0.37)))
 
-# formes de découpe (fil de fer, invisibles au rendu) : 2 ouvertures (avant = -Y, arrière = +Y)
-o, M = OW / 2, 5.0                    # M : débord pour des découpes franches
-cutters = ([
+# formes de découpe (fil de fer, invisibles au rendu) : intérieur + 2 ouvertures (avant = -Y, arrière = +Y)
+b, o, M = a - T, OW / 2, 5.0          # M : débord pour des découpes franches
+cutters = [
+    box("Decoupe_interieur", -b, b, -b, b, T, H + M, origin=(0, 0, T)),
+] + ([
     arch("Decoupe_ouverture_avant", -a - M, -b + M, origin=(0, -a, T)),
     arch("Decoupe_ouverture_arriere", b - M, a + M, origin=(0, a, T)),
 ] if OUVERTURES else [])
@@ -224,7 +201,7 @@ ev = salle.evaluated_get(dg).to_mesh()
 bm = bmesh.new(); bm.from_mesh(ev)
 manifold = all(e.is_manifold for e in bm.edges)
 xs = [v.co.x for v in bm.verts]; ys = [v.co.y for v in bm.verts]; zs = [v.co.z for v in bm.verts]
-print("salle de base :", len(salle.data.vertices), "sommets,", len(salle.data.polygons), "faces")
+print("cube de base :", len(salle.data.vertices), "sommets,", len(salle.data.polygons), "faces")
 print("après découpes :", len(bm.verts), "sommets,", len(bm.faces), "faces, étanche =", manifold)
 print("boîte :", (min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs)))
 bm.free(); salle.evaluated_get(dg).to_mesh_clear()
