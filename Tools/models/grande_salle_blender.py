@@ -119,6 +119,21 @@ for j in range(NCOL + 1):
         kc += 1; c = box("Corniche_%02d" % kc, x0, x1, y0, y1, zc0, zc1, origin=((x0 + x1) / 2, (y0 + y1) / 2, zc0))
         c.data.materials.append(bpy.data.materials["Pierre"]); col_cor.objects.link(c)
 print("corniche :", kc, "morceaux | de", zc0, "à", zc1, "m")
+# corniches basses : identiques à celle du haut (10 m de haut, 5 m de saillie), 10 m au-dessus du sol intérieur (20 -> 30 m)
+# à l'intérieur et en parallèle à l'extérieur ; rien entre les 2 colonnes centrales des murs avant et arrière (arches)
+zb0 = T + 10.0; zb1 = zb0 + 10.0
+for nom, r0, r1 in (("Corniche_basse_int", b - DEP, b), ("Corniche_basse_ext", a, a + DEP)):   # r0..r1 : bande en distance au centre
+    colb = bpy.data.collections.new(nom); scn.collection.children.link(colb)
+    lim = -b if r1 == b else -a - DEP                     # extrémité côté angle (carrés d'angle sur les murs avant / arrière)
+    bb = [lim] + bords[1:-1] + [-lim]
+    n = 0
+    for j in range(NCOL + 1):
+        u0, u1 = bb[2 * j], bb[2 * j + 1]
+        v0, v1 = max(u0, -r0), min(u1, r0)                # murs gauche / droite : s'arrêtent aux carrés d'angle
+        for (x0, x1, y0, y1) in (((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if j != NCOL // 2 else ()) + ((-r1, -r0, v0, v1), (r0, r1, v0, v1)):
+            n += 1; c = box("%s_%02d" % (nom, n), x0, x1, y0, y1, zb0, zb1, origin=((x0 + x1) / 2, (y0 + y1) / 2, zb0))
+            c.data.materials.append(bpy.data.materials["Pierre"]); colb.objects.link(c)
+    print(nom, ":", n, "morceaux | de", zb0, "à", zb1, "m")
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
 
