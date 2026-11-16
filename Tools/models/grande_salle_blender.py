@@ -1,4 +1,4 @@
-"""Grande salle en .blend (250 x 250 m, 125 m de haut, 16 colonnes de 10 x 5 m, ouvertures 16 x 16 m) : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
+"""Grande salle en .blend (250 x 250 m, 125 m de haut, 16 colonnes de 10 x 5 m, ouvertures en arche 16 m x 32 m) : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
 modificateurs Booléens (formes de découpe modifiables, en fil de fer). Bloc d'échelle 0,5 x 0,5 x 2 m au centre.
 Blender (Z vers le haut, mètres). Lancer :  python3.11 avec le module bpy  ->  Assets/Export/grande_salle.blend"""
 import os, sys, math
@@ -6,7 +6,8 @@ import bpy, bmesh
 
 W, H, T = 250.0, 125.0, 10.0
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
-OW = OH = 16.0                        # ouvertures carrées : 10 m de mur entre leur bord et le bord des colonnes du milieu
+OW, OH, OA = 16.0, 16.0, 16.0          # ouvertures : 16 m de large, côtés droits sur 16 m, puis arrondi sur 16 m (sommet à 32 m)
+ARC_SEG = 32                          # nombre de segments de l'arrondi
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Export"))
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -20,6 +21,22 @@ def box(name, x0, x1, y0, y1, z0, z1, origin=(0, 0, 0)):
     v = [(x - ox, y - oy, z - oz) for z in (z0, z1) for y in (y0, y1) for x in (x0, x1)]
     f = [(0, 2, 3, 1), (4, 5, 7, 6), (0, 1, 5, 4), (2, 6, 7, 3), (0, 4, 6, 2), (1, 3, 7, 5)]
     me.from_pydata(v, [], f); me.update(); me.validate()
+    bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
+    ob = bpy.data.objects.new(name, me); ob.location = origin
+    return ob
+
+def arch(name, y0, y1, origin):
+    """forme de découpe d'une ouverture en arche : côtés droits sur OH, puis demi-ellipse (largeur OW, hauteur OA), extrudée en Y"""
+    ox, oy, oz = origin
+    prof = [(-OW / 2, T), (OW / 2, T), (OW / 2, T + OH)]
+    for i in range(1, ARC_SEG):
+        t = math.pi * i / ARC_SEG
+        prof.append((OW / 2 * math.cos(t), T + OH + OA * math.sin(t)))
+    prof.append((-OW / 2, T + OH))
+    n = len(prof)
+    v = [(x - ox, y - oy, z - oz) for y in (y0, y1) for (x, z) in prof]
+    f = [tuple(range(n)), tuple(range(2 * n - 1, n - 1, -1))] + [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
+    me = bpy.data.meshes.new(name); me.from_pydata(v, [], f); me.update(); me.validate()
     bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
     ob = bpy.data.objects.new(name, me); ob.location = origin
     return ob
@@ -42,8 +59,8 @@ salle.data.materials.append(mat("Pierre", (0.43, 0.41, 0.37)))
 b, o, M = a - T, OW / 2, 5.0          # M : débord pour des découpes franches
 cutters = [
     box("Decoupe_interieur", -b, b, -b, b, T, H + M, origin=(0, 0, T)),
-    box("Decoupe_ouverture_avant", -o, o, -a - M, -b + M, T, T + OH, origin=(0, -a, T)),
-    box("Decoupe_ouverture_arriere", -o, o, b - M, a + M, T, T + OH, origin=(0, a, T)),
+    arch("Decoupe_ouverture_avant", -a - M, -b + M, origin=(0, -a, T)),
+    arch("Decoupe_ouverture_arriere", b - M, a + M, origin=(0, a, T)),
 ]
 for c in cutters:
     col_cut.objects.link(c); c.display_type = "WIRE"; c.hide_render = True
@@ -66,7 +83,7 @@ for i in range(1, NCOL + 1):
         k += 1; c = bpy.data.objects.new("Colonne_%02d" % k, me_col); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
         col_cols.objects.link(c)
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
-print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "x", OH, "m")
+print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
 
 # lumière et caméra pour un premier rendu
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 3
@@ -108,6 +125,6 @@ if "--render" in sys.argv:                                   # aperçu (Cycles C
     scn.render.resolution_x, scn.render.resolution_y = 1000, 700
     scn.render.filepath = os.path.join(sys.argv[sys.argv.index("--render") + 1], "salle_ext.png")
     bpy.ops.render.render(write_still=True)
-    cam.location = (30, 80, 20); cam.rotation_euler = (math.radians(86), 0, math.radians(180)); cam.data.lens = 18
+    cam.location = (0, 60, 22); cam.rotation_euler = (math.radians(90), 0, math.radians(180)); cam.data.lens = 24
     scn.render.filepath = os.path.join(sys.argv[sys.argv.index("--render") + 1], "salle_int.png")
     bpy.ops.render.render(write_still=True)
