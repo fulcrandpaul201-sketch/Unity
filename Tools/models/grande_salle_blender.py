@@ -136,9 +136,9 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche_basse_int", b - DEP, b, zb0, zb1, 
             n += 1; c = box("%s_%02d" % (nom, n), x0, x1, y0, y1, z0, z1, origin=((x0 + x1) / 2, (y0 + y1) / 2, z0))
             c.data.materials.append(bpy.data.materials["Pierre"]); colb.objects.link(c)
     print(nom, ":", n, "morceaux | de", z0, "à", z1, "m")
-# moulures harpées autour des 2 arches (intérieur + extérieur) : blocs de 5 m de haut, 1 m de saillie, 1 m d'écart,
+# moulures harpées autour des 2 arches (intérieur + extérieur) : blocs de 5 m de haut, 2,5 m d'épaisseur, 31 blocs (écart ~0,8 m),
 # s'avançant dans le mur de 5 m puis 3 m en alternance, tout le tour de l'arche (côtés droits + arrondi en éventail)
-MH, MS, MG, ML = 5.0, 1.0, 1.0, (5.0, 3.0)
+MH, MS, MG, ML = 5.0, 2.5, 1.0, (5.0, 3.0)
 o = OW / 2
 Lc = 2 * OH + math.pi * o                                 # longueur du contour de l'arche
 nm = int((Lc + MG) // (MH + MG)) | 1; gm = (Lc - nm * MH) / (nm - 1)   # nombre de blocs, écart réajusté (~1 m)
