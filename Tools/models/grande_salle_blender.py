@@ -165,7 +165,7 @@ km = 0
 for nom, y0, y1 in (("avant_ext", -a - MS, -a), ("avant_int", -b, -b + MS), ("arriere_int", b - MS, b), ("arriere_ext", a, a + MS)):
     for i in range(nm):
         t0 = i * (MH + gm)
-        ob = moulure("Moulure_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[i % 2], y0, y1); col_moul.objects.link(ob); km += 1
+        ob = moulure("Moulure_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[min(i, nm - 1 - i) % 2], y0, y1); col_moul.objects.link(ob); km += 1   # symétrie gauche / droite : les 2 blocs du sommet font 5 m
 print("moulures :", km, "blocs |", nm, "par face d'arche | écart", round(gm, 3), "m")
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
