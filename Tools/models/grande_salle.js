@@ -1,7 +1,7 @@
-// Grande salle : cube de 250 x 250 x 250 m creusé par le haut (ouvert au-dessus), parois et sol de 2,5 m d'épaisseur.
+// Grande salle : cube de 250 x 250 x 250 m creusé par le haut (ouvert au-dessus), parois et sol de 10 m d'épaisseur.
 // Un seul maillage, sans faces qui se chevauchent. Unités : mètres. Origine au centre du sol, sous la salle (y = 0).
 function buildHall() {
-  const S = 250, T = 2.5, H = S / 2;
+  const S = 250, T = 10, H = S / 2;
   const parts = [
     [S, T, S, 0, T / 2, 0],                          // sol
     [S, S - T, T, 0, T + (S - T) / 2, -H + T / 2],   // mur arrière (pleine largeur)
