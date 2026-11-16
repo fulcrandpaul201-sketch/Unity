@@ -136,6 +136,37 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche_basse_int", b - DEP, b, zb0, zb1, 
             n += 1; c = box("%s_%02d" % (nom, n), x0, x1, y0, y1, z0, z1, origin=((x0 + x1) / 2, (y0 + y1) / 2, z0))
             c.data.materials.append(bpy.data.materials["Pierre"]); colb.objects.link(c)
     print(nom, ":", n, "morceaux | de", z0, "à", z1, "m")
+# moulures harpées autour des 2 arches (intérieur + extérieur) : blocs de 5 m de haut, 1 m de saillie, 1 m d'écart,
+# s'avançant dans le mur de 5 m puis 3 m en alternance, tout le tour de l'arche (côtés droits + arrondi en éventail)
+MH, MS, MG, ML = 5.0, 1.0, 1.0, (5.0, 3.0)
+o = OW / 2
+Lc = 2 * OH + math.pi * o                                 # longueur du contour de l'arche
+nm = int((Lc + MG) // (MH + MG)); gm = (Lc - nm * MH) / (nm - 1)   # nombre de blocs, écart réajusté (~1 m)
+def contour(t):
+    """point du bord de l'arche (x, z) et direction vers le mur, à la distance t le long du contour (départ en bas à gauche)"""
+    if t <= OH: return (-o, T + t), (-1.0, 0.0)
+    if t >= OH + math.pi * o: return (o, T + OH - (t - OH - math.pi * o)), (1.0, 0.0)
+    th = math.pi - (t - OH) / o
+    return (o * math.cos(th), T + OH + o * math.sin(th)), (math.cos(th), math.sin(th))
+def moulure(name, t0, t1, L, y0, y1):
+    ts = [t0] + [t for t in (OH + i * math.pi * o / 32 for i in range(33)) if t0 < t < t1] + [t1]
+    pin, pout = [], []
+    for t in ts:
+        (x, z), (nx, nz) = contour(t); pin.append((x, z)); pout.append((x + L * nx, z + L * nz))
+    ring = pin + pout[::-1]; m = len(ring); N = len(ts)
+    v = [(x, y0, z) for (x, z) in ring] + [(x, y1, z) for (x, z) in ring]
+    f = [tuple(range(m)), tuple(m + i for i in range(m))[::-1]] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
+    me = bpy.data.meshes.new(name); me.from_pydata(v, [], f); me.update(); me.validate()
+    bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
+    me.materials.append(bpy.data.materials["Pierre"])
+    return bpy.data.objects.new(name, me)
+col_moul = bpy.data.collections.new("Moulures"); scn.collection.children.link(col_moul)
+km = 0
+for nom, y0, y1 in (("avant_ext", -a - MS, -a), ("avant_int", -b, -b + MS), ("arriere_int", b - MS, b), ("arriere_ext", a, a + MS)):
+    for i in range(nm):
+        t0 = i * (MH + gm)
+        ob = moulure("Moulure_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[i % 2], y0, y1); col_moul.objects.link(ob); km += 1
+print("moulures :", km, "blocs |", nm, "par face d'arche | écart", round(gm, 3), "m")
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
 
