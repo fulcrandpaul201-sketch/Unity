@@ -25,14 +25,20 @@ def box(name, x0, x1, y0, y1, z0, z1, origin=(0, 0, 0)):
     ob = bpy.data.objects.new(name, me); ob.location = origin
     return ob
 
-def arch(name, y0, y1, origin, zb=T, hs=OH):
-    """forme de découpe d'une ouverture en arche (bas zb) : côtés droits sur hs, puis demi-ellipse (largeur OW, hauteur OA), extrudée en Y"""
+def arch(name, y0, y1, origin, zb=T, hs=OH, bas_rond=False):
+    """forme de découpe d'une ouverture en arche (bas zb) : côtés droits sur hs, puis demi-ellipse (largeur OW, hauteur OA), extrudée en Y ;
+    bas_rond : le bas est aussi arrondi (demi-cercle de zb à zb + OA, côtés droits de zb + OA à zb + hs)"""
     ox, oy, oz = origin
-    prof = [(-OW / 2, zb), (OW / 2, zb), (OW / 2, zb + hs)]
+    if bas_rond:
+        prof = [(OW / 2 * math.cos(t), zb + OA + OA * math.sin(t)) for t in (math.pi + math.pi * i / ARC_SEG for i in range(1, ARC_SEG))]
+        prof += [(OW / 2, zb + OA), (OW / 2, zb + hs)]
+    else:
+        prof = [(-OW / 2, zb), (OW / 2, zb), (OW / 2, zb + hs)]
     for i in range(1, ARC_SEG):
         t = math.pi * i / ARC_SEG
         prof.append((OW / 2 * math.cos(t), zb + hs + OA * math.sin(t)))
     prof.append((-OW / 2, zb + hs))
+    if bas_rond: prof.append((-OW / 2, zb + OA))
     n = len(prof)
     v = [(x - ox, y - oy, z - oz) for y in (y0, y1) for (x, z) in prof]
     f = [tuple(range(n)), tuple(range(2 * n - 1, n - 1, -1))] + [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
@@ -170,10 +176,10 @@ for nom, y0, y1 in (("avant_ext", -a - MS, -a), ("avant_int", -b, -b + MS), ("ar
         ob = moulure("Moulure_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[min(i, nm - 1 - i) % 2], y0, y1); col_moul.objects.link(ob); km += 1   # nombre impair : alternance symétrique, un seul bloc au sommet
 print("moulures :", km, "blocs |", nm, "par face d'arche | écart", round(gm, 3), "m")
 # fenêtres sans moulure : une seule par mur sans ouverture (murs gauche et droite), centrée, même forme que les arches :
-# 16 m de large, bas 10 m au-dessus de la corniche basse (40 m), sommet 10 m sous la corniche haute (95 m), arrondi à partir de 87 m
+# 16 m de large, bas 10 m au-dessus de la corniche basse (40 m), sommet 10 m sous la corniche haute (95 m), arrondie en bas (40 -> 48 m) et en haut (87 -> 95 m)
 FZ = zb1 + 10.0; FH = T + OH - FZ
 for nom, rz in (("Decoupe_fenetre_gauche", -90), ("Decoupe_fenetre_droite", 90)):
-    c = arch(nom, -a - M, -b + M, origin=(0, 0, FZ), zb=FZ, hs=FH); c.rotation_euler.z = math.radians(rz)
+    c = arch(nom, -a - M, -b + M, origin=(0, 0, FZ), zb=FZ, hs=FH, bas_rond=True); c.rotation_euler.z = math.radians(rz)
     col_cut.objects.link(c); c.display_type = "WIRE"; c.hide_render = True
 print("fenêtres : 2 (murs gauche et droite) | 16 m de large, de", FZ, "à", FZ + FH + OA, "m")
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
