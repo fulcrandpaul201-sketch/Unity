@@ -6,11 +6,7 @@ import bpy, bmesh
 
 W, H, T = 250.0, 125.0, 10.0
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
-MH, MS, MG, ML = 5.0, 2.5, 0.8, (5.0, 3.0)  # moulures : blocs de 5 m de haut, 2,5 m d'épaisseur, écart identique partout 0,8 m, 5 m / 3 m de long en alternance
-NA, NF = 31, 22                       # blocs par face : arches (contour ouvert, impair) et fenêtres (contour fermé, pair)
-OW, OA = 16.0, 8.0                    # ouvertures : 16 m de large, arrondi en demi-cercle (rayon 8 m)
-OH = (NA * MH + (NA - 1) * MG - math.pi * OW / 2) / 2   # côtés droits des arches (~76,93 m) : le tour tombe juste avec l'écart de 0,8 m ; sommet ~94,93 m
-FH = (NF * (MH + MG) - math.pi * OW) / 2                # côtés droits des fenêtres (~38,67 m), arrondies en haut et en bas
+OW, OH, OA = 16.0, 77.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 77 m, puis demi-cercle (rayon 8 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
 ARC_SEG = 32                          # nombre de segments de l'arrondi
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Export"))
 
@@ -29,14 +25,14 @@ def box(name, x0, x1, y0, y1, z0, z1, origin=(0, 0, 0)):
     ob = bpy.data.objects.new(name, me); ob.location = origin
     return ob
 
-def arch(name, y0, y1, origin, cx=0.0, zb=T, hs=OH):
-    """forme de découpe d'une ouverture en arche (centre cx, bas zb) : côtés droits sur hs, puis demi-ellipse (largeur OW, hauteur OA), extrudée en Y"""
+def arch(name, y0, y1, origin):
+    """forme de découpe d'une ouverture en arche : côtés droits sur OH, puis demi-ellipse (largeur OW, hauteur OA), extrudée en Y"""
     ox, oy, oz = origin
-    prof = [(cx - OW / 2, zb), (cx + OW / 2, zb), (cx + OW / 2, zb + hs)]
+    prof = [(-OW / 2, T), (OW / 2, T), (OW / 2, T + OH)]
     for i in range(1, ARC_SEG):
         t = math.pi * i / ARC_SEG
-        prof.append((cx + OW / 2 * math.cos(t), zb + hs + OA * math.sin(t)))
-    prof.append((cx - OW / 2, zb + hs))
+        prof.append((OW / 2 * math.cos(t), T + OH + OA * math.sin(t)))
+    prof.append((-OW / 2, T + OH))
     n = len(prof)
     v = [(x - ox, y - oy, z - oz) for y in (y0, y1) for (x, z) in prof]
     f = [tuple(range(n)), tuple(range(2 * n - 1, n - 1, -1))] + [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
@@ -142,80 +138,37 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("
         L_ = [(E, r0), (r0, r0), (r0, E), (r1, E), (r1, r1), (E, r1)]   # L : bande du mur avant/arrière + bande du mur de côté
         ajoute(prisme("tmp", [(sx * x, sy * y) for x, y in L_], z0, z1))
     print(nom, ":", n, "morceaux | de", z0, "à", z1, "m")
-# moulures harpées autour des 2 arches et des 4 fenêtres (intérieur + extérieur) : blocs de 5 m de haut, 2,5 m d'épaisseur,
-# s'avançant dans le mur de 5 m puis 3 m en alternance, tout le tour (côtés droits + arrondis en éventail), écart identique de 0,8 m,
-# alternance symétrique gauche / droite, clé de voûte de 3 m au sommet partout
+# moulures harpées autour des 2 arches (intérieur + extérieur) : blocs de 5 m de haut, 2,5 m d'épaisseur, 31 blocs (écart ~0,8 m),
+# s'avançant dans le mur de 5 m puis 3 m en alternance, tout le tour de l'arche (côtés droits + arrondi en éventail)
+MH, MS, MG, ML = 5.0, 2.5, 1.0, (5.0, 3.0)
 o = OW / 2
-def contour_arche(cx, zb, hs):
-    """contour ouvert d'une arche, départ en bas à gauche : renvoie (longueur, fonction t -> point (x, z), direction vers le mur ; abscisses des points de l'arrondi)"""
-    def f(t):
-        if t <= hs: return (cx - o, zb + t), (-1.0, 0.0)
-        if t >= hs + math.pi * o: return (cx + o, zb + hs - (t - hs - math.pi * o)), (1.0, 0.0)
-        th = math.pi - (t - hs) / o
-        return (cx + o * math.cos(th), zb + hs + o * math.sin(th)), (math.cos(th), math.sin(th))
-    return 2 * hs + math.pi * o, f, [hs + i * math.pi * o / ARC_SEG for i in range(ARC_SEG + 1)]
-def contour_fenetre(cx, zt, hs):
-    """contour fermé d'une fenêtre arrondie en haut et en bas (centre de l'arrondi haut à zt), départ au sommet, sens horaire"""
-    q = math.pi * o / 2; zbas = zt - hs; Lt = 2 * hs + 2 * math.pi * o
-    def f(t):
-        t %= Lt
-        if t <= q: th, zc = math.pi / 2 - t / o, zt
-        elif t <= q + hs: return (cx + o, zt - (t - q)), (1.0, 0.0)
-        elif t <= 3 * q + hs: th, zc = -(t - q - hs) / o, zbas
-        elif t <= 3 * q + 2 * hs: return (cx - o, zbas + (t - 3 * q - hs)), (-1.0, 0.0)
-        else: th, zc = math.pi - (t - 3 * q - 2 * hs) / o, zt
-        return (cx + o * math.cos(th), zc + o * math.sin(th)), (math.cos(th), math.sin(th))
-    arc = [i * q / (ARC_SEG / 2) for i in range(ARC_SEG // 2 + 1)]
-    pts = arc + [q + hs + i * 2 * q / ARC_SEG for i in range(ARC_SEG + 1)] + [3 * q + 2 * hs + v for v in arc]
-    return Lt, f, pts
-def moulure(name, t0, t1, L, y0, y1, cont):
-    Lt, f, pts = cont
-    ts = [t0] + sorted(p + k * Lt for p in pts for k in (-1, 0, 1) if t0 + 1e-6 < p + k * Lt < t1 - 1e-6) + [t1]
+Lc = 2 * OH + math.pi * o                                 # longueur du contour de l'arche
+nm = int((Lc + MG) // (MH + MG)) | 1; gm = (Lc - nm * MH) / (nm - 1)   # nombre de blocs, écart réajusté (~1 m)
+def contour(t):
+    """point du bord de l'arche (x, z) et direction vers le mur, à la distance t le long du contour (départ en bas à gauche)"""
+    if t <= OH: return (-o, T + t), (-1.0, 0.0)
+    if t >= OH + math.pi * o: return (o, T + OH - (t - OH - math.pi * o)), (1.0, 0.0)
+    th = math.pi - (t - OH) / o
+    return (o * math.cos(th), T + OH + o * math.sin(th)), (math.cos(th), math.sin(th))
+def moulure(name, t0, t1, L, y0, y1):
+    ts = [t0] + [t for t in (OH + i * math.pi * o / 32 for i in range(33)) if t0 < t < t1] + [t1]
     pin, pout = [], []
     for t in ts:
-        (x, z), (nx, nz) = f(t); pin.append((x, z)); pout.append((x + L * nx, z + L * nz))
-    ring = pin + pout[::-1]; m = len(ring)
+        (x, z), (nx, nz) = contour(t); pin.append((x, z)); pout.append((x + L * nx, z + L * nz))
+    ring = pin + pout[::-1]; m = len(ring); N = len(ts)
     v = [(x, y0, z) for (x, z) in ring] + [(x, y1, z) for (x, z) in ring]
-    fc = [tuple(range(m)), tuple(m + i for i in range(m))[::-1]] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
-    me = bpy.data.meshes.new(name); me.from_pydata(v, [], fc); me.update(); me.validate()
+    f = [tuple(range(m)), tuple(m + i for i in range(m))[::-1]] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
+    me = bpy.data.meshes.new(name); me.from_pydata(v, [], f); me.update(); me.validate()
     bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
     me.materials.append(bpy.data.materials["Pierre"])
     return bpy.data.objects.new(name, me)
-FACES = (("avant_ext", -a - MS, -a), ("avant_int", -b, -b + MS), ("arriere_int", b - MS, b), ("arriere_ext", a, a + MS))
 col_moul = bpy.data.collections.new("Moulures"); scn.collection.children.link(col_moul)
-cont = contour_arche(0.0, T, OH); km = 0
-for nom, y0, y1 in FACES:
-    for i in range(NA):                                   # blocs posés depuis le bas à gauche ; nombre impair -> un seul bloc au sommet
-        t0 = i * (MH + MG)
-        col_moul.objects.link(moulure("Moulure_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[min(i, NA - 1 - i) % 2], y0, y1, cont)); km += 1
-print("moulures arches :", km, "blocs |", NA, "par face | écart", MG, "m | longueur du tour", round(cont[0], 3), "=", NA * MH + (NA - 1) * MG)
-# fenêtres : à côté de chaque arche, au milieu des travées voisines (centre ±46 m), 16 m de large (10 m de mur jusqu'aux colonnes),
-# arrondies en haut et en bas, sommet à la même hauteur que les arches ; moulure fermée tout autour, bloc de 3 m au sommet
-ZT = T + OH                                               # centre de l'arrondi haut (comme les arches)
-FB = ZT - FH - o                                          # bas de la fenêtre (~40,27 m)
-col_fen = bpy.data.collections.new("Moulures_fenetres"); scn.collection.children.link(col_fen)
-def stade(name, y0, y1, origin, cx):
-    ox, oy, oz = origin
-    prof = [(cx + o * math.cos(t), ZT + o * math.sin(t)) for t in (math.pi * i / ARC_SEG for i in range(ARC_SEG + 1))]
-    prof += [(cx + o * math.cos(t), ZT - FH + o * math.sin(t)) for t in (math.pi + math.pi * i / ARC_SEG for i in range(ARC_SEG + 1))]
-    n = len(prof)
-    v = [(x - ox, y - oy, z - oz) for y in (y0, y1) for (x, z) in prof]
-    fc = [tuple(range(n)), tuple(range(2 * n - 1, n - 1, -1))] + [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
-    me = bpy.data.meshes.new(name); me.from_pydata(v, [], fc); me.update(); me.validate()
-    bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
-    ob = bpy.data.objects.new(name, me); ob.location = origin
-    return ob
-kf = 0
-for cote, cx in (("gauche", -pas), ("droite", pas)):
-    for mur, y0, y1, oy in (("avant", -a - M, -b + M, -a), ("arriere", b - M, a + M, a)):
-        c = stade("Decoupe_fenetre_%s_%s" % (mur, cote), y0, y1, (cx, oy, FB), cx)
-        col_cut.objects.link(c); c.display_type = "WIRE"; c.hide_render = True
-    cont = contour_fenetre(cx, ZT, FH)
-    for nom, y0, y1 in FACES:
-        for i in range(NF):                               # bloc 0 centré au sommet (3 m), alternance symétrique (nombre pair)
-            t0 = i * (MH + MG) - MH / 2
-            col_fen.objects.link(moulure("Moulure_fenetre_%s_%s_%02d" % (cote, nom, i + 1), t0, t0 + MH, ML[(i + 1) % 2], y0, y1, cont)); kf += 1
-print("fenêtres : 4 | 16 m de large, de", round(FB, 3), "à", round(ZT + o, 3), "m | moulures :", kf, "blocs |", NF, "par face | tour", round(cont[0], 3), "=", NF * (MH + MG))
+km = 0
+for nom, y0, y1 in (("avant_ext", -a - MS, -a), ("avant_int", -b, -b + MS), ("arriere_int", b - MS, b), ("arriere_ext", a, a + MS)):
+    for i in range(nm):
+        t0 = i * (MH + gm)
+        ob = moulure("Moulure_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[min(i, nm - 1 - i) % 2], y0, y1); col_moul.objects.link(ob); km += 1   # nombre impair : alternance symétrique, un seul bloc au sommet
+print("moulures :", km, "blocs |", nm, "par face d'arche | écart", round(gm, 3), "m")
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
 
