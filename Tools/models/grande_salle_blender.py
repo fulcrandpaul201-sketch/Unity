@@ -7,7 +7,7 @@ import bpy, bmesh
 W, H, T = 250.0, 125.0, 10.0
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
 OW, OH, OA = 16.0, 77.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 77 m, puis demi-cercle (rayon 8 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
-OUVERTURES = False                    # False : arches et fenêtres retirées (configuration gardée ci-dessous) ; True pour les remettre
+OUVERTURES = True                     # True : arches et fenêtres ; False pour les retirer (configuration gardée ci-dessous)
 ARC_SEG = 32                          # nombre de segments de l'arrondi
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Export"))
 
@@ -72,6 +72,14 @@ cutters = [
 ] if OUVERTURES else [])
 for c in cutters:
     col_cut.objects.link(c); c.display_type = "WIRE"; c.hide_render = True
+def coupe_croix(ob):
+    """coupe droite du maillage par les plans x = 0 et y = 0 (passent au milieu des arches et des fenêtres) : aucun trou au milieu d'une face"""
+    bm = bmesh.new(); bm.from_mesh(ob.data)
+    for no in ((1, 0, 0), (0, 1, 0)):
+        bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, 0), plane_no=no)
+    bm.to_mesh(ob.data); bm.free(); ob.data.update()
+if OUVERTURES:
+    coupe_croix(salle); coupe_croix(cutters[0])
 mod = salle.modifiers.new("Decoupes", "BOOLEAN")
 mod.operation = "DIFFERENCE"; mod.operand_type = "COLLECTION"; mod.collection = col_cut; mod.solver = "EXACT"
 
@@ -195,13 +203,33 @@ cam.location = (210, -270, 200); scn.collection.objects.link(cam); scn.camera = 
 cam.rotation_euler = (math.radians(62), 0, math.radians(38))
 scn.world = bpy.data.worlds.new("Ciel"); scn.world.color = (0.75, 0.78, 0.82)
 
+# découpes appliquées : la salle devient un seul maillage propre ; des coupes en croix on ne garde qu'un trait,
+# du sommet de chaque arche / fenêtre jusqu'à l'arête du haut (et sur le dessus du mur) ; tout le reste est dissous
+if OUVERTURES:
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(salle.evaluated_get(dg))
+    salle.modifiers.clear(); old = salle.data; salle.data = me; bpy.data.meshes.remove(old); me.name = "Grande_salle"
+    for c in list(col_cut.objects): bpy.data.objects.remove(c)
+    bpy.data.collections.remove(col_cut)
+    bm = bmesh.new(); bm.from_mesh(me)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-3)   # sommets en double laissés par le calcul (arêtes de longueur nulle)
+    bm.normal_update()
+    def sur_coupe(e):
+        return all(abs(v.co.x) < 1e-4 for v in e.verts) or all(abs(v.co.y) < 1e-4 for v in e.verts)
+    inutiles = [e for e in bm.edges if sur_coupe(e) and len(e.link_faces) == 2
+                and e.link_faces[0].normal.dot(e.link_faces[1].normal) > 0.9999 and max(v.co.z for v in e.verts) <= FZ + 1e-4]
+    bmesh.ops.dissolve_edges(bm, edges=inutiles, use_verts=True)
+    bm.to_mesh(me); bm.free(); me.update()
+    print("traits droits restants (au-dessus et, si besoin, au-dessous des ouvertures) :", sum(1 for e in me.edges if all(abs(me.vertices[i].co.x) < 1e-4 for i in e.vertices) or all(abs(me.vertices[i].co.y) < 1e-4 for i in e.vertices)))
+
 # vérification : maillage final (après Booléens) étanche, dimensions exactes
 dg = bpy.context.evaluated_depsgraph_get()
 ev = salle.evaluated_get(dg).to_mesh()
 bm = bmesh.new(); bm.from_mesh(ev)
 manifold = all(e.is_manifold for e in bm.edges)
 xs = [v.co.x for v in bm.verts]; ys = [v.co.y for v in bm.verts]; zs = [v.co.z for v in bm.verts]
-print("cube de base :", len(salle.data.vertices), "sommets,", len(salle.data.polygons), "faces")
+biais = sum(1 for e in bm.edges if sum(1 for c in (e.verts[1].co - e.verts[0].co) if abs(c) > 1e-4) >= 2 and (e.verts[1].co - e.verts[0].co).length > 3)
+print("arêtes en biais (hors arrondis) :", biais)
 print("après découpes :", len(bm.verts), "sommets,", len(bm.faces), "faces, étanche =", manifold)
 print("boîte :", (min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs)))
 bm.free(); salle.evaluated_get(dg).to_mesh_clear()
