@@ -106,6 +106,19 @@ for i in range(1, NCOL + 1):
         kp += 1; c = bpy.data.objects.new("Pont_%02d" % kp, me_pont); c.location = (x, y, H); c.rotation_euler.z = math.radians(rz)
         col_pont.objects.link(c)
 print("ponts :", kp, "| longueur", L, "m, épaisseur", DEP, "m")
+# corniche : bande de 5 m de saillie et 5 m d'épaisseur contre le mur intérieur, 10 m sous le haut (110 -> 115 m), tout autour
+# découpée entre les colonnes (rien n'est fusionné) ; les carrés d'angle appartiennent aux murs avant et arrière
+col_cor = bpy.data.collections.new("Corniche"); scn.collection.children.link(col_cor)
+zc1 = H - 10.0; zc0 = zc1 - DEP
+bords = [-b] + [e for i in range(1, NCOL + 1) for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [b]
+kc = 0
+for j in range(NCOL + 1):
+    u0, u1 = bords[2 * j], bords[2 * j + 1]
+    v0, v1 = max(u0, -b + DEP), min(u1, b - DEP)          # murs gauche / droite : s'arrêtent aux carrés d'angle
+    for (x0, x1, y0, y1) in ((u0, u1, -b, -b + DEP), (u0, u1, b - DEP, b), (-b, -b + DEP, v0, v1), (b - DEP, b, v0, v1)):
+        kc += 1; c = box("Corniche_%02d" % kc, x0, x1, y0, y1, zc0, zc1, origin=((x0 + x1) / 2, (y0 + y1) / 2, zc0))
+        c.data.materials.append(bpy.data.materials["Pierre"]); col_cor.objects.link(c)
+print("corniche :", kc, "morceaux | de", zc0, "à", zc1, "m")
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
 
