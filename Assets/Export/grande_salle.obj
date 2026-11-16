@@ -1,4 +1,4 @@
-# Grande salle 250 x 250 x 175 m, épaisseur 10 m
+# Grande salle 250 x 250 x 175 m, epaisseur 10 m
 mtllib grande_salle.mtl
 o Grande_salle
 v -125 0 -125

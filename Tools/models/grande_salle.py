@@ -42,7 +42,7 @@ os.makedirs(out, exist_ok=True)
 with open(os.path.join(out, "grande_salle.mtl"), "w") as m:
     m.write("newmtl Pierre\nKd 0.69 0.67 0.64\nNs 10\n")
 with open(os.path.join(out, "grande_salle.obj"), "w") as o:
-    o.write("# Grande salle 250 x 250 x 175 m, épaisseur 10 m\nmtllib grande_salle.mtl\no Grande_salle\n")
+    o.write("# Grande salle 250 x 250 x 175 m, epaisseur 10 m\nmtllib grande_salle.mtl\no Grande_salle\n")
     for v in V: o.write("v %g %g %g\n" % v)
     o.write("usemtl Pierre\ns off\n")
     for f, _ in F: o.write("f " + " ".join(str(i + 1) for i in f) + "\n")
