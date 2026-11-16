@@ -106,10 +106,10 @@ for i in range(1, NCOL + 1):
         kp += 1; c = bpy.data.objects.new("Pont_%02d" % kp, me_pont); c.location = (x, y, H); c.rotation_euler.z = math.radians(rz)
         col_pont.objects.link(c)
 print("ponts :", kp, "| longueur", L, "m, épaisseur", DEP, "m")
-# corniche : bande de 5 m de saillie et 5 m d'épaisseur contre le mur intérieur, 10 m sous le haut (110 -> 115 m), tout autour
+# corniche : bande de 5 m de saillie et 10 m de haut contre le mur intérieur, 10 m sous le haut (105 -> 115 m), tout autour
 # découpée entre les colonnes (rien n'est fusionné) ; les carrés d'angle appartiennent aux murs avant et arrière
 col_cor = bpy.data.collections.new("Corniche"); scn.collection.children.link(col_cor)
-zc1 = H - 10.0; zc0 = zc1 - DEP
+zc1 = H - 10.0; zc0 = zc1 - 10.0
 bords = [-b] + [e for i in range(1, NCOL + 1) for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [b]
 kc = 0
 for j in range(NCOL + 1):
