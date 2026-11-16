@@ -6,7 +6,7 @@ import bpy, bmesh
 
 W, H, T = 250.0, 125.0, 10.0
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
-OW, OH, OA = 16.0, 24.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 24 m, puis demi-cercle (rayon 8 m, sommet à 32 m)
+OW, OH, OA = 16.0, 77.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 77 m, puis demi-cercle (rayon 8 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
 ARC_SEG = 32                          # nombre de segments de l'arrondi
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Export"))
 
