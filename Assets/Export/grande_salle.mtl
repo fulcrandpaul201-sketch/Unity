@@ -1,3 +1,8 @@
 newmtl Pierre
 Kd 0.69 0.67 0.64
 Ns 10
+
+newmtl Repere
+Kd 0.85 0.25 0.15
+Ns 10
+
