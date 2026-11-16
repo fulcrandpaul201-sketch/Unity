@@ -1,12 +1,12 @@
-"""Grande salle en .blend (250 x 250 m, 125 m de haut, 16 colonnes) : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
+"""Grande salle en .blend (250 x 250 m, 125 m de haut, 16 colonnes de 10 x 5 m, ouvertures 16 x 16 m) : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
 modificateurs Booléens (formes de découpe modifiables, en fil de fer). Bloc d'échelle 0,5 x 0,5 x 2 m au centre.
 Blender (Z vers le haut, mètres). Lancer :  python3.11 avec le module bpy  ->  Assets/Export/grande_salle.blend"""
 import os, sys, math
 import bpy, bmesh
 
 W, H, T = 250.0, 125.0, 10.0
-COL, NCOL = 10.0, 4                   # colonnes : 10 x 10 m, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
-OW, OH = 25.0, 25.0                   # ouvertures : largeur, hauteur
+COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
+OW = OH = 16.0                        # ouvertures carrées : 10 m de mur entre leur bord et le bord des colonnes du milieu
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Export"))
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -56,15 +56,17 @@ rep.data.materials.append(mat("Repere", (0.70, 0.05, 0.02)))
 
 # colonnes : un seul maillage (pavé 10 x 10 m) partagé par 16 objets ; modifier l'un modifie toutes les autres
 col_cols = bpy.data.collections.new("Colonnes"); scn.collection.children.link(col_cols)
-me_col = box("Colonne_maillage", -COL / 2, COL / 2, -COL / 2, COL / 2, T, H, origin=(0, 0, T)).data
+me_col = box("Colonne_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, T, H, origin=(0, 0, T)).data   # x : le long du mur, y : saillie
 me_col.name = "Colonne"; me_col.materials.append(bpy.data.materials["Pierre"])
 pas = 2 * b / (NCOL + 1)                                # 5 intervalles égaux entre les angles : 46 m
 k = 0
 for i in range(1, NCOL + 1):
     u = -b + i * pas                                    # position le long du mur
-    for (x, y) in ((u, -b + COL / 2), (u, b - COL / 2), (-b + COL / 2, u), (b - COL / 2, u)):   # avant, arrière, gauche, droite
-        k += 1; c = bpy.data.objects.new("Colonne_%02d" % k, me_col); c.location = (x, y, T); col_cols.objects.link(c)
+    for (x, y, rz) in ((u, -b + DEP / 2, 0), (u, b - DEP / 2, 0), (-b + DEP / 2, u, 90), (b - DEP / 2, u, 90)):   # avant, arrière, gauche, droite
+        k += 1; c = bpy.data.objects.new("Colonne_%02d" % k, me_col); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
+        col_cols.objects.link(c)
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
+print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "x", OH, "m")
 
 # lumière et caméra pour un premier rendu
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 3
@@ -106,6 +108,6 @@ if "--render" in sys.argv:                                   # aperçu (Cycles C
     scn.render.resolution_x, scn.render.resolution_y = 1000, 700
     scn.render.filepath = os.path.join(sys.argv[sys.argv.index("--render") + 1], "salle_ext.png")
     bpy.ops.render.render(write_still=True)
-    cam.location = (60, -100, 40); cam.rotation_euler = (math.radians(80), 0, math.radians(25)); cam.data.lens = 18
+    cam.location = (30, 80, 20); cam.rotation_euler = (math.radians(86), 0, math.radians(180)); cam.data.lens = 18
     scn.render.filepath = os.path.join(sys.argv[sys.argv.index("--render") + 1], "salle_int.png")
     bpy.ops.render.render(write_still=True)
