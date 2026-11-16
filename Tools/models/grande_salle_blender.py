@@ -1,10 +1,11 @@
-"""Grande salle en .blend (100 x 100 m, 75 m de haut) : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
+"""Grande salle en .blend (250 x 250 m, 125 m de haut, 16 colonnes) : UN seul cube propre (8 sommets, 6 faces) ; le creux et les 2 ouvertures sont des
 modificateurs Booléens (formes de découpe modifiables, en fil de fer). Bloc d'échelle 0,5 x 0,5 x 2 m au centre.
 Blender (Z vers le haut, mètres). Lancer :  python3.11 avec le module bpy  ->  Assets/Export/grande_salle.blend"""
 import os, sys, math
 import bpy, bmesh
 
-W, H, T = 100.0, 75.0, 10.0          # largeur, hauteur, épaisseur des parois et du sol
+W, H, T = 250.0, 125.0, 10.0
+COL, NCOL = 10.0, 4                   # colonnes : 10 x 10 m, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
 OW, OH = 25.0, 25.0                   # ouvertures : largeur, hauteur
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Export"))
 
@@ -53,11 +54,23 @@ mod.operation = "DIFFERENCE"; mod.operand_type = "COLLECTION"; mod.collection = 
 rep = box("Repere_echelle", -0.25, 0.25, -0.25, 0.25, T, T + 2.0, origin=(0, 0, T)); col_main.objects.link(rep)
 rep.data.materials.append(mat("Repere", (0.70, 0.05, 0.02)))
 
+# colonnes : un seul maillage (pavé 10 x 10 m) partagé par 16 objets ; modifier l'un modifie toutes les autres
+col_cols = bpy.data.collections.new("Colonnes"); scn.collection.children.link(col_cols)
+me_col = box("Colonne_maillage", -COL / 2, COL / 2, -COL / 2, COL / 2, T, H, origin=(0, 0, T)).data
+me_col.name = "Colonne"; me_col.materials.append(bpy.data.materials["Pierre"])
+pas = 2 * b / (NCOL + 1)                                # 5 intervalles égaux entre les angles : 46 m
+k = 0
+for i in range(1, NCOL + 1):
+    u = -b + i * pas                                    # position le long du mur
+    for (x, y) in ((u, -b + COL / 2), (u, b - COL / 2), (-b + COL / 2, u), (b - COL / 2, u)):   # avant, arrière, gauche, droite
+        k += 1; c = bpy.data.objects.new("Colonne_%02d" % k, me_col); c.location = (x, y, T); col_cols.objects.link(c)
+print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
+
 # lumière et caméra pour un premier rendu
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 3
 sun.rotation_euler = (math.radians(50), math.radians(10), math.radians(35)); scn.collection.objects.link(sun)
 cam = bpy.data.objects.new("Camera", bpy.data.cameras.new("Camera")); cam.data.clip_end = 5000; cam.data.lens = 30
-cam.location = (135, -170, 125); scn.collection.objects.link(cam); scn.camera = cam
+cam.location = (330, -420, 260); scn.collection.objects.link(cam); scn.camera = cam
 cam.rotation_euler = (math.radians(62), 0, math.radians(38))
 scn.world = bpy.data.worlds.new("Ciel"); scn.world.color = (0.75, 0.78, 0.82)
 
@@ -81,7 +94,7 @@ for scr in bpy.data.screens:
         for sp in area.spaces:
             if sp.type == "VIEW_3D":
                 sp.clip_end = 5000; sp.clip_start = 0.1
-                r3 = sp.region_3d; r3.view_location = (0, 0, 30); r3.view_distance = 260
+                r3 = sp.region_3d; r3.view_location = (0, 0, 50); r3.view_distance = 620
                 r3.view_rotation = Euler((math.radians(62), 0, math.radians(38))).to_quaternion(); n += 1
 print("vues 3D réglées :", n)
 os.makedirs(OUT, exist_ok=True)
@@ -93,6 +106,6 @@ if "--render" in sys.argv:                                   # aperçu (Cycles C
     scn.render.resolution_x, scn.render.resolution_y = 1000, 700
     scn.render.filepath = os.path.join(sys.argv[sys.argv.index("--render") + 1], "salle_ext.png")
     bpy.ops.render.render(write_still=True)
-    cam.location = (4, -9, 12); cam.rotation_euler = (math.radians(88), 0, math.radians(20)); cam.data.lens = 22
+    cam.location = (60, -100, 40); cam.rotation_euler = (math.radians(80), 0, math.radians(25)); cam.data.lens = 18
     scn.render.filepath = os.path.join(sys.argv[sys.argv.index("--render") + 1], "salle_int.png")
     bpy.ops.render.render(write_still=True)
