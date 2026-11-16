@@ -1,13 +1,13 @@
-// Grande salle : cube de 250 x 250 x 250 m creusé par le haut (ouvert au-dessus), parois et sol de 10 m d'épaisseur.
+// Grande salle : bloc de 250 x 250 m sur 166,67 m de haut creusé par le haut (ouvert au-dessus), parois et sol de 10 m d'épaisseur.
 // Un seul maillage, sans faces qui se chevauchent. Unités : mètres. Origine au centre du sol, sous la salle (y = 0).
 function buildHall() {
-  const S = 250, T = 10, H = S / 2;
+  const S = 250, T = 10, H = S / 2, HT = S * 2 / 3;   // hauteur réduite d'un tiers : 166,67 m
   const parts = [
     [S, T, S, 0, T / 2, 0],                          // sol
-    [S, S - T, T, 0, T + (S - T) / 2, -H + T / 2],   // mur arrière (pleine largeur)
-    [S, S - T, T, 0, T + (S - T) / 2, H - T / 2],    // mur avant (pleine largeur)
-    [T, S - T, S - 2 * T, -H + T / 2, T + (S - T) / 2, 0],   // mur gauche (entre les deux)
-    [T, S - T, S - 2 * T, H - T / 2, T + (S - T) / 2, 0],    // mur droit
+    [S, HT - T, T, 0, T + (HT - T) / 2, -H + T / 2],   // mur arrière (pleine largeur)
+    [S, HT - T, T, 0, T + (HT - T) / 2, H - T / 2],    // mur avant (pleine largeur)
+    [T, HT - T, S - 2 * T, -H + T / 2, T + (HT - T) / 2, 0],   // mur gauche (entre les deux)
+    [T, HT - T, S - 2 * T, H - T / 2, T + (HT - T) / 2, 0],    // mur droit
   ];
   const geos = parts.map(([w, h, d, x, y, z]) => { const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); return g.toNonIndexed(); });
   const pos = [], nor = [];
