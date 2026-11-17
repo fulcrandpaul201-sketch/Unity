@@ -64,6 +64,8 @@ salle.data.materials.append(mat("Pierre", (0.43, 0.41, 0.37)))
 
 # formes de découpe (fil de fer, invisibles au rendu) : intérieur + 2 ouvertures (avant = -Y, arrière = +Y)
 b, o, M = a - T, OW / 2, 5.0          # M : débord pour des découpes franches
+SOL_NAV, SOL_MUR = 75.0, 10.0
+RE, RO = a + SOL_NAV, a + SOL_NAV + SOL_MUR                  # faces intérieure (200 m) et extérieure (210 m) du mur d'enceinte
 cutters = [
     box("Decoupe_interieur", -b, b, -b, b, T, H + M, origin=(0, 0, T)),
 ] + ([
@@ -98,24 +100,24 @@ for i in range(1, NCOL + 1):
     for (x, y, rz) in ((u, -b + DEP / 2, 0), (u, b - DEP / 2, 0), (-b + DEP / 2, u, 90), (b - DEP / 2, u, 90)):   # avant, arrière, gauche, droite
         k += 1; c = bpy.data.objects.new("Colonne_%02d" % k, me_col); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
         col_cols.objects.link(c)
-# colonnes extérieures : mêmes dimensions et mêmes positions, en vis-à-vis des intérieures, posées sur le sol extérieur (10 m) jusqu'en haut
+# colonnes extérieures : déplacées sur la face extérieure du mur d'enceinte, dans l'axe des colonnes intérieures, du bas du mur (0 m) jusqu'en haut
 col_ext = bpy.data.collections.new("Colonnes_exterieures"); scn.collection.children.link(col_ext)
-me_ext = box("Colonne_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, T, H, origin=(0, 0, T)).data
+me_ext = box("Colonne_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H).data
 me_ext.name = "Colonne_exterieure"; me_ext.materials.append(bpy.data.materials["Pierre"])
 ke = 0
 for i in range(1, NCOL + 1):
     u = -b + i * pas
-    for (x, y, rz) in ((u, -a - DEP / 2, 0), (u, a + DEP / 2, 0), (-a - DEP / 2, u, 90), (a + DEP / 2, u, 90)):
-        ke += 1; c = bpy.data.objects.new("Colonne_ext_%02d" % ke, me_ext); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
+    for (x, y, rz) in ((u, -RO - DEP / 2, 0), (u, RO + DEP / 2, 0), (-RO - DEP / 2, u, 90), (RO + DEP / 2, u, 90)):   # face extérieure du mur d'enceinte
+        ke += 1; c = bpy.data.objects.new("Colonne_ext_%02d" % ke, me_ext); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
         col_ext.objects.link(c)
 print("colonnes extérieures :", ke)
-# ponts : relient chaque colonne intérieure à son vis-à-vis extérieur par-dessus le mur (20 m de long, 10 m de large, 5 m d'épaisseur)
+# ponts : relient chaque colonne intérieure à son vis-à-vis extérieur (sur le mur d'enceinte) par-dessus le mur, le toit et l'enceinte (105 m de long, 10 m de large, 5 m d'épaisseur)
 col_pont = bpy.data.collections.new("Ponts"); scn.collection.children.link(col_pont)
-L = T + 2 * DEP                                           # 5 + 10 + 5 = 20 m
+L = (RO + DEP) - (b - DEP)                                # de la colonne intérieure (110 m) à la colonne extérieure de l'enceinte (215 m) : 105 m
 me_pont = box("Pont_maillage", -COL / 2, COL / 2, -L / 2, L / 2, H, H + DEP, origin=(0, 0, H)).data
 me_pont.name = "Pont"; me_pont.materials.append(bpy.data.materials["Pierre"])
 kp = 0
-mid = a - T / 2                                           # milieu de l'épaisseur du mur
+mid = ((RO + DEP) + (b - DEP)) / 2                        # milieu du pont (162,5 m du centre)
 for i in range(1, NCOL + 1):
     u = -b + i * pas
     for (x, y, rz) in ((u, -mid, 0), (u, mid, 0), (-mid, u, 90), (mid, u, 90)):
@@ -138,8 +140,8 @@ def prisme(name, poly, z0, z1):
     bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
     ob = bpy.data.objects.new(name, me); ob.location = (cx, cy, z0)
     return ob
-for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("Corniche_haute_ext", a, a + DEP, zc0, zc1, False),
-                                   ("Corniche_basse_int", b - DEP, b, zb0, zb1, True), ("Corniche_basse_ext", a, a + DEP, zb0, zb1, True)):
+for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("Corniche_haute_ext", RO, RO + DEP, zc0, zc1, False),
+                                   ("Corniche_basse_int", b - DEP, b, zb0, zb1, True), ("Corniche_basse_ext", RO, RO + DEP, zb0, zb1, True)):
     colb = bpy.data.collections.new(nom); scn.collection.children.link(colb)   # r0..r1 : bande en distance au centre
     n = 0
     def ajoute(ob):
@@ -198,7 +200,6 @@ print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL /
 # sol extérieur et mur d'enceinte (objets séparés, rien de fusionné) :
 #   sol : 75 m navigables tout autour du mur extérieur, 10 m d'épaisseur (0 -> 10 m), au niveau du sol de la salle, arrêté contre le mur d'enceinte
 #   mur d'enceinte : 10 m d'épaisseur, de 0 à 125 m ; dessus / dessous coupés seulement au milieu des côtés avant / arrière (axe des arches)
-SOL_NAV, SOL_MUR = 75.0, 10.0
 def cadre(name, ri, ro, z0, z1, cotes=True):
     """anneau carré plein (intérieur ri, extérieur ro) de z0 à z1, un seul maillage ; dessus et dessous coupés par un trait droit
     au milieu de chaque côté (4 morceaux d'angle en L), faces verticales d'un seul tenant"""
@@ -230,7 +231,8 @@ def cadre(name, ri, ro, z0, z1, cotes=True):
     return ob
 col_enc = bpy.data.collections.new("Enceinte"); scn.collection.children.link(col_enc)
 col_enc.objects.link(cadre("Sol_exterieur", a, a + SOL_NAV, 0.0, T))
-RE, RO = a + SOL_NAV, a + SOL_NAV + SOL_MUR                  # faces intérieure (200 m) et extérieure (210 m) du mur d'enceinte
+# toit : entre le mur de la cour et le mur d'enceinte (pas sur la cour), 10 m d'épaisseur sous le haut des murs (115 -> 125 m)
+col_enc.objects.link(cadre("Toit", a, RE, H - T, H, cotes=False))
 mur_enc = cadre("Mur_enceinte", RE, RO, 0.0, H, cotes=False); col_enc.objects.link(mur_enc)
 # arches du mur d'enceinte : en face des arches de la salle (avant et arrière), même forme, découpe appliquée (maillage propre)
 if OUVERTURES:
@@ -264,7 +266,7 @@ if OUVERTURES:
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 3
 sun.rotation_euler = (math.radians(50), math.radians(10), math.radians(35)); scn.collection.objects.link(sun)
 cam = bpy.data.objects.new("Camera", bpy.data.cameras.new("Camera")); cam.data.clip_end = 5000; cam.data.lens = 30
-cam.location = (210, -270, 200); scn.collection.objects.link(cam); scn.camera = cam
+cam.location = (330, -430, 300); scn.collection.objects.link(cam); scn.camera = cam
 cam.rotation_euler = (math.radians(62), 0, math.radians(38))
 scn.world = bpy.data.worlds.new("Ciel"); scn.world.color = (0.75, 0.78, 0.82)
 
