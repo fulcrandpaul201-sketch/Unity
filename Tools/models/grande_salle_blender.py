@@ -166,17 +166,17 @@ MH, MS, MG, ML = 5.0, 2.5, 1.0, (5.0, 3.0)
 o = OW / 2
 Lc = 2 * OH + math.pi * o                                 # longueur du contour de l'arche
 nm = int((Lc + MG) // (MH + MG)) | 1; gm = (Lc - nm * MH) / (nm - 1)   # nombre de blocs, écart réajusté (~1 m)
-def contour(t):
+def contour(t, zb=T, hs=OH):
     """point du bord de l'arche (x, z) et direction vers le mur, à la distance t le long du contour (départ en bas à gauche)"""
-    if t <= OH: return (-o, T + t), (-1.0, 0.0)
-    if t >= OH + math.pi * o: return (o, T + OH - (t - OH - math.pi * o)), (1.0, 0.0)
-    th = math.pi - (t - OH) / o
-    return (o * math.cos(th), T + OH + o * math.sin(th)), (math.cos(th), math.sin(th))
-def moulure(name, t0, t1, L, y0, y1):
-    ts = [t0] + [t for t in (OH + i * math.pi * o / 32 for i in range(33)) if t0 < t < t1] + [t1]
+    if t <= hs: return (-o, zb + t), (-1.0, 0.0)
+    if t >= hs + math.pi * o: return (o, zb + hs - (t - hs - math.pi * o)), (1.0, 0.0)
+    th = math.pi - (t - hs) / o
+    return (o * math.cos(th), zb + hs + o * math.sin(th)), (math.cos(th), math.sin(th))
+def moulure(name, t0, t1, L, y0, y1, zb=T, hs=OH):
+    ts = [t0] + [t for t in (hs + i * math.pi * o / 32 for i in range(33)) if t0 < t < t1] + [t1]
     pin, pout = [], []
     for t in ts:
-        (x, z), (nx, nz) = contour(t); pin.append((x, z)); pout.append((x + L * nx, z + L * nz))
+        (x, z), (nx, nz) = contour(t, zb, hs); pin.append((x, z)); pout.append((x + L * nx, z + L * nz))
     ring = pin + pout[::-1]; m = len(ring); N = len(ts)
     v = [(x, y0, z) for (x, z) in ring] + [(x, y1, z) for (x, z) in ring]
     f = [tuple(range(m)), tuple(m + i for i in range(m))[::-1]] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
@@ -242,17 +242,31 @@ mur_enc = cadre("Mur_enceinte", RE, RO, 0.0, H, cotes=False); col_enc.objects.li
 if OUVERTURES:
     coupe_x = bmesh.new(); coupe_x.from_mesh(mur_enc.data)      # trait droit au milieu des murs avant / arrière (au-dessus et au-dessous des arches)
     bmesh.ops.bisect_plane(coupe_x, geom=coupe_x.verts[:] + coupe_x.edges[:] + coupe_x.faces[:], plane_co=(0, 0, 0), plane_no=(1, 0, 0))
+    YC = -b + pas / 2                                     # arches de côté : centrées à ±92 m (4 colonnes extérieures entre elles)
+    for yp in (-YC, YC):                                  # trait droit au-dessus et au-dessous des arches de côté
+        bmesh.ops.bisect_plane(coupe_x, geom=coupe_x.verts[:] + coupe_x.edges[:] + coupe_x.faces[:], plane_co=(0, yp, 0), plane_no=(0, 1, 0))
     coupe_x.to_mesh(mur_enc.data); coupe_x.free(); mur_enc.data.update()
     col_tmp = bpy.data.collections.new("tmp"); scn.collection.children.link(col_tmp)
     for nom, y0, y1, oy in (("Decoupe_enceinte_avant", -RO - M, -RE + M, -RO), ("Decoupe_enceinte_arriere", RE - M, RO + M, RO)):
         c = arch(nom, y0, y1, origin=(0, oy, T)); col_tmp.objects.link(c)
-        md = mur_enc.modifiers.new(nom, "BOOLEAN"); md.operation = "DIFFERENCE"; md.object = c; md.solver = "EXACT"
+    # arches de côté (murs gauche et droit) : 2 par mur, à ±92 m, du palier (30 m) jusqu'au sommet à 95 m, même forme
+    ZS = zb1; HS = T + OH - ZS                            # bas à 30 m, côtés droits sur 57 m, arrondi de 87 à 95 m
+    for cote, rz in (("gauche", -90), ("droite", 90)):
+        for yo in (-YC, YC):
+            nom = "Decoupe_enceinte_%s_%d" % (cote, round(yo))
+            c = arch(nom, -RO - M, -RE + M, origin=(0, 0, 0), zb=ZS, hs=HS); c.rotation_euler.z = math.radians(rz); c.location = (0, yo, 0)
+            col_tmp.objects.link(c)
+    md = mur_enc.modifiers.new("Decoupes_enceinte", "BOOLEAN"); md.operation = "DIFFERENCE"; md.operand_type = "COLLECTION"; md.collection = col_tmp; md.solver = "EXACT"
     dg = bpy.context.evaluated_depsgraph_get()
     me = bpy.data.meshes.new_from_object(mur_enc.evaluated_get(dg))
     mur_enc.modifiers.clear(); old = mur_enc.data; mur_enc.data = me; bpy.data.meshes.remove(old); me.name = "Mur_enceinte"
     for c in list(col_tmp.objects): bpy.data.objects.remove(c)
     bpy.data.collections.remove(col_tmp)
-    bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-3)
+    bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-3); bm.normal_update()
+    hz = [e for e in bm.edges if all(abs(abs(v.co.y) - abs(YC)) < 1e-3 for v in e.verts) and abs(e.verts[0].co.z - e.verts[1].co.z) < 1e-4
+          and abs(e.verts[0].co.x - e.verts[1].co.x) > 1 and (abs(e.verts[0].co.z) < 1e-3 or abs(e.verts[0].co.z - H) < 1e-3)]
+    for e in hz:                                          # traits inutiles sur le dessus / dessous du mur : faces réunies
+        if e.is_valid and len(e.link_faces) == 2: bmesh.utils.face_join(list(e.link_faces))
     ok = all(e.is_manifold for e in bm.edges)
     biais = sum(1 for e in bm.edges if sum(1 for c in (e.verts[1].co - e.verts[0].co) if abs(c) > 1e-4) >= 2 and (e.verts[1].co - e.verts[0].co).length > 3)
     bm.to_mesh(me); bm.free(); me.update()
@@ -264,7 +278,15 @@ if OUVERTURES:
         for i in range(nm):
             t0 = i * (MH + gm)
             col_me.objects.link(moulure("Moulure_enceinte_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[min(i, nm - 1 - i) % 2], y0, y1)); kme += 1
-    print("moulures enceinte :", kme)
+    nm2 = int((2 * HS + math.pi * o + MG) // (MH + MG)) | 1; gm2 = (2 * HS + math.pi * o - nm2 * MH) / (nm2 - 1)
+    for cote, rz in (("gauche", -90), ("droite", 90)):
+        for yo in (-YC, YC):
+            for face, y0, y1 in (("ext", -RO - MS, -RO), ("int", -RE, -RE + MS)):
+                for i in range(nm2):
+                    t0 = i * (MH + gm2)
+                    ob = moulure("Moulure_enceinte_%s_%d_%s_%02d" % (cote, round(yo), face, i + 1), t0, t0 + MH, ML[min(i, nm2 - 1 - i) % 2], y0, y1, ZS, HS)
+                    ob.rotation_euler.z = math.radians(rz); ob.location = (0, yo, 0); col_me.objects.link(ob); kme += 1
+    print("moulures enceinte :", kme, "| arches de côté :", nm2, "blocs par face, écart", round(gm2, 3), "m")
 
 # escaliers d'honneur de la salle couverte : de chaque côté, un palier en U plein de 10 à 30 m (bande de côté entière + angles + 125 m des bandes
 # avant et arrière, jusqu'à 75 m de l'axe des arches) ; au bout de chaque branche du U, un escalier (4 en tout) sur toute la largeur (75 m), 2 volées de 4 marches de 2,5 x 2,5 m (hauteur = profondeur) séparées par un
