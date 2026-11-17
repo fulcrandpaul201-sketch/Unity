@@ -265,6 +265,29 @@ if OUVERTURES:
             col_me.objects.link(moulure("Moulure_enceinte_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[min(i, nm - 1 - i) % 2], y0, y1)); kme += 1
     print("moulures enceinte :", kme)
 
+# escalier de la salle couverte : marches de 0,5 x 0,5 m (hauteur = profondeur, pente 45°), du sol (10 m) au haut de la corniche basse (30 m),
+# 40 marches sur 20 m de long, 10 m de large contre le mur d'enceinte, dans la bande avant ; il monte vers l'angle avant-gauche
+# et s'arrête au bord du carré d'angle (75 x 75 m), plein de 10 à 30 m (palier) ; 2 objets séparés
+MARCHE, Z_HAUT, L_ESC = 0.5, zb1, 10.0
+col_esc = bpy.data.collections.new("Escalier"); scn.collection.children.link(col_esc)
+nmar = round((Z_HAUT - T) / MARCHE); long_esc = nmar * MARCHE
+prof = [(0.0, T), (long_esc, T)]                          # profil (d = distance au bord du palier, z), une seule face de côté
+for k in range(1, nmar + 1):
+    d = long_esc - (k - 1) * MARCHE
+    prof += [(d, T + k * MARCHE), (d - MARCHE, T + k * MARCHE)]
+prof = prof[:-1] + [(0.0, Z_HAUT)]
+xe = -a                                                   # bord du palier côté escalier (x = -125)
+y0e, y1e = -RE, -RE + L_ESC                               # contre le mur d'enceinte
+m = len(prof)
+v = [(xe + d, y0e, z) for d, z in prof] + [(xe + d, y1e, z) for d, z in prof]
+f = [tuple(range(m)), tuple(range(m, 2 * m))] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
+me = bpy.data.meshes.new("Escalier"); me.from_pydata(v, [], f); me.update(); me.validate()
+bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); ok_e = all(e.is_manifold for e in bm.edges); bm.to_mesh(me); bm.free()
+me.materials.append(bpy.data.materials["Pierre"]); col_esc.objects.link(bpy.data.objects.new("Escalier", me))
+pal = box("Palier_angle", -RE, -a, -RE, -a, T, Z_HAUT, origin=((-RE - a) / 2, (-RE - a) / 2, T)); pal.data.materials.append(bpy.data.materials["Pierre"])
+col_esc.objects.link(pal)
+print("escalier :", nmar, "marches de", MARCHE, "m |", long_esc, "m de long,", L_ESC, "m de large | de", T, "à", Z_HAUT, "m | étanche =", ok_e)
+
 # lumière et caméra pour un premier rendu
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 3
 sun.rotation_euler = (math.radians(50), math.radians(10), math.radians(35)); scn.collection.objects.link(sun)
