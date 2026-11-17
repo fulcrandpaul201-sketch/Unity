@@ -200,26 +200,20 @@ print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL /
 #   mur d'enceinte : 10 m d'épaisseur, posé sur le bord du sol, de 10 m à 125 m ; angles découpés par des traits droits (pas de diagonale)
 SOL_NAV, SOL_MUR = 75.0, 10.0
 def cadre(name, ri, ro, z0, z1):
-    """anneau carré plein (intérieur ri, extérieur ro) de z0 à z1, un seul maillage ; dessus et dessous coupés par des traits droits
-    qui prolongent les faces intérieures (bandes avant / arrière sur toute la largeur, bandes de côté entre les deux)"""
+    """anneau carré plein (intérieur ri, extérieur ro) de z0 à z1, un seul maillage ; dessus et dessous coupés par un trait droit
+    au milieu de chaque côté (4 morceaux d'angle en L), faces verticales d'un seul tenant"""
     v = {}
     def p(x, y, z):
         if (x, y, z) not in v: v[(x, y, z)] = len(v)
         return v[(x, y, z)]
     f = []
     for z in (z0, z1):
-        f += [[p(-ro, -ro, z), p(ro, -ro, z), p(ro, -ri, z), p(ri, -ri, z), p(-ri, -ri, z), p(-ro, -ri, z)],
-              [p(ro, ro, z), p(-ro, ro, z), p(-ro, ri, z), p(-ri, ri, z), p(ri, ri, z), p(ro, ri, z)],
-              [p(-ro, -ri, z), p(-ri, -ri, z), p(-ri, ri, z), p(-ro, ri, z)],
-              [p(ro, ri, z), p(ri, ri, z), p(ri, -ri, z), p(ro, -ri, z)]]
-    f += [[p(-ro, -ro, z0), p(ro, -ro, z0), p(ro, -ro, z1), p(-ro, -ro, z1)],
-          [p(ro, ro, z0), p(-ro, ro, z0), p(-ro, ro, z1), p(ro, ro, z1)],
-          [p(-ro, ro, z0), p(-ro, ri, z0), p(-ro, -ri, z0), p(-ro, -ro, z0), p(-ro, -ro, z1), p(-ro, -ri, z1), p(-ro, ri, z1), p(-ro, ro, z1)],
-          [p(ro, -ro, z0), p(ro, -ri, z0), p(ro, ri, z0), p(ro, ro, z0), p(ro, ro, z1), p(ro, ri, z1), p(ro, -ri, z1), p(ro, -ro, z1)],
-          [p(-ri, -ri, z0), p(-ri, -ri, z1), p(ri, -ri, z1), p(ri, -ri, z0)],
-          [p(ri, ri, z0), p(ri, ri, z1), p(-ri, ri, z1), p(-ri, ri, z0)],
-          [p(-ri, ri, z0), p(-ri, ri, z1), p(-ri, -ri, z1), p(-ri, -ri, z0)],
-          [p(ri, -ri, z0), p(ri, -ri, z1), p(ri, ri, z1), p(ri, ri, z0)]]
+        for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):            # morceaux d'angle en L
+            f.append([p(0, sy * ro, z), p(sx * ro, sy * ro, z), p(sx * ro, 0, z), p(sx * ri, 0, z), p(sx * ri, sy * ri, z), p(0, sy * ri, z)])
+    for r in (ro, ri):                                                  # faces verticales extérieures puis intérieures
+        for (x0, y0), (x1, y1) in (((-r, -r), (r, -r)), ((r, -r), (r, r)), ((r, r), (-r, r)), ((-r, r), (-r, -r))):
+            xm, ym = (x0 + x1) / 2, (y0 + y1) / 2
+            f.append([p(x0, y0, z0), p(xm, ym, z0), p(x1, y1, z0), p(x1, y1, z1), p(xm, ym, z1), p(x0, y0, z1)])
     me = bpy.data.meshes.new(name); me.from_pydata([(x, y, z - z0) for (x, y, z) in sorted(v, key=v.get)], [], f); me.update(); me.validate()
     bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     ok = all(e.is_manifold for e in bm.edges); bm.to_mesh(me); bm.free()
