@@ -197,9 +197,9 @@ print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL /
 
 # sol extérieur et mur d'enceinte (objets séparés, rien de fusionné) :
 #   sol : 75 m navigables tout autour du mur extérieur, 10 m d'épaisseur (0 -> 10 m), au niveau du sol de la salle, arrêté contre le mur d'enceinte
-#   mur d'enceinte : 10 m d'épaisseur, de 0 à 125 m ; dessus / dessous coupés au milieu de chaque côté (pas de diagonale)
+#   mur d'enceinte : 10 m d'épaisseur, de 0 à 125 m ; dessus / dessous coupés seulement au milieu des côtés avant / arrière (axe des arches)
 SOL_NAV, SOL_MUR = 75.0, 10.0
-def cadre(name, ri, ro, z0, z1):
+def cadre(name, ri, ro, z0, z1, cotes=True):
     """anneau carré plein (intérieur ri, extérieur ro) de z0 à z1, un seul maillage ; dessus et dessous coupés par un trait droit
     au milieu de chaque côté (4 morceaux d'angle en L), faces verticales d'un seul tenant"""
     v = {}
@@ -208,12 +208,19 @@ def cadre(name, ri, ro, z0, z1):
         return v[(x, y, z)]
     f = []
     for z in (z0, z1):
-        for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):            # morceaux d'angle en L
-            f.append([p(0, sy * ro, z), p(sx * ro, sy * ro, z), p(sx * ro, 0, z), p(sx * ri, 0, z), p(sx * ri, sy * ri, z), p(0, sy * ri, z)])
+        if cotes:
+            for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):        # morceaux d'angle en L
+                f.append([p(0, sy * ro, z), p(sx * ro, sy * ro, z), p(sx * ro, 0, z), p(sx * ri, 0, z), p(sx * ri, sy * ri, z), p(0, sy * ri, z)])
+        else:                                                           # coupé seulement au milieu des côtés avant / arrière : 2 moitiés en U
+            for sx in (-1, 1):
+                f.append([p(0, -ro, z), p(sx * ro, -ro, z), p(sx * ro, ro, z), p(0, ro, z), p(0, ri, z), p(sx * ri, ri, z), p(sx * ri, -ri, z), p(0, -ri, z)])
     for r in (ro, ri):                                                  # faces verticales extérieures puis intérieures
         for (x0, y0), (x1, y1) in (((-r, -r), (r, -r)), ((r, -r), (r, r)), ((r, r), (-r, r)), ((-r, r), (-r, -r))):
             xm, ym = (x0 + x1) / 2, (y0 + y1) / 2
-            f.append([p(x0, y0, z0), p(xm, ym, z0), p(x1, y1, z0), p(x1, y1, z1), p(xm, ym, z1), p(x0, y0, z1)])
+            if cotes or y0 == y1:
+                f.append([p(x0, y0, z0), p(xm, ym, z0), p(x1, y1, z0), p(x1, y1, z1), p(xm, ym, z1), p(x0, y0, z1)])
+            else:
+                f.append([p(x0, y0, z0), p(x1, y1, z0), p(x1, y1, z1), p(x0, y0, z1)])
     me = bpy.data.meshes.new(name); me.from_pydata([(x, y, z - z0) for (x, y, z) in sorted(v, key=v.get)], [], f); me.update(); me.validate()
     bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     ok = all(e.is_manifold for e in bm.edges); bm.to_mesh(me); bm.free()
@@ -224,7 +231,7 @@ def cadre(name, ri, ro, z0, z1):
 col_enc = bpy.data.collections.new("Enceinte"); scn.collection.children.link(col_enc)
 col_enc.objects.link(cadre("Sol_exterieur", a, a + SOL_NAV, 0.0, T))
 RE, RO = a + SOL_NAV, a + SOL_NAV + SOL_MUR                  # faces intérieure (200 m) et extérieure (210 m) du mur d'enceinte
-mur_enc = cadre("Mur_enceinte", RE, RO, 0.0, H); col_enc.objects.link(mur_enc)
+mur_enc = cadre("Mur_enceinte", RE, RO, 0.0, H, cotes=False); col_enc.objects.link(mur_enc)
 # arches du mur d'enceinte : en face des arches de la salle (avant et arrière), même forme, découpe appliquée (maillage propre)
 if OUVERTURES:
     coupe_x = bmesh.new(); coupe_x.from_mesh(mur_enc.data)      # trait droit au milieu des murs avant / arrière (au-dessus et au-dessous des arches)
