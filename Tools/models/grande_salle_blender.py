@@ -266,10 +266,10 @@ if OUVERTURES:
             col_me.objects.link(moulure("Moulure_enceinte_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[min(i, nm - 1 - i) % 2], y0, y1)); kme += 1
     print("moulures enceinte :", kme)
 
-# escalier de la salle couverte : marches de 0,5 x 0,5 m (hauteur = profondeur, pente 45°), du sol (10 m) au haut de la corniche basse (30 m),
-# 40 marches sur 20 m de long, 37,5 m de large (moitié de la salle couverte) contre le mur d'enceinte, dans la bande avant ; il monte vers l'angle avant-gauche
+# escalier de la salle couverte : marches de 5 x 5 m (hauteur = profondeur, pente 45°), du sol (10 m) au haut de la corniche basse (30 m),
+# 4 marches sur 20 m de long, 37,5 m de large (moitié de la salle couverte) contre le mur d'enceinte, dans la bande avant ; il monte vers l'angle avant-gauche
 # et s'arrête au bord du carré d'angle (75 x 75 m), plein de 10 à 30 m (palier) ; 2 objets séparés
-MARCHE, Z_HAUT, L_ESC = 0.5, zb1, SOL_NAV / 2   # largeur : la moitié de la salle couverte (37,5 m)
+MARCHE, Z_HAUT, L_ESC = 5.0, zb1, SOL_NAV / 2   # largeur : la moitié de la salle couverte (37,5 m)
 col_esc = bpy.data.collections.new("Escalier"); scn.collection.children.link(col_esc)
 nmar = round((Z_HAUT - T) / MARCHE); long_esc = nmar * MARCHE
 prof = [(0.0, T), (long_esc, T)]                          # profil (d = distance au bord du palier, z), une seule face de côté
