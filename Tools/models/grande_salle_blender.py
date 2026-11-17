@@ -204,6 +204,21 @@ for nom, rz in ((("Decoupe_fenetre_gauche", -90), ("Decoupe_fenetre_droite", 90)
     c = arch(nom, -a - M, -b + M, origin=(0, 0, FZ), zb=FZ, hs=FH, bas_rond=True); c.rotation_euler.z = math.radians(rz)
     col_cut.objects.link(c); c.display_type = "WIRE"; c.hide_render = True
 print("fenêtres : 2 (murs gauche et droite) | 16 m de large, de", FZ, "à", FZ + FH + OA, "m")
+# barreaux des 2 fenêtres de la cour : 3 verticaux, section 1 x 1 m, au milieu de l'épaisseur du mur,
+# espacés régulièrement (3,25 m de vide) ; les verticaux vont jusqu'aux arrondis (bout ancré dans le mur) ; objets séparés
+if OUVERTURES:
+    col_bar = bpy.data.collections.new("Barreaux"); scn.collection.children.link(col_bar)
+    BS = 1.0; vide = (OW - 3 * BS) / 4                    # 3,25 m
+    zc_bas, zc_haut = FZ + OA, FZ + FH                    # centres des arrondis du bas (48 m) et du haut (87 m)
+    kb = 0
+    for sx, cote in ((-1, "gauche"), (1, "droite")):
+        xc = sx * (a - T / 2)                             # milieu de l'épaisseur du mur (±120 m)
+        for i in range(3):
+            yc_ = -OW / 2 + vide + BS / 2 + i * (BS + vide)          # -4,25 / 0 / 4,25 m
+            h = math.sqrt(o * o - yc_ * yc_)              # hauteur de l'arrondi au droit du barreau
+            bb_ = box("Barreau_%s_%d" % (cote, i + 1), xc - BS / 2, xc + BS / 2, yc_ - BS / 2, yc_ + BS / 2, zc_bas - h, zc_haut + h, origin=(xc, yc_, zc_bas - h))
+            bb_.data.materials.append(bpy.data.materials["Pierre"]); col_bar.objects.link(bb_); kb += 1
+    print("barreaux :", kb, "| section", BS, "m | vide", vide, "m")
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
 
