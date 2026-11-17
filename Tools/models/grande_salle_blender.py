@@ -266,22 +266,26 @@ if OUVERTURES:
             col_me.objects.link(moulure("Moulure_enceinte_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[min(i, nm - 1 - i) % 2], y0, y1)); kme += 1
     print("moulures enceinte :", kme)
 
-# escalier d'honneur de la salle couverte (bande avant) : palier d'angle plein de 10 à 30 m, 125 m de long (de l'angle jusqu'à 75 m de l'axe de l'arche)
-# x 75 m de large ; au bout, escalier sur toute la largeur (75 m), 2 volées de 4 marches de 2,5 x 2,5 m (hauteur = profondeur) séparées par un
+# escaliers d'honneur de la salle couverte : de chaque côté, un palier en U plein de 10 à 30 m (bande de côté entière + angles + 125 m des bandes
+# avant et arrière, jusqu'à 75 m de l'axe des arches) ; au bout de chaque branche du U, un escalier (4 en tout) sur toute la largeur (75 m), 2 volées de 4 marches de 2,5 x 2,5 m (hauteur = profondeur) séparées par un
 # palier de repos de 15 m à 20 m, qui descend vers l'arche (pied à 45 m de son axe) ; garde-corps retirés pour l'instant (GARDE_CORPS)
 MARCHE, Z_HAUT = 2.5, zb1
 LARG, PAL, GC = SOL_NAV, 15.0, 2.5      # largeur : toute la bande (75 m)
 L_PALIER = 125.0; GARDE_CORPS = False                # garde-corps : 2,5 m d'épaisseur, 2,5 m au-dessus des marches (True pour les remettre)
 col_esc = bpy.data.collections.new("Escalier"); scn.collection.children.link(col_esc)
-xe = -RE + L_PALIER; yc = -(a + RE) / 2                   # bout du palier (x = -75), axe de la bande avant
-def prisme_xz(name, prof, y0, y1):
+XB = RE - L_PALIER                                        # distance à l'axe des arches du bout des paliers (75 m)
+def prisme_xz(name, prof, y0, y1, sx):
+    """profil (d, z) extrudé en y ; d compté depuis le bout du palier vers l'axe de l'arche, côté sx (-1 gauche, +1 droite)"""
     m = len(prof)
-    v = [(xe + d, y0, z) for d, z in prof] + [(xe + d, y1, z) for d, z in prof]
+    v = [(sx * (XB - d), y0, z) for d, z in prof] + [(sx * (XB - d), y1, z) for d, z in prof]
     f = [tuple(range(m)), tuple(range(m, 2 * m))] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
     me = bpy.data.meshes.new(name); me.from_pydata(v, [], f); me.update(); me.validate()
     bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
     me.materials.append(bpy.data.materials["Pierre"]); ob = bpy.data.objects.new(name, me); col_esc.objects.link(ob); return ob
 n2 = round((Z_HAUT - T) / MARCHE / 2)                     # 4 marches par volée
+def gprof_():                                             # garde-corps : suivent la pente, 2,5 m au-dessus du nez des marches
+    return [(0.0, T), (long_e + GC, T), (long_e + GC, T + GC), (long_e - (n2 - 1) * MARCHE, T + MARCHE * n2 + GC),
+            (n2 * MARCHE, T + MARCHE * n2 + GC), (0.0, Z_HAUT + GC)]
 prof = [(0.0, T)]; d = 0.0; z = Z_HAUT
 for k in range(n2):                                       # volée haute (descend depuis le palier d'angle)
     prof += [(d, z)]; z -= MARCHE; prof += [(d, z)]; d += MARCHE
@@ -294,16 +298,16 @@ prof = [p for p in prof if p != (0.0, Z_HAUT)]
 prof[-1] = (prof[-1][0], T) if prof[-1][1] == T else prof[-1]
 if prof[-1][1] != T: prof.append((prof[-1][0], T))
 long_e = prof[-1][0]
-prisme_xz("Escalier", prof, yc - LARG / 2, yc + LARG / 2)
-# garde-corps : suivent la pente, 2,5 m au-dessus du nez des marches, un peu plus longs que l'escalier
-hp = Z_HAUT - T                                           # 20 m
-gprof = [(0.0, T), (long_e + GC, T), (long_e + GC, T + GC), (long_e - (n2 - 1) * MARCHE, T + MARCHE * n2 + GC),
-         (n2 * MARCHE, T + MARCHE * n2 + GC), (0.0, Z_HAUT + GC)]
-for nom, ya in ((("Garde_corps_1", yc - LARG / 2 - GC), ("Garde_corps_2", yc + LARG / 2)) if GARDE_CORPS else ()):
-    prisme_xz(nom, gprof, ya, ya + GC)
-pal = box("Palier_angle", -RE, xe, -RE, -a, T, Z_HAUT, origin=((-RE + xe) / 2, (-RE - a) / 2, T)); pal.data.materials.append(bpy.data.materials["Pierre"])
-col_esc.objects.link(pal)
-print("escalier :", 2 * n2, "marches |", long_e, "m de long | palier", L_PALIER, "x", SOL_NAV, "m | pied de l'escalier à x =", xe + long_e)
+for sx, sy, nom in ((-1, -1, "avant_gauche"), (1, -1, "avant_droite"), (-1, 1, "arriere_gauche"), (1, 1, "arriere_droite")):
+    yc = sy * (a + RE) / 2                                # axe de la bande avant / arrière
+    prisme_xz("Escalier_" + nom, prof, yc - LARG / 2, yc + LARG / 2, sx)
+    for g, ya in ((("1", yc - LARG / 2 - GC), ("2", yc + LARG / 2)) if GARDE_CORPS else ()):
+        prisme_xz("Garde_corps_%s_%s" % (nom, g), gprof_(), ya, ya + GC, sx)
+# paliers en U (gauche et droite) : une seule forme chacun, de 10 à 30 m
+for sx, nom in ((-1, "Palier_gauche"), (1, "Palier_droit")):
+    u = [(XB, -RE), (RE, -RE), (RE, RE), (XB, RE), (XB, a), (a, a), (a, -a), (XB, -a)]
+    pal = prisme(nom, [(sx * x, y) for x, y in u], T, Z_HAUT); pal.data.materials.append(bpy.data.materials["Pierre"]); col_esc.objects.link(pal)
+print("escaliers : 4 x", 2 * n2, "marches |", long_e, "m de long | paliers en U | pieds des escaliers à", XB - long_e, "m de l'axe des arches")
 
 # lumière et caméra pour un premier rendu
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 3
