@@ -7,7 +7,8 @@ import bpy, bmesh
 W, H, T = 250.0, 125.0, 10.0
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
 OW, OH, OA = 16.0, 77.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 77 m, puis demi-cercle (rayon 8 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
-SALLES_COTE = True                    # salles carrées derrière les arches de côté de l'enceinte
+SALLES_COTE = False                   # salles carrées derrière les arches de côté : retirées pour l'instant (configuration gardée) ; True pour les remettre
+PLACE_SALLES = True                   # colonnes / corniches de côté de l'enceinte retirées là où vont les salles
 TOIT = True                           # toits de la salle couverte et des salles carrées (10 m, de 115 à 125 m) ; False pour les retirer
 OUVERTURES = True                     # True : arches et fenêtres ; False pour les retirer (configuration gardée ci-dessous)
 ARC_SEG = 32                          # nombre de segments de l'arrondi
@@ -110,7 +111,7 @@ ke = 0
 IEXT = range(-1, NCOL + 3)                                # 8 par côté : les 4 dans l'axe des colonnes intérieures + 2 de chaque côté, même pas de 46 m
 for i in IEXT:
     u = -b + i * pas
-    for (x, y, rz) in ((u, -RO - DEP / 2, 0), (u, RO + DEP / 2, 0)) + (() if SALLES_COTE else ((-RO - DEP / 2, u, 90), (RO + DEP / 2, u, 90))):   # face extérieure du mur d'enceinte (murs de côté : remplacées par les salles carrées)
+    for (x, y, rz) in ((u, -RO - DEP / 2, 0), (u, RO + DEP / 2, 0)) + (() if PLACE_SALLES else ((-RO - DEP / 2, u, 90), (RO + DEP / 2, u, 90))):   # face extérieure du mur d'enceinte (murs de côté : remplacées par les salles carrées)
         ke += 1; c = bpy.data.objects.new("Colonne_ext_%02d" % ke, me_ext); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
         col_ext.objects.link(c)
 print("colonnes extérieures :", ke)
@@ -156,12 +157,12 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("
     for j in range(1, len(bb) // 2 - 1):                  # morceaux entre colonnes (hors angles)
         u0, u1 = bb[2 * j], bb[2 * j + 1]
         cotes_ = ((-r1, -r0, u0, u1), (r0, r1, u0, u1))
-        if SALLES_COTE and r0 >= RO:                      # murs de côté de l'enceinte : seulement entre les 2 salles carrées (-23 -> 23 m)
+        if PLACE_SALLES and r0 >= RO:                      # murs de côté de l'enceinte : seulement entre les 2 salles carrées (-23 -> 23 m)
             cotes_ = ((-r1, -r0, -8.0, 8.0), (r0, r1, -8.0, 8.0)) if u0 < 0 < u1 else ()
         for (x0, x1, y0, y1) in (((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if not (coupe and u0 < 0 < u1) else ()) + cotes_:
             ajoute(box("tmp", x0, x1, y0, y1, z0, z1, origin=((x0 + x1) / 2, (y0 + y1) / 2, z0)))
     for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):   # angles : une seule forme en L
-        Ec = 176.0 if (SALLES_COTE and r0 >= RO) else Eb # mur de côté : la branche s'arrête contre la salle carrée
+        Ec = 176.0 if (PLACE_SALLES and r0 >= RO) else Eb # mur de côté : la branche s'arrête contre la salle carrée
         L_ = [(Eb, r0), (r0, r0), (r0, Ec), (r1, Ec), (r1, r1), (Eb, r1)]   # L : bande du mur avant/arrière + bande du mur de côté
         ajoute(prisme("tmp", [(sx * x, sy * y) for x, y in L_], z0, z1))
     print(nom, ":", n, "morceaux | de", z0, "à", z1, "m")
