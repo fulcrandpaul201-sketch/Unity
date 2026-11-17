@@ -385,7 +385,7 @@ if SALLES_COTE:
 # avant et arrière, jusqu'à 75 m de l'axe des arches) ; au bout de chaque branche du U, un escalier (4 en tout) sur toute la largeur (75 m), 2 volées de 4 marches de 2,5 x 2,5 m (hauteur = profondeur) séparées par un
 # palier de repos de 15 m à 20 m, qui descend vers l'arche (pied à 45 m de son axe) ; garde-corps retirés pour l'instant (GARDE_CORPS)
 MARCHE, Z_HAUT = 2.5, zb1
-LARG, PAL, GC = SOL_NAV, 15.0, 2.5      # largeur : toute la bande (75 m)
+LARG, PAL, GC = SOL_NAV, 0.0, 2.5       # largeur : toute la bande (75 m) ; PAL = 0 : escalier droit, sans palier de repos
 L_PALIER = 125.0; GARDE_CORPS = False                # garde-corps : 2,5 m d'épaisseur, 2,5 m au-dessus des marches (True pour les remettre)
 col_esc = bpy.data.collections.new("Escalier"); scn.collection.children.link(col_esc)
 XB = RE - L_PALIER                                        # distance à l'axe des arches du bout des paliers (75 m)
@@ -412,15 +412,20 @@ prof = [p for i, p in enumerate(prof) if i == 0 or p != prof[i - 1]]
 prof = [p for p in prof if p != (0.0, Z_HAUT)]
 prof[-1] = (prof[-1][0], T) if prof[-1][1] == T else prof[-1]
 if prof[-1][1] != T: prof.append((prof[-1][0], T))
+if PAL == 0:                                              # escalier droit : 8 marches de 2,5 x 2,5 m, du palier (30 m) au sol (10 m)
+    prof = [(0.0, T)]
+    for k in range(2 * n2):                               # marche k : dessus à 30 - 2,5 k, de d = 2,5 k à 2,5 (k + 1)
+        prof += [(k * MARCHE, Z_HAUT - k * MARCHE), ((k + 1) * MARCHE, Z_HAUT - k * MARCHE)]
+    prof.append((2 * n2 * MARCHE, T))
 long_e = prof[-1][0]
 for sx, sy, nom in ((-1, -1, "avant_gauche"), (1, -1, "avant_droite"), (-1, 1, "arriere_gauche"), (1, 1, "arriere_droite")):
     yc = sy * (a + RE) / 2                                # axe de la bande avant / arrière
-    # en largeur : escalier 25 m | forme pleine 25 m (à 30 m, jusqu'au pied des escaliers) | escalier 25 m
+    # en largeur : escalier 25 m | pilier 25 m (du sol au plafond, jusqu'au pied des escaliers) | escalier 25 m
     l3 = LARG / 3
     prisme_xz("Escalier_%s_1" % nom, prof, yc - LARG / 2, yc - LARG / 2 + l3, sx)
     prisme_xz("Escalier_%s_2" % nom, prof, yc + LARG / 2 - l3, yc + LARG / 2, sx)
     xa_, xb_ = sorted((sx * XB, sx * (XB - long_e)))
-    bloc = box("Bloc_%s" % nom, xa_, xb_, yc - l3 / 2, yc + l3 / 2, T, Z_HAUT, origin=((xa_ + xb_) / 2, yc, T))
+    bloc = box("Pilier_%s" % nom, xa_, xb_, yc - l3 / 2, yc + l3 / 2, T, H - T, origin=((xa_ + xb_) / 2, yc, T))   # pilier : du sol jusqu'au plafond (115 m)
     bloc.data.materials.append(bpy.data.materials["Pierre"]); col_esc.objects.link(bloc)
     for g, ya in ((("1", yc - LARG / 2 - GC), ("2", yc + LARG / 2)) if GARDE_CORPS else ()):
         prisme_xz("Garde_corps_%s_%s" % (nom, g), gprof_(), ya, ya + GC, sx)
