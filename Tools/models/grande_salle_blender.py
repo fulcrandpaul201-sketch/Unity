@@ -157,7 +157,7 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("
         u0, u1 = bb[2 * j], bb[2 * j + 1]
         cotes_ = ((-r1, -r0, u0, u1), (r0, r1, u0, u1))
         if SALLES_COTE and r0 >= RO:                      # murs de côté de l'enceinte : seulement entre les 2 salles carrées (-23 -> 23 m)
-            cotes_ = ((-r1, -r0, -pas / 2, pas / 2), (r0, r1, -pas / 2, pas / 2)) if u0 < 0 < u1 else ()
+            cotes_ = ((-r1, -r0, -18.0, 18.0), (r0, r1, -18.0, 18.0)) if u0 < 0 < u1 else ()
         for (x0, x1, y0, y1) in (((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if not (coupe and u0 < 0 < u1) else ()) + cotes_:
             ajoute(box("tmp", x0, x1, y0, y1, z0, z1, origin=((x0 + x1) / 2, (y0 + y1) / 2, z0)))
     for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):   # angles : une seule forme en L
@@ -292,13 +292,13 @@ if OUVERTURES:
                     ob.rotation_euler.z = math.radians(rz); ob.location = (0, yo, 0); col_me.objects.link(ob); kme += 1
     print("moulures enceinte :", kme, "| arches de côté :", nm2, "blocs par face, écart", round(gm2, 3), "m")
 
-# salles carrées derrière les 4 arches de côté de l'enceinte : 138 x 138 m (des colonnes à ±161 m jusqu'à celles à ±23 m, enlevées),
+# salles carrées derrière les 4 arches de côté de l'enceinte : 148 x 148 m, leurs murs de côté à la place exacte des colonnes à ±161 et ±23 m (enlevées),
 # collées au mur d'enceinte ; murs de 10 m de 0 à 125 m, sol plein de 0 à 30 m (niveau du palier et du bas des arches), sans toit
 if SALLES_COTE:
     col_sc = bpy.data.collections.new("Salles_cote"); scn.collection.children.link(col_sc)
-    CS = 138.0
+    CS = 148.0
     for sx, cote in ((-1, "gauche"), (1, "droite")):
-        for y0s, y1s, pos in ((-161.0, -23.0, "avant"), (23.0, 161.0, "arriere")):
+        for y0s, y1s, pos in ((-166.0, -18.0, "avant"), (18.0, 166.0, "arriere")):
             xa, xb = sorted((sx * RO, sx * (RO + CS)))       # de la face extérieure de l'enceinte vers l'extérieur
             nom = "Salle_%s_%s" % (cote, pos)
             ob = box(nom, xa, xb, y0s, y1s, 0.0, H, origin=((xa + xb) / 2, (y0s + y1s) / 2, 0.0)); col_sc.objects.link(ob)
