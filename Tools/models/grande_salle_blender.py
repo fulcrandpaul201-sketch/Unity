@@ -166,6 +166,35 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("
         L_ = [(Eb, r0), (r0, r0), (r0, Ec), (r1, Ec), (r1, r1), (Eb, r1)]   # L : bande du mur avant/arrière + bande du mur de côté
         ajoute(prisme("tmp", [(sx * x, sy * y) for x, y in L_], z0, z1))
     print(nom, ":", n, "morceaux | de", z0, "à", z1, "m")
+# arrondis (congés) de 5 x 5 m dans la cour : à chaque jonction pilier / corniche intérieure, au-dessus et au-dessous de la bande,
+# des deux côtés du pilier (là où la bande existe), sur toute la saillie (5 m) ; quart de cercle concave de 5 m de rayon ; objets séparés
+RA, NSEG = 5.0, 8
+col_arr = bpy.data.collections.new("Arrondis"); scn.collection.children.link(col_arr)
+prof_a = [(0.0, 0.0), (RA, 0.0)] + [(RA + RA * math.cos(th), RA + RA * math.sin(th)) for th in
+          (-math.pi / 2 - (math.pi / 2) * i / NSEG for i in range(1, NSEG))] + [(0.0, RA)]
+def arrondi(name, mur, u_bord, du, z_face, dz):
+    """congé : profil (s le long du mur depuis le bord du pilier, t vertical depuis la face de la bande) extrudé sur la saillie w = 0..DEP"""
+    def pt(s_, t_, w):
+        u, z = u_bord + du * s_, z_face + dz * t_
+        return {"avant": (u, -b + w, z), "arriere": (u, b - w, z), "gauche": (-b + w, u, z), "droite": (b - w, u, z)}[mur]
+    m = len(prof_a)
+    v = [pt(s_, t_, 0.0) for s_, t_ in prof_a] + [pt(s_, t_, DEP) for s_, t_ in prof_a]
+    f = [tuple(range(m)), tuple(range(m, 2 * m))] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
+    me = bpy.data.meshes.new(name); me.from_pydata(v, [], f); me.update(); me.validate()
+    bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
+    me.materials.append(bpy.data.materials["Pierre"]); ob = bpy.data.objects.new(name, me); col_arr.objects.link(ob); return ob
+ka = 0
+for i in range(1, NCOL + 1):
+    u = -b + i * pas
+    for mur in ("avant", "arriere", "gauche", "droite"):
+        for du in (-1, 1):
+            u_bord = u + du * COL / 2
+            for bande, zb_, zh_, coupe in (("haute", zc0, zc1, False), ("basse", zb0, zb1, True)):
+                if coupe and mur in ("avant", "arriere") and abs(u) < pas and du * u < 0:
+                    continue                              # pas de bande basse devant les arches
+                for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
+                    ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u_bord, du, z_face, dz)
+print("arrondis :", ka, "| rayon", RA, "m")
 # moulures harpées autour des 2 arches (intérieur + extérieur) : blocs de 5 m de haut, 2,5 m d'épaisseur, 31 blocs (écart ~0,8 m),
 # s'avançant dans le mur de 5 m puis 3 m en alternance, tout le tour de l'arche (côtés droits + arrondi en éventail)
 MH, MS, MG, ML = 5.0, 2.5, 1.0, (5.0, 3.0)
