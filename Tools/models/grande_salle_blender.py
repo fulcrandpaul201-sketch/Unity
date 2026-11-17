@@ -360,12 +360,12 @@ for sx, nom in ((-1, "Palier_gauche"), (1, "Palier_droit")):
 print("escaliers : 4 x", 2 * n2, "marches |", long_e, "m de long | paliers en U | pieds des escaliers à", XB - long_e, "m de l'axe des arches")
 
 # lumière et caméra pour un premier rendu
-sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 3
+sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 1.5                     # soleil plus doux : les faces éclairées ne virent pas au blanc
 sun.rotation_euler = (math.radians(50), math.radians(10), math.radians(35)); scn.collection.objects.link(sun)
 cam = bpy.data.objects.new("Camera", bpy.data.cameras.new("Camera")); cam.data.clip_end = 5000; cam.data.lens = 30
 cam.location = (330, -430, 300); scn.collection.objects.link(cam); scn.camera = cam
 cam.rotation_euler = (math.radians(62), 0, math.radians(38))
-scn.world = bpy.data.worlds.new("Ciel"); scn.world.color = (0.75, 0.78, 0.82)
+scn.world = bpy.data.worlds.new("Ciel"); scn.world.color = (0.95, 0.95, 0.95)   # lumière ambiante plus claire, ombres moins contrastées
 
 # découpes appliquées : la salle devient un seul maillage propre ; des coupes en croix on ne garde qu'un trait,
 # du sommet de chaque arche / fenêtre jusqu'à l'arête du haut (et sur le dessus du mur) ; tout le reste est dissous
