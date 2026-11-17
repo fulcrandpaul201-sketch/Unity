@@ -249,8 +249,8 @@ if OUVERTURES:
     col_tmp = bpy.data.collections.new("tmp"); scn.collection.children.link(col_tmp)
     for nom, y0, y1, oy in (("Decoupe_enceinte_avant", -RO - M, -RE + M, -RO), ("Decoupe_enceinte_arriere", RE - M, RO + M, RO)):
         c = arch(nom, y0, y1, origin=(0, oy, T)); col_tmp.objects.link(c)
-    # arches de côté (murs gauche et droit) : 2 par mur, à ±92 m, du palier (30 m) jusqu'au sommet à 95 m, même forme
-    ZS = zb1; HS = T + OH - ZS                            # bas à 30 m, côtés droits sur 57 m, arrondi de 87 à 95 m
+    # arches de côté (murs gauche et droit) : 2 par mur, à ±92 m, 16 x 32 m depuis le palier (30 m), sommet à 62 m
+    ZS = zb1; HS = 24.0                                   # 16 x 32 m : bas à 30 m, côtés droits sur 24 m, arrondi de 54 à 62 m
     for cote, rz in (("gauche", -90), ("droite", 90)):
         for yo in (-YC, YC):
             nom = "Decoupe_enceinte_%s_%d" % (cote, round(yo))
