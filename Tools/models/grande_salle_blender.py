@@ -196,9 +196,9 @@ print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) f
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
 
 # sol extérieur et mur d'enceinte (objets séparés, rien de fusionné) :
-#   sol : 60 m tout autour du mur extérieur (50 m navigables + 10 m sous le mur), 10 m d'épaisseur (0 -> 10 m), au niveau du sol de la salle
+#   sol : 85 m tout autour du mur extérieur (75 m navigables + 10 m sous le mur), 10 m d'épaisseur (0 -> 10 m), au niveau du sol de la salle
 #   mur d'enceinte : 10 m d'épaisseur, posé sur le bord du sol, de 10 m à 125 m ; angles découpés par des traits droits (pas de diagonale)
-SOL_NAV, SOL_MUR = 50.0, 10.0
+SOL_NAV, SOL_MUR = 75.0, 10.0
 def cadre(name, ri, ro, z0, z1):
     """anneau carré plein (intérieur ri, extérieur ro) de z0 à z1, un seul maillage ; dessus et dessous coupés par des traits droits
     qui prolongent les faces intérieures (bandes avant / arrière sur toute la largeur, bandes de côté entre les deux)"""
@@ -229,7 +229,32 @@ def cadre(name, ri, ro, z0, z1):
     return ob
 col_enc = bpy.data.collections.new("Enceinte"); scn.collection.children.link(col_enc)
 col_enc.objects.link(cadre("Sol_exterieur", a, a + SOL_NAV + SOL_MUR, 0.0, T))
-col_enc.objects.link(cadre("Mur_enceinte", a + SOL_NAV, a + SOL_NAV + SOL_MUR, T, H))
+RE, RO = a + SOL_NAV, a + SOL_NAV + SOL_MUR                  # faces intérieure (200 m) et extérieure (210 m) du mur d'enceinte
+mur_enc = cadre("Mur_enceinte", RE, RO, T, H); col_enc.objects.link(mur_enc)
+# arches du mur d'enceinte : en face des arches de la salle (avant et arrière), même forme, découpe appliquée (maillage propre)
+if OUVERTURES:
+    col_tmp = bpy.data.collections.new("tmp"); scn.collection.children.link(col_tmp)
+    for nom, y0, y1, oy in (("Decoupe_enceinte_avant", -RO - M, -RE + M, -RO), ("Decoupe_enceinte_arriere", RE - M, RO + M, RO)):
+        c = arch(nom, y0, y1, origin=(0, oy, T)); col_tmp.objects.link(c)
+        md = mur_enc.modifiers.new(nom, "BOOLEAN"); md.operation = "DIFFERENCE"; md.object = c; md.solver = "EXACT"
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(mur_enc.evaluated_get(dg))
+    mur_enc.modifiers.clear(); old = mur_enc.data; mur_enc.data = me; bpy.data.meshes.remove(old); me.name = "Mur_enceinte"
+    for c in list(col_tmp.objects): bpy.data.objects.remove(c)
+    bpy.data.collections.remove(col_tmp)
+    bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-3)
+    ok = all(e.is_manifold for e in bm.edges)
+    biais = sum(1 for e in bm.edges if sum(1 for c in (e.verts[1].co - e.verts[0].co) if abs(c) > 1e-4) >= 2 and (e.verts[1].co - e.verts[0].co).length > 3)
+    bm.to_mesh(me); bm.free(); me.update()
+    print("Mur_enceinte avec arches :", len(me.vertices), "sommets,", len(me.polygons), "faces, étanche =", ok, "| arêtes en biais :", biais)
+    # moulures des arches de l'enceinte : identiques à celles de la salle (31 blocs par face, intérieur + extérieur)
+    col_me = bpy.data.collections.new("Moulures_enceinte"); scn.collection.children.link(col_me)
+    kme = 0
+    for nom, y0, y1 in (("avant_ext", -RO - MS, -RO), ("avant_int", -RE, -RE + MS), ("arriere_int", RE - MS, RE), ("arriere_ext", RO, RO + MS)):
+        for i in range(nm):
+            t0 = i * (MH + gm)
+            col_me.objects.link(moulure("Moulure_enceinte_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[min(i, nm - 1 - i) % 2], y0, y1)); kme += 1
+    print("moulures enceinte :", kme)
 
 # lumière et caméra pour un premier rendu
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 3
