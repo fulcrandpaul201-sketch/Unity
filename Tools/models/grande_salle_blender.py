@@ -7,6 +7,7 @@ import bpy, bmesh
 W, H, T = 250.0, 125.0, 10.0
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
 OW, OH, OA = 16.0, 77.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 77 m, puis demi-cercle (rayon 8 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
+TOIT = False                          # False : toit de la salle couverte retiré pour l'instant (configuration gardée) ; True pour le remettre
 OUVERTURES = True                     # True : arches et fenêtres ; False pour les retirer (configuration gardée ci-dessous)
 ARC_SEG = 32                          # nombre de segments de l'arrondi
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Export"))
@@ -235,7 +236,7 @@ def cadre(name, ri, ro, z0, z1, cotes=True):
 col_enc = bpy.data.collections.new("Enceinte"); scn.collection.children.link(col_enc)
 col_enc.objects.link(cadre("Sol_exterieur", a, a + SOL_NAV, 0.0, T, cotes=False))
 # toit : entre le mur de la cour et le mur d'enceinte (pas sur la cour), 10 m d'épaisseur sous le haut des murs (115 -> 125 m)
-col_enc.objects.link(cadre("Toit", a, RE, H - T, H, cotes=False))
+if TOIT: col_enc.objects.link(cadre("Toit", a, RE, H - T, H, cotes=False))
 mur_enc = cadre("Mur_enceinte", RE, RO, 0.0, H, cotes=False); col_enc.objects.link(mur_enc)
 # arches du mur d'enceinte : en face des arches de la salle (avant et arrière), même forme, découpe appliquée (maillage propre)
 if OUVERTURES:
