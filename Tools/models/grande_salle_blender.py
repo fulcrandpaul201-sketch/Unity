@@ -230,7 +230,7 @@ def cadre(name, ri, ro, z0, z1, cotes=True):
     print(name, ":", len(me.vertices), "sommets,", len(me.polygons), "faces, étanche =", ok)
     return ob
 col_enc = bpy.data.collections.new("Enceinte"); scn.collection.children.link(col_enc)
-col_enc.objects.link(cadre("Sol_exterieur", a, a + SOL_NAV, 0.0, T))
+col_enc.objects.link(cadre("Sol_exterieur", a, a + SOL_NAV, 0.0, T, cotes=False))
 # toit : entre le mur de la cour et le mur d'enceinte (pas sur la cour), 10 m d'épaisseur sous le haut des murs (115 -> 125 m)
 col_enc.objects.link(cadre("Toit", a, RE, H - T, H, cotes=False))
 mur_enc = cadre("Mur_enceinte", RE, RO, 0.0, H, cotes=False); col_enc.objects.link(mur_enc)
