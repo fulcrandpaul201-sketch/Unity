@@ -157,11 +157,12 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("
         u0, u1 = bb[2 * j], bb[2 * j + 1]
         cotes_ = ((-r1, -r0, u0, u1), (r0, r1, u0, u1))
         if SALLES_COTE and r0 >= RO:                      # murs de côté de l'enceinte : seulement entre les 2 salles carrées (-23 -> 23 m)
-            cotes_ = ((-r1, -r0, -18.0, 18.0), (r0, r1, -18.0, 18.0)) if u0 < 0 < u1 else ()
+            cotes_ = ((-r1, -r0, -8.0, 8.0), (r0, r1, -8.0, 8.0)) if u0 < 0 < u1 else ()
         for (x0, x1, y0, y1) in (((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if not (coupe and u0 < 0 < u1) else ()) + cotes_:
             ajoute(box("tmp", x0, x1, y0, y1, z0, z1, origin=((x0 + x1) / 2, (y0 + y1) / 2, z0)))
     for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):   # angles : une seule forme en L
-        L_ = [(Eb, r0), (r0, r0), (r0, Eb), (r1, Eb), (r1, r1), (Eb, r1)]   # L : bande du mur avant/arrière + bande du mur de côté
+        Ec = 176.0 if (SALLES_COTE and r0 >= RO) else Eb # mur de côté : la branche s'arrête contre la salle carrée
+        L_ = [(Eb, r0), (r0, r0), (r0, Ec), (r1, Ec), (r1, r1), (Eb, r1)]   # L : bande du mur avant/arrière + bande du mur de côté
         ajoute(prisme("tmp", [(sx * x, sy * y) for x, y in L_], z0, z1))
     print(nom, ":", n, "morceaux | de", z0, "à", z1, "m")
 # moulures harpées autour des 2 arches (intérieur + extérieur) : blocs de 5 m de haut, 2,5 m d'épaisseur, 31 blocs (écart ~0,8 m),
@@ -292,13 +293,13 @@ if OUVERTURES:
                     ob.rotation_euler.z = math.radians(rz); ob.location = (0, yo, 0); col_me.objects.link(ob); kme += 1
     print("moulures enceinte :", kme, "| arches de côté :", nm2, "blocs par face, écart", round(gm2, 3), "m")
 
-# salles carrées derrière les 4 arches de côté de l'enceinte : 148 x 148 m, leurs murs de côté à la place exacte des colonnes à ±161 et ±23 m (enlevées),
+# salles carrées derrière les 4 arches de côté de l'enceinte : 168 x 168 m (148 m + 10 m tout autour), de ±8 à ±176 m le long du mur,
 # collées au mur d'enceinte ; murs de 10 m de 0 à 125 m, sol plein de 0 à 30 m (niveau du palier et du bas des arches), sans toit
 if SALLES_COTE:
     col_sc = bpy.data.collections.new("Salles_cote"); scn.collection.children.link(col_sc)
-    CS = 148.0
+    CS = 168.0
     for sx, cote in ((-1, "gauche"), (1, "droite")):
-        for y0s, y1s, pos in ((-166.0, -18.0, "avant"), (18.0, 166.0, "arriere")):
+        for y0s, y1s, pos in ((-176.0, -8.0, "avant"), (8.0, 176.0, "arriere")):
             xa, xb = sorted((sx * RO, sx * (RO + CS)))       # de la face extérieure de l'enceinte vers l'extérieur
             nom = "Salle_%s_%s" % (cote, pos)
             ob = box(nom, xa, xb, y0s, y1s, 0.0, H, origin=((xa + xb) / 2, (y0s + y1s) / 2, 0.0)); col_sc.objects.link(ob)
