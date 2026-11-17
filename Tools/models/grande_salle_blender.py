@@ -157,6 +157,8 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("
     for j in range(1, len(bb) // 2 - 1):                  # morceaux entre colonnes (hors angles)
         u0, u1 = bb[2 * j], bb[2 * j + 1]
         cotes_ = ((-r1, -r0, u0, u1), (r0, r1, u0, u1))
+        if r0 < RO and u0 < 0 < u1:                       # cour, murs de côté : pas de bande dans la travée de la fenêtre
+            cotes_ = ()
         if PLACE_SALLES and r0 >= RO:                      # murs de côté de l'enceinte : seulement entre les 2 salles carrées (-23 -> 23 m)
             cotes_ = ((-r1, -r0, -8.0, 8.0), (r0, r1, -8.0, 8.0)) if u0 < 0 < u1 else ()
         for (x0, x1, y0, y1) in (((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if not (coupe and u0 < 0 < u1) else ()) + cotes_:
@@ -192,6 +194,8 @@ for i in range(1, NCOL + 1):
             for bande, zb_, zh_, coupe in (("haute", zc0, zc1, False), ("basse", zb0, zb1, True)):
                 if coupe and mur in ("avant", "arriere") and abs(u) < pas and du * u < 0:
                     continue                              # pas de bande basse devant les arches
+                if mur in ("gauche", "droite") and abs(u) < pas and du * u < 0:
+                    continue                              # pas de bande dans la travée de la fenêtre
                 for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
                     ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u_bord, du, z_face, dz)
 print("arrondis :", ka, "| rayon", RA, "m")
