@@ -196,8 +196,8 @@ print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) f
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
 
 # sol extérieur et mur d'enceinte (objets séparés, rien de fusionné) :
-#   sol : 85 m tout autour du mur extérieur (75 m navigables + 10 m sous le mur), 10 m d'épaisseur (0 -> 10 m), au niveau du sol de la salle
-#   mur d'enceinte : 10 m d'épaisseur, posé sur le bord du sol, de 10 m à 125 m ; angles découpés par des traits droits (pas de diagonale)
+#   sol : 75 m navigables tout autour du mur extérieur, 10 m d'épaisseur (0 -> 10 m), au niveau du sol de la salle, arrêté contre le mur d'enceinte
+#   mur d'enceinte : 10 m d'épaisseur, de 0 à 125 m ; dessus / dessous coupés au milieu de chaque côté (pas de diagonale)
 SOL_NAV, SOL_MUR = 75.0, 10.0
 def cadre(name, ri, ro, z0, z1):
     """anneau carré plein (intérieur ri, extérieur ro) de z0 à z1, un seul maillage ; dessus et dessous coupés par un trait droit
@@ -222,11 +222,14 @@ def cadre(name, ri, ro, z0, z1):
     print(name, ":", len(me.vertices), "sommets,", len(me.polygons), "faces, étanche =", ok)
     return ob
 col_enc = bpy.data.collections.new("Enceinte"); scn.collection.children.link(col_enc)
-col_enc.objects.link(cadre("Sol_exterieur", a, a + SOL_NAV + SOL_MUR, 0.0, T))
+col_enc.objects.link(cadre("Sol_exterieur", a, a + SOL_NAV, 0.0, T))
 RE, RO = a + SOL_NAV, a + SOL_NAV + SOL_MUR                  # faces intérieure (200 m) et extérieure (210 m) du mur d'enceinte
-mur_enc = cadre("Mur_enceinte", RE, RO, T, H); col_enc.objects.link(mur_enc)
+mur_enc = cadre("Mur_enceinte", RE, RO, 0.0, H); col_enc.objects.link(mur_enc)
 # arches du mur d'enceinte : en face des arches de la salle (avant et arrière), même forme, découpe appliquée (maillage propre)
 if OUVERTURES:
+    coupe_x = bmesh.new(); coupe_x.from_mesh(mur_enc.data)      # trait droit au milieu des murs avant / arrière (au-dessus et au-dessous des arches)
+    bmesh.ops.bisect_plane(coupe_x, geom=coupe_x.verts[:] + coupe_x.edges[:] + coupe_x.faces[:], plane_co=(0, 0, 0), plane_no=(1, 0, 0))
+    coupe_x.to_mesh(mur_enc.data); coupe_x.free(); mur_enc.data.update()
     col_tmp = bpy.data.collections.new("tmp"); scn.collection.children.link(col_tmp)
     for nom, y0, y1, oy in (("Decoupe_enceinte_avant", -RO - M, -RE + M, -RO), ("Decoupe_enceinte_arriere", RE - M, RO + M, RO)):
         c = arch(nom, y0, y1, origin=(0, oy, T)); col_tmp.objects.link(c)
