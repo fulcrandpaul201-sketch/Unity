@@ -8,7 +8,7 @@ W, H, T = 250.0, 125.0, 10.0
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
 OW, OH, OA = 16.0, 77.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 77 m, puis demi-cercle (rayon 8 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
 SALLES_COTE = True                    # salles carrées derrière les arches de côté de l'enceinte
-TOIT = False                          # False : toit de la salle couverte retiré pour l'instant (configuration gardée) ; True pour le remettre
+TOIT = True                           # toits de la salle couverte et des salles carrées (10 m, de 115 à 125 m) ; False pour les retirer
 OUVERTURES = True                     # True : arches et fenêtres ; False pour les retirer (configuration gardée ci-dessous)
 ARC_SEG = 32                          # nombre de segments de l'arrondi
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Export"))
@@ -326,6 +326,10 @@ if SALLES_COTE:
     for sx, cote in ((-1, "gauche"), (1, "droite")):
         for y0s, y1s, pos in ((-176.0, -8.0, "avant"), (8.0, 176.0, "arriere")):
             col_sc.objects.link(salle_carree("Salle_%s_%s" % (cote, pos), sx, y0s, y1s, 168.0, 30.0))
+            if TOIT:                                      # toit : 10 m d'épaisseur entre les murs, au ras du haut (115 -> 125 m)
+                xa, xb = sorted((sx * RO, sx * (RO + 168.0 - T)))
+                t = box("Toit_salle_%s_%s" % (cote, pos), xa, xb, y0s + T, y1s - T, H - T, H, origin=((xa + xb) / 2, (y0s + y1s) / 2, H - T))
+                t.data.materials.append(bpy.data.materials["Pierre"]); col_sc.objects.link(t)
 
 # escaliers d'honneur de la salle couverte : de chaque côté, un palier en U plein de 10 à 30 m (bande de côté entière + angles + 125 m des bandes
 # avant et arrière, jusqu'à 75 m de l'axe des arches) ; au bout de chaque branche du U, un escalier (4 en tout) sur toute la largeur (75 m), 2 volées de 4 marches de 2,5 x 2,5 m (hauteur = profondeur) séparées par un
