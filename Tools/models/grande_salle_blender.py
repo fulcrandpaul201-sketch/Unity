@@ -415,7 +415,13 @@ if prof[-1][1] != T: prof.append((prof[-1][0], T))
 long_e = prof[-1][0]
 for sx, sy, nom in ((-1, -1, "avant_gauche"), (1, -1, "avant_droite"), (-1, 1, "arriere_gauche"), (1, 1, "arriere_droite")):
     yc = sy * (a + RE) / 2                                # axe de la bande avant / arrière
-    prisme_xz("Escalier_" + nom, prof, yc - LARG / 2, yc + LARG / 2, sx)
+    # en largeur : escalier 25 m | forme pleine 25 m (à 30 m, jusqu'au pied des escaliers) | escalier 25 m
+    l3 = LARG / 3
+    prisme_xz("Escalier_%s_1" % nom, prof, yc - LARG / 2, yc - LARG / 2 + l3, sx)
+    prisme_xz("Escalier_%s_2" % nom, prof, yc + LARG / 2 - l3, yc + LARG / 2, sx)
+    xa_, xb_ = sorted((sx * XB, sx * (XB - long_e)))
+    bloc = box("Bloc_%s" % nom, xa_, xb_, yc - l3 / 2, yc + l3 / 2, T, Z_HAUT, origin=((xa_ + xb_) / 2, yc, T))
+    bloc.data.materials.append(bpy.data.materials["Pierre"]); col_esc.objects.link(bloc)
     for g, ya in ((("1", yc - LARG / 2 - GC), ("2", yc + LARG / 2)) if GARDE_CORPS else ()):
         prisme_xz("Garde_corps_%s_%s" % (nom, g), gprof_(), ya, ya + GC, sx)
 # paliers en U (gauche et droite) : une seule forme chacun, de 10 à 30 m
