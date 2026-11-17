@@ -7,6 +7,7 @@ import bpy, bmesh
 W, H, T = 250.0, 125.0, 10.0
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
 OW, OH, OA = 16.0, 77.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 77 m, puis demi-cercle (rayon 8 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
+SALLES_COTE = True                    # salles carrées derrière les arches de côté de l'enceinte
 TOIT = False                          # False : toit de la salle couverte retiré pour l'instant (configuration gardée) ; True pour le remettre
 OUVERTURES = True                     # True : arches et fenêtres ; False pour les retirer (configuration gardée ci-dessous)
 ARC_SEG = 32                          # nombre de segments de l'arrondi
@@ -109,7 +110,7 @@ ke = 0
 IEXT = range(-1, NCOL + 3)                                # 8 par côté : les 4 dans l'axe des colonnes intérieures + 2 de chaque côté, même pas de 46 m
 for i in IEXT:
     u = -b + i * pas
-    for (x, y, rz) in ((u, -RO - DEP / 2, 0), (u, RO + DEP / 2, 0), (-RO - DEP / 2, u, 90), (RO + DEP / 2, u, 90)):   # face extérieure du mur d'enceinte
+    for (x, y, rz) in ((u, -RO - DEP / 2, 0), (u, RO + DEP / 2, 0)) + (() if SALLES_COTE else ((-RO - DEP / 2, u, 90), (RO + DEP / 2, u, 90))):   # face extérieure du mur d'enceinte (murs de côté : remplacées par les salles carrées)
         ke += 1; c = bpy.data.objects.new("Colonne_ext_%02d" % ke, me_ext); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
         col_ext.objects.link(c)
 print("colonnes extérieures :", ke)
@@ -154,7 +155,10 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("
     bb = bords_ext if r0 >= RO else bords; Eb = -bb[1]
     for j in range(1, len(bb) // 2 - 1):                  # morceaux entre colonnes (hors angles)
         u0, u1 = bb[2 * j], bb[2 * j + 1]
-        for (x0, x1, y0, y1) in (((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if not (coupe and u0 < 0 < u1) else ()) + ((-r1, -r0, u0, u1), (r0, r1, u0, u1)):
+        cotes_ = ((-r1, -r0, u0, u1), (r0, r1, u0, u1))
+        if SALLES_COTE and r0 >= RO:                      # murs de côté de l'enceinte : seulement entre les 2 salles carrées (-23 -> 23 m)
+            cotes_ = ((-r1, -r0, -pas / 2, pas / 2), (r0, r1, -pas / 2, pas / 2)) if u0 < 0 < u1 else ()
+        for (x0, x1, y0, y1) in (((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if not (coupe and u0 < 0 < u1) else ()) + cotes_:
             ajoute(box("tmp", x0, x1, y0, y1, z0, z1, origin=((x0 + x1) / 2, (y0 + y1) / 2, z0)))
     for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):   # angles : une seule forme en L
         L_ = [(Eb, r0), (r0, r0), (r0, Eb), (r1, Eb), (r1, r1), (Eb, r1)]   # L : bande du mur avant/arrière + bande du mur de côté
@@ -287,6 +291,29 @@ if OUVERTURES:
                     ob = moulure("Moulure_enceinte_%s_%d_%s_%02d" % (cote, round(yo), face, i + 1), t0, t0 + MH, ML[min(i, nm2 - 1 - i) % 2], y0, y1, ZS, HS)
                     ob.rotation_euler.z = math.radians(rz); ob.location = (0, yo, 0); col_me.objects.link(ob); kme += 1
     print("moulures enceinte :", kme, "| arches de côté :", nm2, "blocs par face, écart", round(gm2, 3), "m")
+
+# salles carrées derrière les 4 arches de côté de l'enceinte : 138 x 138 m (des colonnes à ±161 m jusqu'à celles à ±23 m, enlevées),
+# collées au mur d'enceinte ; murs de 10 m de 0 à 125 m, sol plein de 0 à 30 m (niveau du palier et du bas des arches), sans toit
+if SALLES_COTE:
+    col_sc = bpy.data.collections.new("Salles_cote"); scn.collection.children.link(col_sc)
+    CS = 138.0
+    for sx, cote in ((-1, "gauche"), (1, "droite")):
+        for y0s, y1s, pos in ((-161.0, -23.0, "avant"), (23.0, 161.0, "arriere")):
+            xa, xb = sorted((sx * RO, sx * (RO + CS)))       # de la face extérieure de l'enceinte vers l'extérieur
+            nom = "Salle_%s_%s" % (cote, pos)
+            ob = box(nom, xa, xb, y0s, y1s, 0.0, H, origin=((xa + xb) / 2, (y0s + y1s) / 2, 0.0)); col_sc.objects.link(ob)
+            xi0, xi1 = (xa + T, xb + M) if sx < 0 else (xa - M, xb - T)   # creux : ouvert côté enceinte et vers le haut
+            c = box(nom + "_creux", xi0, xi1, y0s + T, y1s - T, 30.0, H + M, origin=((xi0 + xi1) / 2, (y0s + y1s) / 2, 30.0)); col_sc.objects.link(c)
+            md = ob.modifiers.new("creux", "BOOLEAN"); md.operation = "DIFFERENCE"; md.object = c; md.solver = "EXACT"
+            dg = bpy.context.evaluated_depsgraph_get()
+            me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg)); ob.modifiers.clear(); old = ob.data; ob.data = me; bpy.data.meshes.remove(old); me.name = nom
+            bpy.data.objects.remove(c)
+            bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-3)
+            ok = all(e.is_manifold for e in bm.edges)
+            biais = sum(1 for e in bm.edges if sum(1 for q in (e.verts[1].co - e.verts[0].co) if abs(q) > 1e-4) >= 2)
+            bm.to_mesh(me); bm.free(); me.update()
+            if not me.materials: me.materials.append(bpy.data.materials["Pierre"])
+            print(nom, ":", len(me.vertices), "sommets,", len(me.polygons), "faces, étanche =", ok, "| arêtes en biais :", biais)
 
 # escaliers d'honneur de la salle couverte : de chaque côté, un palier en U plein de 10 à 30 m (bande de côté entière + angles + 125 m des bandes
 # avant et arrière, jusqu'à 75 m de l'axe des arches) ; au bout de chaque branche du U, un escalier (4 en tout) sur toute la largeur (75 m), 2 volées de 4 marches de 2,5 x 2,5 m (hauteur = profondeur) séparées par un
