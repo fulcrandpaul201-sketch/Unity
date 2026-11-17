@@ -206,7 +206,8 @@ for nom, rz in ((("Decoupe_fenetre_gauche", -90), ("Decoupe_fenetre_droite", 90)
 print("fenêtres : 2 (murs gauche et droite) | 16 m de large, de", FZ, "à", FZ + FH + OA, "m")
 # barreaux des 2 fenêtres de la cour : 3 verticaux, section 1 x 1 m, au milieu de l'épaisseur du mur,
 # espacés régulièrement (3,25 m de vide) ; les verticaux vont jusqu'aux arrondis (bout ancré dans le mur) ; objets séparés
-if OUVERTURES:
+BARREAUX = False                                          # barreaux retirés (configuration gardée) ; True pour les remettre
+if OUVERTURES and BARREAUX:
     col_bar = bpy.data.collections.new("Barreaux"); scn.collection.children.link(col_bar)
     BS = 1.0; vide = (OW - 3 * BS) / 4                    # 3,25 m
     zc_bas, zc_haut = FZ + OA, FZ + FH                    # centres des arrondis du bas (48 m) et du haut (87 m)
