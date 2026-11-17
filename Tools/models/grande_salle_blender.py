@@ -267,10 +267,10 @@ if OUVERTURES:
     print("moulures enceinte :", kme)
 
 # escalier d'honneur de la salle couverte (bande avant) : palier d'angle plein de 10 à 30 m, 125 m de long (de l'angle jusqu'à 75 m de l'axe de l'arche)
-# x 75 m de large ; au bout, escalier centré de 37,5 m de large, 2 volées de 4 marches de 2,5 x 2,5 m (hauteur = profondeur) séparées par un
+# x 75 m de large ; au bout, escalier sur toute la largeur (75 m), 2 volées de 4 marches de 2,5 x 2,5 m (hauteur = profondeur) séparées par un
 # palier de repos de 15 m à 20 m, qui descend vers l'arche (pied à 45 m de son axe) ; garde-corps retirés pour l'instant (GARDE_CORPS)
 MARCHE, Z_HAUT = 2.5, zb1
-LARG, PAL, GC = 37.5, 15.0, 2.5
+LARG, PAL, GC = SOL_NAV, 15.0, 2.5      # largeur : toute la bande (75 m)
 L_PALIER = 125.0; GARDE_CORPS = False                # garde-corps : 2,5 m d'épaisseur, 2,5 m au-dessus des marches (True pour les remettre)
 col_esc = bpy.data.collections.new("Escalier"); scn.collection.children.link(col_esc)
 xe = -RE + L_PALIER; yc = -(a + RE) / 2                   # bout du palier (x = -75), axe de la bande avant
