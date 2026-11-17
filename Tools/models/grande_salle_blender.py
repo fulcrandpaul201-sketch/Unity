@@ -98,15 +98,15 @@ for i in range(1, NCOL + 1):
     for (x, y, rz) in ((u, -b + DEP / 2, 0), (u, b - DEP / 2, 0), (-b + DEP / 2, u, 90), (b - DEP / 2, u, 90)):   # avant, arrière, gauche, droite
         k += 1; c = bpy.data.objects.new("Colonne_%02d" % k, me_col); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
         col_cols.objects.link(c)
-# colonnes extérieures : mêmes dimensions et mêmes positions, en vis-à-vis des intérieures, du sol (0 m) jusqu'en haut
+# colonnes extérieures : mêmes dimensions et mêmes positions, en vis-à-vis des intérieures, posées sur le sol extérieur (10 m) jusqu'en haut
 col_ext = bpy.data.collections.new("Colonnes_exterieures"); scn.collection.children.link(col_ext)
-me_ext = box("Colonne_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H).data
+me_ext = box("Colonne_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, T, H, origin=(0, 0, T)).data
 me_ext.name = "Colonne_exterieure"; me_ext.materials.append(bpy.data.materials["Pierre"])
 ke = 0
 for i in range(1, NCOL + 1):
     u = -b + i * pas
     for (x, y, rz) in ((u, -a - DEP / 2, 0), (u, a + DEP / 2, 0), (-a - DEP / 2, u, 90), (a + DEP / 2, u, 90)):
-        ke += 1; c = bpy.data.objects.new("Colonne_ext_%02d" % ke, me_ext); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
+        ke += 1; c = bpy.data.objects.new("Colonne_ext_%02d" % ke, me_ext); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
         col_ext.objects.link(c)
 print("colonnes extérieures :", ke)
 # ponts : relient chaque colonne intérieure à son vis-à-vis extérieur par-dessus le mur (20 m de long, 10 m de large, 5 m d'épaisseur)
@@ -194,6 +194,42 @@ for nom, rz in ((("Decoupe_fenetre_gauche", -90), ("Decoupe_fenetre_droite", 90)
 print("fenêtres : 2 (murs gauche et droite) | 16 m de large, de", FZ, "à", FZ + FH + OA, "m")
 print("colonnes :", k, "| centres le long des murs :", [round(-b + i * pas, 2) for i in range(1, NCOL + 1)])
 print("mur entre colonne du milieu et ouverture :", round((-b + 3 * pas) - COL / 2 - OW / 2, 3), "m | ouverture :", OW, "m de large,", OH + OA, "m de haut (arrondi à partir de", OH, "m)")
+
+# sol extérieur et mur d'enceinte (objets séparés, rien de fusionné) :
+#   sol : 60 m tout autour du mur extérieur (50 m navigables + 10 m sous le mur), 10 m d'épaisseur (0 -> 10 m), au niveau du sol de la salle
+#   mur d'enceinte : 10 m d'épaisseur, posé sur le bord du sol, de 10 m à 125 m ; angles découpés par des traits droits (pas de diagonale)
+SOL_NAV, SOL_MUR = 50.0, 10.0
+def cadre(name, ri, ro, z0, z1):
+    """anneau carré plein (intérieur ri, extérieur ro) de z0 à z1, un seul maillage ; dessus et dessous coupés par des traits droits
+    qui prolongent les faces intérieures (bandes avant / arrière sur toute la largeur, bandes de côté entre les deux)"""
+    v = {}
+    def p(x, y, z):
+        if (x, y, z) not in v: v[(x, y, z)] = len(v)
+        return v[(x, y, z)]
+    f = []
+    for z in (z0, z1):
+        f += [[p(-ro, -ro, z), p(ro, -ro, z), p(ro, -ri, z), p(ri, -ri, z), p(-ri, -ri, z), p(-ro, -ri, z)],
+              [p(ro, ro, z), p(-ro, ro, z), p(-ro, ri, z), p(-ri, ri, z), p(ri, ri, z), p(ro, ri, z)],
+              [p(-ro, -ri, z), p(-ri, -ri, z), p(-ri, ri, z), p(-ro, ri, z)],
+              [p(ro, ri, z), p(ri, ri, z), p(ri, -ri, z), p(ro, -ri, z)]]
+    f += [[p(-ro, -ro, z0), p(ro, -ro, z0), p(ro, -ro, z1), p(-ro, -ro, z1)],
+          [p(ro, ro, z0), p(-ro, ro, z0), p(-ro, ro, z1), p(ro, ro, z1)],
+          [p(-ro, ro, z0), p(-ro, ri, z0), p(-ro, -ri, z0), p(-ro, -ro, z0), p(-ro, -ro, z1), p(-ro, -ri, z1), p(-ro, ri, z1), p(-ro, ro, z1)],
+          [p(ro, -ro, z0), p(ro, -ri, z0), p(ro, ri, z0), p(ro, ro, z0), p(ro, ro, z1), p(ro, ri, z1), p(ro, -ri, z1), p(ro, -ro, z1)],
+          [p(-ri, -ri, z0), p(-ri, -ri, z1), p(ri, -ri, z1), p(ri, -ri, z0)],
+          [p(ri, ri, z0), p(ri, ri, z1), p(-ri, ri, z1), p(-ri, ri, z0)],
+          [p(-ri, ri, z0), p(-ri, ri, z1), p(-ri, -ri, z1), p(-ri, -ri, z0)],
+          [p(ri, -ri, z0), p(ri, -ri, z1), p(ri, ri, z1), p(ri, ri, z0)]]
+    me = bpy.data.meshes.new(name); me.from_pydata([(x, y, z - z0) for (x, y, z) in sorted(v, key=v.get)], [], f); me.update(); me.validate()
+    bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    ok = all(e.is_manifold for e in bm.edges); bm.to_mesh(me); bm.free()
+    me.materials.append(bpy.data.materials["Pierre"])
+    ob = bpy.data.objects.new(name, me); ob.location = (0, 0, z0)
+    print(name, ":", len(me.vertices), "sommets,", len(me.polygons), "faces, étanche =", ok)
+    return ob
+col_enc = bpy.data.collections.new("Enceinte"); scn.collection.children.link(col_enc)
+col_enc.objects.link(cadre("Sol_exterieur", a, a + SOL_NAV + SOL_MUR, 0.0, T))
+col_enc.objects.link(cadre("Mur_enceinte", a + SOL_NAV, a + SOL_NAV + SOL_MUR, T, H))
 
 # lumière et caméra pour un premier rendu
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 3
