@@ -7,6 +7,7 @@ import bpy, bmesh
 W, H, T = 250.0, 125.0, 10.0
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
 OW, OH, OA = 16.0, 77.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 77 m, puis demi-cercle (rayon 8 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
+ARCHES_COTE = False                   # arches de côté de l'enceinte (vers les salles de classe) et leurs moulures : retirées (configuration gardée)
 SALLES_COTE = False                   # salles carrées derrière les arches de côté : retirées pour l'instant (configuration gardée) ; True pour les remettre
 PLACE_SALLES = SALLES_COTE            # colonnes / corniches de côté de l'enceinte : remises tant que les salles sont retirées
 TOIT = True                           # toits de la salle couverte et des salles carrées (10 m, de 115 à 125 m) ; False pour les retirer
@@ -298,7 +299,7 @@ if OUVERTURES:
     coupe_x = bmesh.new(); coupe_x.from_mesh(mur_enc.data)      # trait droit au milieu des murs avant / arrière (au-dessus et au-dessous des arches)
     bmesh.ops.bisect_plane(coupe_x, geom=coupe_x.verts[:] + coupe_x.edges[:] + coupe_x.faces[:], plane_co=(0, 0, 0), plane_no=(1, 0, 0))
     YC = -b + pas / 2                                     # arches de côté : centrées à ±92 m (4 colonnes extérieures entre elles)
-    for yp in (-YC, YC):                                  # trait droit au-dessus et au-dessous des arches de côté
+    for yp in ((-YC, YC) if ARCHES_COTE else ()):         # trait droit au-dessus et au-dessous des arches de côté
         bmesh.ops.bisect_plane(coupe_x, geom=coupe_x.verts[:] + coupe_x.edges[:] + coupe_x.faces[:], plane_co=(0, yp, 0), plane_no=(0, 1, 0))
     coupe_x.to_mesh(mur_enc.data); coupe_x.free(); mur_enc.data.update()
     col_tmp = bpy.data.collections.new("tmp"); scn.collection.children.link(col_tmp)
@@ -306,7 +307,7 @@ if OUVERTURES:
         c = arch(nom, y0, y1, origin=(0, oy, T)); col_tmp.objects.link(c)
     # arches de côté (murs gauche et droit) : 2 par mur, à ±92 m, 16 x 32 m depuis le palier (30 m), sommet à 62 m
     ZS = zb1; HS = 24.0                                   # 16 x 32 m : bas à 30 m, côtés droits sur 24 m, arrondi de 54 à 62 m
-    for cote, rz in (("gauche", -90), ("droite", 90)):
+    for cote, rz in ((("gauche", -90), ("droite", 90)) if ARCHES_COTE else ()):
         for yo in (-YC, YC):
             nom = "Decoupe_enceinte_%s_%d" % (cote, round(yo))
             c = arch(nom, -RO - M, -RE + M, origin=(0, 0, 0), zb=ZS, hs=HS); c.rotation_euler.z = math.radians(rz); c.location = (0, yo, 0)
@@ -334,7 +335,7 @@ if OUVERTURES:
             t0 = i * (MH + gm)
             col_me.objects.link(moulure("Moulure_enceinte_%s_%02d" % (nom, i + 1), t0, t0 + MH, ML[min(i, nm - 1 - i) % 2], y0, y1)); kme += 1
     nm2 = int((2 * HS + math.pi * o + MG) // (MH + MG)) | 1; gm2 = (2 * HS + math.pi * o - nm2 * MH) / (nm2 - 1)
-    for cote, rz in (("gauche", -90), ("droite", 90)):
+    for cote, rz in ((("gauche", -90), ("droite", 90)) if ARCHES_COTE else ()):
         for yo in (-YC, YC):
             for face, y0, y1 in (("ext", -RO - MS, -RO), ("int", -RE, -RE + MS)):
                 for i in range(nm2):
