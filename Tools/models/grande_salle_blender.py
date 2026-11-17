@@ -105,7 +105,8 @@ col_ext = bpy.data.collections.new("Colonnes_exterieures"); scn.collection.child
 me_ext = box("Colonne_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H).data
 me_ext.name = "Colonne_exterieure"; me_ext.materials.append(bpy.data.materials["Pierre"])
 ke = 0
-for i in range(1, NCOL + 1):
+IEXT = range(-1, NCOL + 3)                                # 8 par côté : les 4 dans l'axe des colonnes intérieures + 2 de chaque côté, même pas de 46 m
+for i in IEXT:
     u = -b + i * pas
     for (x, y, rz) in ((u, -RO - DEP / 2, 0), (u, RO + DEP / 2, 0), (-RO - DEP / 2, u, 90), (RO + DEP / 2, u, 90)):   # face extérieure du mur d'enceinte
         ke += 1; c = bpy.data.objects.new("Colonne_ext_%02d" % ke, me_ext); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
@@ -131,6 +132,7 @@ zc1 = H - 10.0; zc0 = zc1 - 10.0
 zb0 = T + 10.0; zb1 = zb0 + 10.0
 bords = [-b] + [e for i in range(1, NCOL + 1) for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [b]
 E = -bords[1]                                             # distance au centre du bord de la première colonne (74 m)
+bords_ext = [-RO - DEP] + [e for i in IEXT for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [RO + DEP]   # colonnes de l'enceinte
 def prisme(name, poly, z0, z1):
     """polygone (x, y) extrudé de z0 à z1 : une seule forme, sans arête superflue"""
     cx = sum(p[0] for p in poly) / len(poly); cy = sum(p[1] for p in poly) / len(poly); m = len(poly)
@@ -148,12 +150,13 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("
         global n
         n += 1; ob.name = ob.data.name = "%s_%02d" % (nom, n)
         ob.data.materials.append(bpy.data.materials["Pierre"]); colb.objects.link(ob)
-    for j in range(1, NCOL):                              # morceaux entre colonnes (hors angles)
-        u0, u1 = bords[2 * j], bords[2 * j + 1]
-        for (x0, x1, y0, y1) in (((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if not (coupe and j == NCOL // 2) else ()) + ((-r1, -r0, u0, u1), (r0, r1, u0, u1)):
+    bb = bords_ext if r0 >= RO else bords; Eb = -bb[1]
+    for j in range(1, len(bb) // 2 - 1):                  # morceaux entre colonnes (hors angles)
+        u0, u1 = bb[2 * j], bb[2 * j + 1]
+        for (x0, x1, y0, y1) in (((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if not (coupe and u0 < 0 < u1) else ()) + ((-r1, -r0, u0, u1), (r0, r1, u0, u1)):
             ajoute(box("tmp", x0, x1, y0, y1, z0, z1, origin=((x0 + x1) / 2, (y0 + y1) / 2, z0)))
     for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):   # angles : une seule forme en L
-        L_ = [(E, r0), (r0, r0), (r0, E), (r1, E), (r1, r1), (E, r1)]   # L : bande du mur avant/arrière + bande du mur de côté
+        L_ = [(Eb, r0), (r0, r0), (r0, Eb), (r1, Eb), (r1, r1), (Eb, r1)]   # L : bande du mur avant/arrière + bande du mur de côté
         ajoute(prisme("tmp", [(sx * x, sy * y) for x, y in L_], z0, z1))
     print(nom, ":", n, "morceaux | de", z0, "à", z1, "m")
 # moulures harpées autour des 2 arches (intérieur + extérieur) : blocs de 5 m de haut, 2,5 m d'épaisseur, 31 blocs (écart ~0,8 m),
