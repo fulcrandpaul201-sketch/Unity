@@ -110,7 +110,7 @@ col_ext = bpy.data.collections.new("Colonnes_exterieures"); scn.collection.child
 me_ext = box("Colonne_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H).data
 me_ext.name = "Colonne_exterieure"; me_ext.materials.append(bpy.data.materials["Pierre"])
 ke = 0
-IEXT = range(-1, NCOL + 3)                                # 8 par côté : les 4 dans l'axe des colonnes intérieures + 2 de chaque côté, même pas de 46 m
+IEXT = range(-1, NCOL + 3)                                # 8 par côté : les 4 dans l'axe des colonnes intérieures + 2 de chaque côté, même pas que les colonnes intérieures
 for i in IEXT:
     u = -b + i * pas
     for (x, y, rz) in ((u, -RO - DEP / 2, 0), (u, RO + DEP / 2, 0)) + (() if PLACE_SALLES else ((-RO - DEP / 2, u, 90), (RO + DEP / 2, u, 90))):   # face extérieure du mur d'enceinte (murs de côté : remplacées par les salles carrées)
@@ -180,7 +180,8 @@ def arrondi(name, mur, u_bord, du, z_face, dz):
     """congé : profil (s le long du mur depuis le bord du pilier, t vertical depuis la face de la bande) extrudé sur la saillie w = 0..DEP"""
     def pt(s_, t_, w):
         u, z = u_bord + du * s_, z_face + dz * t_
-        return {"avant": (u, -b + w, z), "arriere": (u, b - w, z), "gauche": (-b + w, u, z), "droite": (b - w, u, z)}[mur]
+        return {"avant": (u, -b + w, z), "arriere": (u, b - w, z), "gauche": (-b + w, u, z), "droite": (b - w, u, z),
+                "avant_ext": (u, -RO - w, z), "arriere_ext": (u, RO + w, z), "gauche_ext": (-RO - w, u, z), "droite_ext": (RO + w, u, z)}[mur]
     m = len(prof_a)
     v = [pt(s_, t_, 0.0) for s_, t_ in prof_a] + [pt(s_, t_, DEP) for s_, t_ in prof_a]
     f = [tuple(range(m)), tuple(range(m, 2 * m))] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
@@ -198,6 +199,17 @@ for i in range(1, NCOL + 1):
                     continue                              # pas de bande basse devant les arches
                 if mur in ("gauche", "droite") and abs(u) < pas and du * u < 0:
                     continue                              # pas de bande dans la travée de la fenêtre
+                for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
+                    ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u_bord, du, z_face, dz)
+# mêmes arrondis à l'extérieur : colonnes de l'enceinte / corniches extérieures (bande basse coupée devant les arches avant / arrière)
+for i in IEXT:
+    u = -b + i * pas
+    for mur in ("avant_ext", "arriere_ext") + (() if PLACE_SALLES else ("gauche_ext", "droite_ext")):
+        for du in (-1, 1):
+            u_bord = u + du * COL / 2
+            for bande, zb_, zh_, coupe in (("haute", zc0, zc1, False), ("basse", zb0, zb1, True)):
+                if coupe and mur in ("avant_ext", "arriere_ext") and abs(u) < pas and du * u < 0:
+                    continue                              # pas de bande basse devant les arches
                 for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
                     ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u_bord, du, z_face, dz)
 print("arrondis :", ka, "| rayon", RA, "m")
