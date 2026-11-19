@@ -7,6 +7,7 @@ import bpy, bmesh
 W, H, T = 250.0, 125.0, 10.0
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
 OW, OH, OA = 16.0, 77.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 77 m, puis demi-cercle (rayon 8 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
+ESCALIERS = False                     # escaliers, piliers et paliers surélevés de la salle couverte : retirés (configuration gardée)
 ARCHES_COTE = False                   # arches de côté de l'enceinte (vers les salles de classe) et leurs moulures : retirées (configuration gardée)
 SALLES_COTE = False                   # salles carrées derrière les arches de côté : retirées pour l'instant (configuration gardée) ; True pour les remettre
 PLACE_SALLES = SALLES_COTE            # colonnes / corniches de côté de l'enceinte : remises tant que les salles sont retirées
@@ -388,7 +389,8 @@ if SALLES_COTE:
 MARCHE, Z_HAUT = 2.5, zb1
 LARG, PAL, GC = SOL_NAV, 0.0, 2.5       # largeur : toute la bande (75 m) ; PAL = 0 : escalier droit, sans palier de repos
 L_PALIER = 125.0; GARDE_CORPS = False                # garde-corps : 2,5 m d'épaisseur, 2,5 m au-dessus des marches (True pour les remettre)
-col_esc = bpy.data.collections.new("Escalier"); scn.collection.children.link(col_esc)
+col_esc = bpy.data.collections.new("Escalier")
+if ESCALIERS: scn.collection.children.link(col_esc)
 XB = RE - L_PALIER                                        # distance à l'axe des arches du bout des paliers (75 m)
 def prisme_xz(name, prof, y0, y1, sx):
     """profil (d, z) extrudé en y ; d compté depuis le bout du palier vers l'axe de l'arche, côté sx (-1 gauche, +1 droite)"""
@@ -419,7 +421,7 @@ if PAL == 0:                                              # escalier droit : 8 m
         prof += [(k * MARCHE, Z_HAUT - k * MARCHE), ((k + 1) * MARCHE, Z_HAUT - k * MARCHE)]
     prof.append((2 * n2 * MARCHE, T))
 long_e = prof[-1][0]
-for sx, sy, nom in ((-1, -1, "avant_gauche"), (1, -1, "avant_droite"), (-1, 1, "arriere_gauche"), (1, 1, "arriere_droite")):
+for sx, sy, nom in (((-1, -1, "avant_gauche"), (1, -1, "avant_droite"), (-1, 1, "arriere_gauche"), (1, 1, "arriere_droite")) if ESCALIERS else ()):
     yc = sy * (a + RE) / 2                                # axe de la bande avant / arrière
     # en largeur : escalier 25 m | pilier 25 m (du sol au plafond, jusqu'au pied des escaliers) | escalier 25 m
     l3 = LARG / 3
@@ -431,10 +433,10 @@ for sx, sy, nom in ((-1, -1, "avant_gauche"), (1, -1, "avant_droite"), (-1, 1, "
     for g, ya in ((("1", yc - LARG / 2 - GC), ("2", yc + LARG / 2)) if GARDE_CORPS else ()):
         prisme_xz("Garde_corps_%s_%s" % (nom, g), gprof_(), ya, ya + GC, sx)
 # paliers en U (gauche et droite) : une seule forme chacun, de 10 à 30 m
-for sx, nom in ((-1, "Palier_gauche"), (1, "Palier_droit")):
+for sx, nom in (((-1, "Palier_gauche"), (1, "Palier_droit")) if ESCALIERS else ()):
     u = [(XB, -RE), (RE, -RE), (RE, RE), (XB, RE), (XB, a), (a, a), (a, -a), (XB, -a)]
     pal = prisme(nom, [(sx * x, y) for x, y in u], T, Z_HAUT); pal.data.materials.append(bpy.data.materials["Pierre"]); col_esc.objects.link(pal)
-print("escaliers : 4 x", 2 * n2, "marches |", long_e, "m de long | paliers en U | pieds des escaliers à", XB - long_e, "m de l'axe des arches")
+if ESCALIERS: print("escaliers : 4 x", 2 * n2, "marches |", long_e, "m de long | paliers en U | pieds des escaliers à", XB - long_e, "m de l'axe des arches")
 
 # lumière et caméra pour un premier rendu
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 1.5                     # soleil plus doux : les faces éclairées ne virent pas au blanc
