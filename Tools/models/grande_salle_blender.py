@@ -4,9 +4,9 @@ Blender (Z vers le haut, mètres). Lancer :  python3.11 avec le module bpy  ->  
 import os, sys, math
 import bpy, bmesh
 
-W, H, T = 250.0, 125.0, 10.0
+W, H, T = 270.0, 125.0, 10.0          # cour : 250 x 250 m navigables + murs de 10 m
 COL, DEP, NCOL = 10.0, 5.0, 4         # colonnes : 10 m le long du mur, 5 m de saillie, 4 par mur, aucune dans un angle, à écart égal          # largeur, hauteur, épaisseur des parois et du sol
-OW, OH, OA = 16.0, 77.0, 8.0           # ouvertures : 16 m de large, côtés droits sur 77 m, puis demi-cercle (rayon 8 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
+OW, OH, OA = 20.0, 75.0, 10.0          # ouvertures : 20 m de large (10 m de mur jusqu'aux colonnes du milieu), côtés droits sur 75 m, puis demi-cercle (rayon 10 m) ; sommet à 95 m, 10 m sous la corniche haute (105 m)
 ESCALIERS = False                     # escaliers, piliers et paliers surélevés de la salle couverte : retirés (configuration gardée)
 ARCHES_COTE = False                   # arches de côté de l'enceinte (vers les salles de classe) et leurs moulures : retirées (configuration gardée)
 SALLES_COTE = False                   # salles carrées derrière les arches de côté : retirées pour l'instant (configuration gardée) ; True pour les remettre
@@ -238,7 +238,7 @@ FZ = zb1 + 10.0; FH = T + OH - FZ
 for nom, rz in ((("Decoupe_fenetre_gauche", -90), ("Decoupe_fenetre_droite", 90)) if OUVERTURES else ()):
     c = arch(nom, -a - M, -b + M, origin=(0, 0, FZ), zb=FZ, hs=FH, bas_rond=True); c.rotation_euler.z = math.radians(rz)
     col_cut.objects.link(c); c.display_type = "WIRE"; c.hide_render = True
-print("fenêtres : 2 (murs gauche et droite) | 16 m de large, de", FZ, "à", FZ + FH + OA, "m")
+print("fenêtres : 2 (murs gauche et droite) |", OW, "m de large, de", FZ, "à", FZ + FH + OA, "m")
 # barreaux des 2 fenêtres de la cour : 3 verticaux, section 1 x 1 m, au milieu de l'épaisseur du mur,
 # espacés régulièrement (3,25 m de vide) ; les verticaux vont jusqu'aux arrondis (bout ancré dans le mur) ; objets séparés
 BARREAUX = False                                          # barreaux retirés (configuration gardée) ; True pour les remettre
