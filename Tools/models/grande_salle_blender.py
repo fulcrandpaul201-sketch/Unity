@@ -535,6 +535,53 @@ for nom_, y0_, y1_ in (("avant_ext", -RXO - MS, -RXO), ("avant_int", -RXI, -RXI 
         t0_ = i * (MH2 + gga)
         col_mga.objects.link(moulure("Moulure_grande_arche_%s_%02d" % (nom_, i + 1), t0_, t0_ + MH2, ML2[min(i, nga - 1 - i) % 2], y0_, y1_, GA_Z0, GA_HS, GA_HW)); kga += 1
 print("moulures grandes arches :", kga, "|", nga, "par face | écart", round(gga, 3), "m")
+# grande arche fermée (style château, sans texture, même pierre) : herse en grille près de la face extérieure + double porte au milieu du mur
+col_porte = bpy.data.collections.new("Porte_grande_arche"); scn.collection.children.link(col_porte)
+PIERRE_M = bpy.data.materials["Pierre"]
+def haut_arche(x):                                        # hauteur de l'intrados de la grande arche au droit de x
+    return GA_Z0 + GA_HS + math.sqrt(max(GA_HW * GA_HW - x * x, 0.0))
+def demi_larg(z):                                         # demi-largeur libre de l'arche à la hauteur z
+    return GA_HW if z <= GA_Z0 + GA_HS else math.sqrt(max(GA_HW * GA_HW - (z - GA_Z0 - GA_HS) ** 2, 0.0))
+def prisme_y(name, prof, y0, y1):
+    """profil (x, z) extrudé en y de y0 à y1"""
+    m = len(prof)
+    v = [(x, y0, z) for x, z in prof] + [(x, y1, z) for x, z in prof]
+    f = [tuple(range(m)), tuple(range(m, 2 * m))] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
+    me = bpy.data.meshes.new(name); me.from_pydata(v, [], f); me.update(); me.validate()
+    bm = bmesh.new(); bm.from_mesh(me); bmesh.ops.recalc_face_normals(bm, faces=bm.faces); bm.to_mesh(me); bm.free()
+    me.materials.append(PIERRE_M); ob = bpy.data.objects.new(name, me); col_porte.objects.link(ob); return ob
+# herse : barreaux verticaux de 2 x 2 m tous les 8 m, pointes en bas ; traverses de 2 m tous les 15 m (un peu plus épaisses : pas de faces superposées)
+YH = -RXO + 15.0; BH = 2.0; kh = 0
+for i in range(12):
+    x = -44.0 + 8.0 * i; zt = haut_arche(abs(x) + BH / 2) + 1.0       # le haut entre dans la pierre de l'arche
+    prisme_y("Herse_barreau_%02d" % (i + 1), [(x - BH / 2, GA_Z0 + 4.0), (x, GA_Z0), (x + BH / 2, GA_Z0 + 4.0), (x + BH / 2, zt), (x - BH / 2, zt)], YH - BH / 2, YH + BH / 2); kh += 1
+z = GA_Z0 + 15.0
+while z + BH < GA_TOP - 4.0:
+    w = min(demi_larg(z), demi_larg(z + BH)) + 0.5
+    b_ = box("Herse_traverse_%d" % round(z), -w, w, YH - BH / 2 - 0.4, YH + BH / 2 + 0.4, z, z + BH, origin=(0, YH, z)); b_.data.materials.append(PIERRE_M); col_porte.objects.link(b_); kh += 1
+    z += 15.0
+# double porte : 2 battants de 4 m d'épaisseur au milieu du mur, joint de 0,4 m au centre, suivant l'arrondi ; ferrures en relief sur les 2 faces + anneau
+YP0, YP1 = -(RXO + RXI) / 2 - 2.0, -(RXO + RXI) / 2 + 2.0
+for sx, cote in ((-1, "gauche"), (1, "droite")):
+    xs = [sx * 0.2 + sx * (GA_HW - 0.2) * k / 32 for k in range(33)]
+    prof = [(sx * 0.2, GA_Z0)] + [(x, haut_arche(abs(x))) for x in xs] + [(sx * GA_HW, GA_Z0)]
+    if sx > 0: prof = prof[::-1]
+    prisme_y("Porte_battant_" + cote, prof, YP0, YP1)
+    for zf in (30.0, 65.0, 100.0, 135.0, 165.0):          # ferrures horizontales (2 m de haut, 1 m de relief), sur les 2 faces
+        w = demi_larg(zf + 2.0) - 1.0
+        if w <= 2.0: continue
+        xa, xb = sorted((sx * 1.0, sx * w))
+        for face, y0_, y1_ in (("ext", YP0 - 1.0, YP0), ("int", YP1, YP1 + 1.0)):
+            b_ = box("Ferrure_%s_%s_%d" % (cote, face, round(zf)), xa, xb, y0_, y1_, zf, zf + 2.0, origin=((xa + xb) / 2, (y0_ + y1_) / 2, zf))
+            b_.data.materials.append(PIERRE_M); col_porte.objects.link(b_)
+    bm = bmesh.new(); bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=3.0, radius2=3.0, depth=0.6)   # anneau (plaque ronde + anneau)
+    me_a = bpy.data.meshes.new("Anneau_" + cote); bm.to_mesh(me_a); bm.free(); me_a.materials.append(PIERRE_M)
+    an = bpy.data.objects.new("Anneau_" + cote, me_a); an.location = (sx * 8.0, YP0 - 0.3, 60.0); an.rotation_euler.x = math.radians(90); col_porte.objects.link(an)
+    bpy.ops.mesh.primitive_torus_add(major_radius=4.0, minor_radius=0.5, location=(sx * 8.0, YP0 - 1.0, 56.0), rotation=(math.radians(90), 0, 0))
+    to = bpy.context.active_object; to.name = "Anneau_tore_" + cote; to.data.materials.append(PIERRE_M)
+    for c_ in list(to.users_collection): c_.objects.unlink(to)
+    col_porte.objects.link(to)
+print("porte de la grande arche : herse", kh, "pièces + double porte")
 # sol entre l'enceinte et le mur extérieur : comme celui de la cour, 10 m d'épaisseur (0 -> 10 m)
 col_mx.objects.link(cadre("Sol_mur_exterieur", RO, RXI, 0.0, T, cotes=False))
 # sol extérieur : 50 m tout autour du mur extérieur (0 -> 10 m), sans mur ; les piliers extérieurs sont posés dessus (10 m)
