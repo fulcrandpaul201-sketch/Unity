@@ -249,6 +249,16 @@ for u in CMXI:                                            # face intérieure du 
                 if mur == "avant_mxi" and abs(u) < 100 and du * u < 0 and zb_ < GA_TOP: continue
                 for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
                     ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u + du * COL / 2, du, z_face, dz)
+# au-dessus de la grande porte : haut des 2 piliers retirés (±25 m), sur les deux faces, de la bande à 210 m jusqu'en haut, avec arrondis au-dessus de la bande
+zbh0, zbh1 = BANDES_MX[-1]
+me_ph = box("Pilier_haut_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, zbh0, H_MX, origin=(0, 0, zbh0)).data
+me_ph.name = "Pilier_haut_porte"; me_ph.materials.append(bpy.data.materials["Pierre"])
+for u in (-25.0, 25.0):
+    for nom_, y_ in (("ext", -RXO - DEP / 2), ("int", -RXI + DEP / 2)):
+        ph = bpy.data.objects.new("Pilier_haut_porte_%s_%d" % (nom_, round(u)), me_ph); ph.location = (u, y_, zbh0); col_arr.objects.link(ph)
+    for mur in ("avant_mx", "avant_mxi"):
+        for du in (-1, 1):
+            ka += 1; arrondi("Arrondi_%s_%d_%s_haut_porte" % (mur, round(u), "d" if du > 0 else "g"), mur, u + du * COL / 2, du, zbh1, 1)
 print("arrondis :", ka, "| rayon", RA, "m")
 # moulures harpées autour des 2 arches (intérieur + extérieur) : blocs de 5 m de haut, 2,5 m d'épaisseur, 31 blocs (écart ~0,8 m),
 # s'avançant dans le mur de 5 m puis 3 m en alternance, tout le tour de l'arche (côtés droits + arrondi en éventail)
