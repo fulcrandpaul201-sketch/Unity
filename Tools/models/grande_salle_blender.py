@@ -71,7 +71,9 @@ salle.data.materials.append(mat("Pierre", (0.43, 0.41, 0.37)))
 b, o, M = a - T, OW / 2, 5.0          # M : débord pour des découpes franches
 SOL_NAV, SOL_MUR = 75.0, 10.0
 RE, RO = a + SOL_NAV, a + SOL_NAV + SOL_MUR                  # faces intérieure et extérieure du mur d'enceinte
-RXO = 920.0; RXI = RXO - T; IMX = range(-15, 21)         # mur extérieur : face extérieure de 1 840 m, 36 piliers par côté
+RXO = 920.0; IMX = range(-15, 21)                        # mur extérieur : face extérieure de 1 840 m, 36 piliers par côté
+EP_MX = 25.0; RXI = RXO - EP_MX                           # épaisseur 25 m : face intérieure de 1 790 m = 35 piliers de 10 m + 36 panneaux de 40 m
+CMXI = [-RXI + 45.0 + 50.0 * k for k in range(35)]       # centres des piliers intérieurs (-850 ... 850 m, un au centre)
 cutters = [
     box("Decoupe_interieur", -b, b, -b, b, T, H + M, origin=(0, 0, T)),
 ] + ([
@@ -139,6 +141,7 @@ zb0 = T + 10.0; zb1 = zb0 + 10.0
 bords = [-b] + [e for i in range(1, NCOL + 1) for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [b]
 E = -bords[1]                                             # distance au centre du bord de la première colonne (74 m)
 bords_mx = [-RXO - DEP] + [e for i in IMX for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [RXO + DEP]   # piliers du mur extérieur
+bords_mxi = [-RXI] + [e for c_ in CMXI for e in (c_ - COL / 2, c_ + COL / 2)] + [RXI]   # piliers de la face intérieure du mur extérieur
 bords_ext = [-RO - DEP] + [e for i in IEXT for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [RO + DEP]   # colonnes de l'enceinte
 def prisme(name, poly, z0, z1):
     """polygone (x, y) extrudé de z0 à z1 : une seule forme, sans arête superflue"""
@@ -151,14 +154,15 @@ def prisme(name, poly, z0, z1):
     return ob
 for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("Corniche_haute_ext", RO, RO + DEP, zc0, zc1, False),
                                    ("Corniche_basse_int", b - DEP, b, zb0, zb1, True), ("Corniche_basse_ext", RO, RO + DEP, zb0, zb1, True),
-                                   ("Corniche_haute_mur_ext", RXO, RXO + DEP, zc0, zc1, False), ("Corniche_basse_mur_ext", RXO, RXO + DEP, zb0, zb1, False)):
+                                   ("Corniche_haute_mur_ext", RXO, RXO + DEP, zc0, zc1, False), ("Corniche_basse_mur_ext", RXO, RXO + DEP, zb0, zb1, False),
+                                   ("Corniche_haute_mur_int", RXI - DEP, RXI, zc0, zc1, False), ("Corniche_basse_mur_int", RXI - DEP, RXI, zb0, zb1, False)):
     colb = bpy.data.collections.new(nom); scn.collection.children.link(colb)   # r0..r1 : bande en distance au centre
     n = 0
     def ajoute(ob):
         global n
         n += 1; ob.name = ob.data.name = "%s_%02d" % (nom, n)
         ob.data.materials.append(bpy.data.materials["Pierre"]); colb.objects.link(ob)
-    bb = bords_mx if r0 >= RXO else (bords_ext if r0 >= RO else bords); Eb = -bb[1]
+    bb = bords_mxi if r1 == RXI else (bords_mx if r0 >= RXO else (bords_ext if r0 >= RO else bords)); Eb = -bb[1]
     for j in range(1, len(bb) // 2 - 1):                  # morceaux entre colonnes (hors angles)
         u0, u1 = bb[2 * j], bb[2 * j + 1]
         cotes_ = ((-r1, -r0, u0, u1), (r0, r1, u0, u1))
@@ -185,7 +189,8 @@ def arrondi(name, mur, u_bord, du, z_face, dz):
         u, z = u_bord + du * s_, z_face + dz * t_
         return {"avant": (u, -b + w, z), "arriere": (u, b - w, z), "gauche": (-b + w, u, z), "droite": (b - w, u, z),
                 "avant_ext": (u, -RO - w, z), "arriere_ext": (u, RO + w, z), "gauche_ext": (-RO - w, u, z), "droite_ext": (RO + w, u, z),
-                "avant_mx": (u, -RXO - w, z), "arriere_mx": (u, RXO + w, z), "gauche_mx": (-RXO - w, u, z), "droite_mx": (RXO + w, u, z)}[mur]
+                "avant_mx": (u, -RXO - w, z), "arriere_mx": (u, RXO + w, z), "gauche_mx": (-RXO - w, u, z), "droite_mx": (RXO + w, u, z),
+                "avant_mxi": (u, -RXI + w, z), "arriere_mxi": (u, RXI - w, z), "gauche_mxi": (-RXI + w, u, z), "droite_mxi": (RXI - w, u, z)}[mur]
     m = len(prof_a)
     v = [pt(s_, t_, 0.0) for s_, t_ in prof_a] + [pt(s_, t_, DEP) for s_, t_ in prof_a]
     f = [tuple(range(m)), tuple(range(m, 2 * m))] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
@@ -220,6 +225,12 @@ for i in IEXT:
 for i in IMX:
     u = -b + i * pas
     for mur in ("avant_mx", "arriere_mx", "gauche_mx", "droite_mx"):
+        for du in (-1, 1):
+            for bande, zb_, zh_ in (("haute", zc0, zc1), ("basse", zb0, zb1)):
+                for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
+                    ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u + du * COL / 2, du, z_face, dz)
+for u in CMXI:                                            # face intérieure du mur extérieur
+    for mur in ("avant_mxi", "arriere_mxi", "gauche_mxi", "droite_mxi"):
         for du in (-1, 1):
             for bande, zb_, zh_ in (("haute", zc0, zc1), ("basse", zb0, zb1)):
                 for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
@@ -463,7 +474,7 @@ for sx, nom in (((-1, "Palier_gauche"), (1, "Palier_droit")) if ESCALIERS else (
 if ESCALIERS: print("escaliers : 4 x", 2 * n2, "marches |", long_e, "m de long | paliers en U | pieds des escaliers à", XB - long_e, "m de l'axe des arches")
 
 # mur extérieur : englobe tout, face extérieure de 1 840 x 1 840 m (au moins 3 fois la surface de 1 040 m, en gardant 40 m de mur entre piliers, angles compris),
-# 10 m d'épaisseur, de 0 à 125 m (même hauteur que la cour) ; 36 piliers de 10 m par côté sur la face extérieure, alignés sur les piliers actuels
+# 25 m d'épaisseur (pour 40 m de mur entre piliers aussi à l'intérieur), de 0 à 125 m ; 36 piliers par côté dehors, 35 dedans
 col_mx = bpy.data.collections.new("Mur_exterieur"); scn.collection.children.link(col_mx)
 col_mx.objects.link(cadre("Mur_exterieur", RXI, RXO, 0.0, H, cotes=False))
 # sol entre l'enceinte et le mur extérieur : comme celui de la cour, 10 m d'épaisseur (0 -> 10 m)
@@ -476,6 +487,15 @@ for i in IMX:                                             # centres de -875 à 8
     for (x, y, rz) in ((u, -RXO - DEP / 2, 0), (u, RXO + DEP / 2, 0), (-RXO - DEP / 2, u, 90), (RXO + DEP / 2, u, 90)):
         kx += 1; c = bpy.data.objects.new("Pilier_mur_ext_%02d" % kx, me_px); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
         col_mx.objects.link(c)
+me_pi = box("Pilier_mur_int_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, T, H, origin=(0, 0, T)).data
+me_pi.name = "Pilier_mur_interieur"; me_pi.materials.append(bpy.data.materials["Pierre"])
+ki = 0
+for u in CMXI:                                            # piliers de la face intérieure, posés sur le sol (10 m)
+    for (x, y, rz) in ((u, -RXI + DEP / 2, 0), (u, RXI - DEP / 2, 0), (-RXI + DEP / 2, u, 90), (RXI - DEP / 2, u, 90)):
+        ki += 1; c = bpy.data.objects.new("Pilier_mur_int_%02d" % ki, me_pi); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
+        col_mx.objects.link(c)
+ecarts_i = sorted(set([round(CMXI[0] - COL / 2 + RXI, 3)] + [round(CMXI[k + 1] - CMXI[k] - COL, 3) for k in range(34)]))
+print("mur extérieur, face intérieure :", 2 * RXI, "m | piliers :", ki, "| écarts (angles compris) :", ecarts_i, "| épaisseur", EP_MX, "m")
 ecarts = [round((-b + (i + 1) * pas - COL / 2) - (-b + i * pas + COL / 2), 3) for i in range(-15, 20)]
 print("mur extérieur :", 2 * RXO, "m | piliers :", kx, "| écarts entre piliers :", set(ecarts), "| angle :", RXO - (-b + 20 * pas + COL / 2), "m")
 
