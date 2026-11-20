@@ -476,10 +476,11 @@ if ESCALIERS: print("escaliers : 4 x", 2 * n2, "marches |", long_e, "m de long |
 # mur extérieur : englobe tout, face extérieure de 1 840 x 1 840 m (au moins 3 fois la surface de 1 040 m, en gardant 40 m de mur entre piliers, angles compris),
 # 25 m d'épaisseur (pour 40 m de mur entre piliers aussi à l'intérieur), de 0 à 125 m ; 36 piliers par côté dehors, 35 dedans
 col_mx = bpy.data.collections.new("Mur_exterieur"); scn.collection.children.link(col_mx)
-col_mx.objects.link(cadre("Mur_exterieur", RXI, RXO, 0.0, H, cotes=False))
+H_MX = 2 * H                                              # mur extérieur : hauteur doublée (250 m), piliers aussi ; bandes inchangées
+col_mx.objects.link(cadre("Mur_exterieur", RXI, RXO, 0.0, H_MX, cotes=False))
 # sol entre l'enceinte et le mur extérieur : comme celui de la cour, 10 m d'épaisseur (0 -> 10 m)
 col_mx.objects.link(cadre("Sol_mur_exterieur", RO, RXI, 0.0, T, cotes=False))
-me_px = box("Pilier_mur_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H).data
+me_px = box("Pilier_mur_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H_MX).data
 me_px.name = "Pilier_mur_exterieur"; me_px.materials.append(bpy.data.materials["Pierre"])
 kx = 0
 for i in IMX:                                             # centres de -875 à 875 m, pas de 50 m
@@ -487,7 +488,7 @@ for i in IMX:                                             # centres de -875 à 8
     for (x, y, rz) in ((u, -RXO - DEP / 2, 0), (u, RXO + DEP / 2, 0), (-RXO - DEP / 2, u, 90), (RXO + DEP / 2, u, 90)):
         kx += 1; c = bpy.data.objects.new("Pilier_mur_ext_%02d" % kx, me_px); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
         col_mx.objects.link(c)
-me_pi = box("Pilier_mur_int_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, T, H, origin=(0, 0, T)).data
+me_pi = box("Pilier_mur_int_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, T, H_MX, origin=(0, 0, T)).data
 me_pi.name = "Pilier_mur_interieur"; me_pi.materials.append(bpy.data.materials["Pierre"])
 ki = 0
 for u in CMXI:                                            # piliers de la face intérieure, posés sur le sol (10 m)
