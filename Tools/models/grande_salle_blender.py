@@ -70,7 +70,8 @@ salle.data.materials.append(mat("Pierre", (0.43, 0.41, 0.37)))
 # formes de découpe (fil de fer, invisibles au rendu) : intérieur + 2 ouvertures (avant = -Y, arrière = +Y)
 b, o, M = a - T, OW / 2, 5.0          # M : débord pour des découpes franches
 SOL_NAV, SOL_MUR = 75.0, 10.0
-RE, RO = a + SOL_NAV, a + SOL_NAV + SOL_MUR                  # faces intérieure (200 m) et extérieure (210 m) du mur d'enceinte
+RE, RO = a + SOL_NAV, a + SOL_NAV + SOL_MUR                  # faces intérieure et extérieure du mur d'enceinte
+RXO = 920.0; RXI = RXO - T; IMX = range(-15, 21)         # mur extérieur : face extérieure de 1 840 m, 36 piliers par côté
 cutters = [
     box("Decoupe_interieur", -b, b, -b, b, T, H + M, origin=(0, 0, T)),
 ] + ([
@@ -137,6 +138,7 @@ zc1 = H - 10.0; zc0 = zc1 - 10.0
 zb0 = T + 10.0; zb1 = zb0 + 10.0
 bords = [-b] + [e for i in range(1, NCOL + 1) for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [b]
 E = -bords[1]                                             # distance au centre du bord de la première colonne (74 m)
+bords_mx = [-RXO - DEP] + [e for i in IMX for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [RXO + DEP]   # piliers du mur extérieur
 bords_ext = [-RO - DEP] + [e for i in IEXT for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [RO + DEP]   # colonnes de l'enceinte
 def prisme(name, poly, z0, z1):
     """polygone (x, y) extrudé de z0 à z1 : une seule forme, sans arête superflue"""
@@ -148,25 +150,26 @@ def prisme(name, poly, z0, z1):
     ob = bpy.data.objects.new(name, me); ob.location = (cx, cy, z0)
     return ob
 for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("Corniche_haute_ext", RO, RO + DEP, zc0, zc1, False),
-                                   ("Corniche_basse_int", b - DEP, b, zb0, zb1, True), ("Corniche_basse_ext", RO, RO + DEP, zb0, zb1, True)):
+                                   ("Corniche_basse_int", b - DEP, b, zb0, zb1, True), ("Corniche_basse_ext", RO, RO + DEP, zb0, zb1, True),
+                                   ("Corniche_haute_mur_ext", RXO, RXO + DEP, zc0, zc1, False), ("Corniche_basse_mur_ext", RXO, RXO + DEP, zb0, zb1, False)):
     colb = bpy.data.collections.new(nom); scn.collection.children.link(colb)   # r0..r1 : bande en distance au centre
     n = 0
     def ajoute(ob):
         global n
         n += 1; ob.name = ob.data.name = "%s_%02d" % (nom, n)
         ob.data.materials.append(bpy.data.materials["Pierre"]); colb.objects.link(ob)
-    bb = bords_ext if r0 >= RO else bords; Eb = -bb[1]
+    bb = bords_mx if r0 >= RXO else (bords_ext if r0 >= RO else bords); Eb = -bb[1]
     for j in range(1, len(bb) // 2 - 1):                  # morceaux entre colonnes (hors angles)
         u0, u1 = bb[2 * j], bb[2 * j + 1]
         cotes_ = ((-r1, -r0, u0, u1), (r0, r1, u0, u1))
         if r0 < RO and u0 < 0 < u1:                       # cour, murs de côté : pas de bande dans la travée de la fenêtre
             cotes_ = ()
-        if PLACE_SALLES and r0 >= RO:                      # murs de côté de l'enceinte : seulement entre les 2 salles carrées (-23 -> 23 m)
+        if PLACE_SALLES and r0 == RO:                      # murs de côté de l'enceinte : seulement entre les 2 salles carrées (-23 -> 23 m)
             cotes_ = ((-r1, -r0, -8.0, 8.0), (r0, r1, -8.0, 8.0)) if u0 < 0 < u1 else ()
         for (x0, x1, y0, y1) in (((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if not (coupe and u0 < 0 < u1) else ()) + cotes_:
             ajoute(box("tmp", x0, x1, y0, y1, z0, z1, origin=((x0 + x1) / 2, (y0 + y1) / 2, z0)))
     for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):   # angles : une seule forme en L
-        Ec = 176.0 if (PLACE_SALLES and r0 >= RO) else Eb # mur de côté : la branche s'arrête contre la salle carrée
+        Ec = 176.0 if (PLACE_SALLES and r0 == RO) else Eb # mur de côté : la branche s'arrête contre la salle carrée
         L_ = [(Eb, r0), (r0, r0), (r0, Ec), (r1, Ec), (r1, r1), (Eb, r1)]   # L : bande du mur avant/arrière + bande du mur de côté
         ajoute(prisme("tmp", [(sx * x, sy * y) for x, y in L_], z0, z1))
     print(nom, ":", n, "morceaux | de", z0, "à", z1, "m")
@@ -181,7 +184,8 @@ def arrondi(name, mur, u_bord, du, z_face, dz):
     def pt(s_, t_, w):
         u, z = u_bord + du * s_, z_face + dz * t_
         return {"avant": (u, -b + w, z), "arriere": (u, b - w, z), "gauche": (-b + w, u, z), "droite": (b - w, u, z),
-                "avant_ext": (u, -RO - w, z), "arriere_ext": (u, RO + w, z), "gauche_ext": (-RO - w, u, z), "droite_ext": (RO + w, u, z)}[mur]
+                "avant_ext": (u, -RO - w, z), "arriere_ext": (u, RO + w, z), "gauche_ext": (-RO - w, u, z), "droite_ext": (RO + w, u, z),
+                "avant_mx": (u, -RXO - w, z), "arriere_mx": (u, RXO + w, z), "gauche_mx": (-RXO - w, u, z), "droite_mx": (RXO + w, u, z)}[mur]
     m = len(prof_a)
     v = [pt(s_, t_, 0.0) for s_, t_ in prof_a] + [pt(s_, t_, DEP) for s_, t_ in prof_a]
     f = [tuple(range(m)), tuple(range(m, 2 * m))] + [(i, (i + 1) % m, m + (i + 1) % m, m + i) for i in range(m)]
@@ -212,6 +216,14 @@ for i in IEXT:
                     continue                              # pas de bande basse devant les arches
                 for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
                     ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u_bord, du, z_face, dz)
+# mêmes arrondis sur le mur extérieur (piliers / corniches de sa face extérieure, pas d'ouverture donc partout)
+for i in IMX:
+    u = -b + i * pas
+    for mur in ("avant_mx", "arriere_mx", "gauche_mx", "droite_mx"):
+        for du in (-1, 1):
+            for bande, zb_, zh_ in (("haute", zc0, zc1), ("basse", zb0, zb1)):
+                for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
+                    ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u + du * COL / 2, du, z_face, dz)
 print("arrondis :", ka, "| rayon", RA, "m")
 # moulures harpées autour des 2 arches (intérieur + extérieur) : blocs de 5 m de haut, 2,5 m d'épaisseur, 31 blocs (écart ~0,8 m),
 # s'avançant dans le mur de 5 m puis 3 m en alternance, tout le tour de l'arche (côtés droits + arrondi en éventail)
@@ -452,7 +464,6 @@ if ESCALIERS: print("escaliers : 4 x", 2 * n2, "marches |", long_e, "m de long |
 
 # mur extérieur : englobe tout, face extérieure de 1 840 x 1 840 m (au moins 3 fois la surface de 1 040 m, en gardant 40 m de mur entre piliers, angles compris),
 # 10 m d'épaisseur, de 0 à 125 m (même hauteur que la cour) ; 36 piliers de 10 m par côté sur la face extérieure, alignés sur les piliers actuels
-RXO = 920.0; RXI = RXO - T
 col_mx = bpy.data.collections.new("Mur_exterieur"); scn.collection.children.link(col_mx)
 col_mx.objects.link(cadre("Mur_exterieur", RXI, RXO, 0.0, H, cotes=False))
 # sol entre l'enceinte et le mur extérieur : comme celui de la cour, 10 m d'épaisseur (0 -> 10 m)
@@ -460,7 +471,7 @@ col_mx.objects.link(cadre("Sol_mur_exterieur", RO, RXI, 0.0, T, cotes=False))
 me_px = box("Pilier_mur_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H).data
 me_px.name = "Pilier_mur_exterieur"; me_px.materials.append(bpy.data.materials["Pierre"])
 kx = 0
-for i in range(-15, 21):                                  # centres de -875 à 875 m, pas de 50 m
+for i in IMX:                                             # centres de -875 à 875 m, pas de 50 m
     u = -b + i * pas
     for (x, y, rz) in ((u, -RXO - DEP / 2, 0), (u, RXO + DEP / 2, 0), (-RXO - DEP / 2, u, 90), (RXO + DEP / 2, u, 90)):
         kx += 1; c = bpy.data.objects.new("Pilier_mur_ext_%02d" % kx, me_px); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
