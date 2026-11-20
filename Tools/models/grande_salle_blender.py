@@ -138,8 +138,9 @@ print("ponts :", kp, "| longueur", L, "m, épaisseur", DEP, "m")
 #   basses intérieure et extérieure (20 -> 30 m, 10 m au-dessus du sol intérieur), rien entre les 2 colonnes centrales avant / arrière (arches)
 zc1 = H - 10.0; zc0 = zc1 - 10.0
 zb0 = T + 10.0; zb1 = zb0 + 10.0
-H_MX = 240.0                                              # mur extérieur : 240 m de haut
-BANDES_MX = [(20.0 + 50.0 * k, 30.0 + 50.0 * k) for k in range(5)]   # bandes tous les 50 m (20-30 ... 220-230) : panneaux de 40 x 40 m entre elles
+H_MX = 230.0                                              # mur extérieur : 230 m de haut
+# bandes de 10 m ; panneaux (40 m de large) en alternance : 20 (10 avec le sol) | 75 | 10 | 75 | 10 (sommet)
+BANDES_MX = [(20.0, 30.0), (105.0, 115.0), (125.0, 135.0), (210.0, 220.0)]
 bords = [-b] + [e for i in range(1, NCOL + 1) for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [b]
 E = -bords[1]                                             # distance au centre du bord de la première colonne (74 m)
 bords_mx = [-RXO - DEP] + [e for i in IMX for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [RXO + DEP]   # piliers du mur extérieur
