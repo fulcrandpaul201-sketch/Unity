@@ -527,13 +527,15 @@ for nom_, y0_, y1_ in (("avant_ext", -RXO - MS, -RXO), ("avant_int", -RXI, -RXI 
 print("moulures grandes arches :", kga, "|", nga, "par face | écart", round(gga, 3), "m")
 # sol entre l'enceinte et le mur extérieur : comme celui de la cour, 10 m d'épaisseur (0 -> 10 m)
 col_mx.objects.link(cadre("Sol_mur_exterieur", RO, RXI, 0.0, T, cotes=False))
-me_px = box("Pilier_mur_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H_MX).data
+# sol extérieur : 50 m tout autour du mur extérieur (0 -> 10 m), sans mur ; les piliers extérieurs sont posés dessus (10 m)
+col_mx.objects.link(cadre("Sol_autour_mur_exterieur", RXO, RXO + 50.0, 0.0, T, cotes=False))
+me_px = box("Pilier_mur_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, T, H_MX, origin=(0, 0, T)).data
 me_px.name = "Pilier_mur_exterieur"; me_px.materials.append(bpy.data.materials["Pierre"])
 kx = 0
 for i in IMX:                                             # centres de -875 à 875 m, pas de 50 m
     u = -b + i * pas
     for (x, y, rz) in (() if baie_ga(u) else ((u, -RXO - DEP / 2, 0),)) + ((u, RXO + DEP / 2, 0),) + ((-RXO - DEP / 2, u, 90), (RXO + DEP / 2, u, 90)):
-        kx += 1; c = bpy.data.objects.new("Pilier_mur_ext_%02d" % kx, me_px); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
+        kx += 1; c = bpy.data.objects.new("Pilier_mur_ext_%02d" % kx, me_px); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
         col_mx.objects.link(c)
 me_pi = box("Pilier_mur_int_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, T, H_MX, origin=(0, 0, T)).data
 me_pi.name = "Pilier_mur_interieur"; me_pi.materials.append(bpy.data.materials["Pierre"])
