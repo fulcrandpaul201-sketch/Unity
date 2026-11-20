@@ -139,11 +139,11 @@ print("ponts :", kp, "| longueur", L, "m, épaisseur", DEP, "m")
 zc1 = H - 10.0; zc0 = zc1 - 10.0
 zb0 = T + 10.0; zb1 = zb0 + 10.0
 H_MX = 230.0                                              # mur extérieur : 230 m de haut
-# bandes de 10 m ; panneaux (40 m de large) en alternance : 20 (10 avec le sol) | 75 | 10 | 75 | 10 (sommet)
-BANDES_MX = [(20.0, 30.0), (105.0, 115.0), (125.0, 135.0), (210.0, 220.0)]
-# grande arche (une seule, à l'avant du mur extérieur) : 2 piliers centraux (±25 m) retirés, 40 m de mur tout autour :
-# jusqu'aux piliers à ±75 m -> 60 m de large ; sommet 40 m sous la bande à 210 m -> 170 m (côtés droits de 10 à 140 m, demi-cercle de 30 m)
-GA_HW, GA_Z0, GA_TOP = 30.0, T, 170.0; GA_HS = GA_TOP - GA_Z0 - GA_HW
+# bandes de 10 m ; panneaux (40 m de large) : 20 (10 avec le sol) | 85 | 85 | 10 (sommet) — une seule bande au milieu
+BANDES_MX = [(20.0, 30.0), (115.0, 125.0), (210.0, 220.0)]
+# grande arche (une seule, à l'avant du mur extérieur) : 2 piliers centraux (±25 m) retirés, 20 m de mur tout autour :
+# jusqu'aux piliers à ±75 m -> 100 m de large ; sommet 20 m sous la bande à 210 m -> 190 m (côtés droits de 10 à 140 m, demi-cercle de 50 m)
+GA_HW, GA_Z0, GA_TOP = 50.0, T, 190.0; GA_HS = GA_TOP - GA_Z0 - GA_HW
 def baie_ga(u): return abs(u) < 50.0                     # piliers retirés (avant / arrière du mur extérieur)
 bords = [-b] + [e for i in range(1, NCOL + 1) for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [b]
 E = -bords[1]                                             # distance au centre du bord de la première colonne (74 m)
