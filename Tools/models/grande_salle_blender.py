@@ -497,6 +497,18 @@ for u in CMXI:                                            # piliers de la face i
     for (x, y, rz) in ((u, -RXI + DEP / 2, 0), (u, RXI - DEP / 2, 0), (-RXI + DEP / 2, u, 90), (RXI - DEP / 2, u, 90)):
         ki += 1; c = bpy.data.objects.new("Pilier_mur_int_%02d" % ki, me_pi); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
         col_mx.objects.link(c)
+# ponts du mur extérieur : relient chaque pilier intérieur au pilier extérieur d'en face, par-dessus le mur
+# (comme ceux de la cour) : 10 m de large, 5 m d'épaisseur (230 -> 235 m), de la face du pilier intérieur à celle du pilier extérieur
+LMX = EP_MX + 2 * DEP                                     # 60 m
+me_pmx = box("Pont_mur_ext_maillage", -COL / 2, COL / 2, -LMX / 2, LMX / 2, H_MX, H_MX + DEP, origin=(0, 0, H_MX)).data
+me_pmx.name = "Pont_mur_exterieur"; me_pmx.materials.append(bpy.data.materials["Pierre"])
+col_pmx = bpy.data.collections.new("Ponts_mur_exterieur"); scn.collection.children.link(col_pmx)
+kpx = 0; mmx = (RXO + RXI) / 2
+for u in CMXI:
+    for (x, y, rz) in ((u, -mmx, 0), (u, mmx, 0), (-mmx, u, 90), (mmx, u, 90)):
+        kpx += 1; c = bpy.data.objects.new("Pont_mur_ext_%03d" % kpx, me_pmx); c.location = (x, y, H_MX); c.rotation_euler.z = math.radians(rz)
+        col_pmx.objects.link(c)
+print("ponts du mur extérieur :", kpx, "| longueur", LMX, "m")
 ecarts_i = sorted(set([round(CMXI[0] - COL / 2 + RXI, 3)] + [round(CMXI[k + 1] - CMXI[k] - COL, 3) for k in range(len(CMXI) - 1)]))
 print("mur extérieur, face intérieure :", 2 * RXI, "m | piliers :", ki, "| écarts (angles compris) :", ecarts_i, "| épaisseur", EP_MX, "m")
 ecarts = [round((-b + (i + 1) * pas - COL / 2) - (-b + i * pas + COL / 2), 3) for i in range(-15, 20)]
