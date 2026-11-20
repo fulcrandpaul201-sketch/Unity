@@ -141,9 +141,9 @@ zb0 = T + 10.0; zb1 = zb0 + 10.0
 H_MX = 230.0                                              # mur extérieur : 230 m de haut
 # bandes de 10 m ; panneaux (40 m de large) en alternance : 20 (10 avec le sol) | 75 | 10 | 75 | 10 (sommet)
 BANDES_MX = [(20.0, 30.0), (105.0, 115.0), (125.0, 135.0), (210.0, 220.0)]
-# grande arche (une seule, à l'avant du mur extérieur) : 2 piliers centraux (±25 m) retirés, 20 m de mur tout autour :
-# jusqu'aux piliers à ±75 m -> 100 m de large ; sommet 20 m sous la bande à 210 m -> 190 m (côtés droits de 10 à 140 m, demi-cercle de 50 m)
-GA_HW, GA_Z0, GA_TOP = 50.0, T, 190.0; GA_HS = GA_TOP - GA_Z0 - GA_HW
+# grande arche (une seule, à l'avant du mur extérieur) : 2 piliers centraux (±25 m) retirés, 40 m de mur tout autour :
+# jusqu'aux piliers à ±75 m -> 60 m de large ; sommet 40 m sous la bande à 210 m -> 170 m (côtés droits de 10 à 140 m, demi-cercle de 30 m)
+GA_HW, GA_Z0, GA_TOP = 30.0, T, 170.0; GA_HS = GA_TOP - GA_Z0 - GA_HW
 def baie_ga(u): return abs(u) < 50.0                     # piliers retirés (avant / arrière du mur extérieur)
 bords = [-b] + [e for i in range(1, NCOL + 1) for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [b]
 E = -bords[1]                                             # distance au centre du bord de la première colonne (74 m)
@@ -515,14 +515,15 @@ okx = all(e.is_manifold for e in bmx.edges)
 biaisx = sum(1 for e in bmx.edges if sum(1 for q in (e.verts[1].co - e.verts[0].co) if abs(q) > 1e-4) >= 2 and (e.verts[1].co - e.verts[0].co).length > 3)
 bmx.to_mesh(mex); bmx.free(); mex.update()
 print("Mur_exterieur avec grandes arches :", len(mex.vertices), "sommets, étanche =", okx, "| arêtes en biais :", biaisx)
-# moulures des grandes arches : mêmes règles (blocs de 5 m de haut, 2,5 m d'épaisseur, 5 / 3 m en alternance, nombre impair, écart ~1 m)
+# moulures de la grande arche : blocs deux fois plus grands (10 m de haut, 10 / 6 m en alternance), même épaisseur (2,5 m), nombre impair, écart ~1 m
+MH2, ML2 = 2 * MH, (2 * ML[0], 2 * ML[1])
 col_mga = bpy.data.collections.new("Moulures_grandes_arches"); scn.collection.children.link(col_mga)
 Lga = 2 * GA_HS + math.pi * GA_HW
-nga = int((Lga + MG) // (MH + MG)) | 1; gga = (Lga - nga * MH) / (nga - 1); kga = 0
+nga = int((Lga + MG) // (MH2 + MG)) | 1; gga = (Lga - nga * MH2) / (nga - 1); kga = 0
 for nom_, y0_, y1_ in (("avant_ext", -RXO - MS, -RXO), ("avant_int", -RXI, -RXI + MS)):
     for i in range(nga):
-        t0_ = i * (MH + gga)
-        col_mga.objects.link(moulure("Moulure_grande_arche_%s_%02d" % (nom_, i + 1), t0_, t0_ + MH, ML[min(i, nga - 1 - i) % 2], y0_, y1_, GA_Z0, GA_HS, GA_HW)); kga += 1
+        t0_ = i * (MH2 + gga)
+        col_mga.objects.link(moulure("Moulure_grande_arche_%s_%02d" % (nom_, i + 1), t0_, t0_ + MH2, ML2[min(i, nga - 1 - i) % 2], y0_, y1_, GA_Z0, GA_HS, GA_HW)); kga += 1
 print("moulures grandes arches :", kga, "|", nga, "par face | écart", round(gga, 3), "m")
 # sol entre l'enceinte et le mur extérieur : comme celui de la cour, 10 m d'épaisseur (0 -> 10 m)
 col_mx.objects.link(cadre("Sol_mur_exterieur", RO, RXI, 0.0, T, cotes=False))
