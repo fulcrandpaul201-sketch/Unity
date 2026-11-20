@@ -179,7 +179,7 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("
             cotes_ = ((-r1, -r0, -8.0, 8.0), (r0, r1, -8.0, 8.0)) if u0 < 0 < u1 else ()
         avar = ((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if not (coupe and u0 < 0 < u1) else ()
         if r0 >= RXI - DEP and abs(u0 + u1) / 2 <= 50.0:  # mur extérieur, travée de la grande arche (entre les piliers à ±75 m)
-            avar = (((-70.0, 70.0, -r1, -r0),) if (z0 >= GA_TOP and u0 < 0 < u1) else ()) + (((u0, u1, r0, r1),) if not (coupe and u0 < 0 < u1) else ())
+            avar = (((u0, u1, -r1, -r0),) if z0 >= GA_TOP else ()) + (((u0, u1, r0, r1),) if not (coupe and u0 < 0 < u1) else ())   # au-dessus : coupée aux piliers
         for (x0, x1, y0, y1) in avar + cotes_:
             ajoute(box("tmp", x0, x1, y0, y1, z0, z1, origin=((x0 + x1) / 2, (y0 + y1) / 2, z0)))
     for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):   # angles : une seule forme en L
@@ -562,7 +562,7 @@ me_pmx.name = "Pont_mur_exterieur"; me_pmx.materials.append(bpy.data.materials["
 col_pmx = bpy.data.collections.new("Ponts_mur_exterieur"); scn.collection.children.link(col_pmx)
 kpx = 0; mmx = (RXO + RXI) / 2
 for u in CMXI:
-    for (x, y, rz) in (() if baie_ga(u) else ((u, -mmx, 0),)) + ((u, mmx, 0),) + ((-mmx, u, 90), (mmx, u, 90)):
+    for (x, y, rz) in ((u, -mmx, 0), (u, mmx, 0)) + ((-mmx, u, 90), (mmx, u, 90)):
         kpx += 1; c = bpy.data.objects.new("Pont_mur_ext_%03d" % kpx, me_pmx); c.location = (x, y, H_MX); c.rotation_euler.z = math.radians(rz)
         col_pmx.objects.link(c)
 print("ponts du mur extérieur :", kpx, "| longueur", LMX, "m")
