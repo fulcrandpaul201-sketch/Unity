@@ -107,14 +107,14 @@ for i in range(1, NCOL + 1):
         col_cols.objects.link(c)
 # colonnes extérieures : déplacées sur la face extérieure du mur d'enceinte, dans l'axe des colonnes intérieures, du bas du mur (0 m) jusqu'en haut
 col_ext = bpy.data.collections.new("Colonnes_exterieures"); scn.collection.children.link(col_ext)
-me_ext = box("Colonne_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H).data
+me_ext = box("Colonne_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, T, H, origin=(0, 0, T)).data   # posées sur le sol extérieur (10 m)
 me_ext.name = "Colonne_exterieure"; me_ext.materials.append(bpy.data.materials["Pierre"])
 ke = 0
 IEXT = range(-1, NCOL + 3)                                # 8 par côté : les 4 dans l'axe des colonnes intérieures + 2 de chaque côté, même pas que les colonnes intérieures
 for i in IEXT:
     u = -b + i * pas
     for (x, y, rz) in ((u, -RO - DEP / 2, 0), (u, RO + DEP / 2, 0)) + (() if PLACE_SALLES else ((-RO - DEP / 2, u, 90), (RO + DEP / 2, u, 90))):   # face extérieure du mur d'enceinte (murs de côté : remplacées par les salles carrées)
-        ke += 1; c = bpy.data.objects.new("Colonne_ext_%02d" % ke, me_ext); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
+        ke += 1; c = bpy.data.objects.new("Colonne_ext_%02d" % ke, me_ext); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
         col_ext.objects.link(c)
 print("colonnes extérieures :", ke)
 # ponts : relient chaque colonne intérieure à son vis-à-vis extérieur (sur le mur d'enceinte) par-dessus le mur, le toit et l'enceinte (105 m de long, 10 m de large, 5 m d'épaisseur)
@@ -455,6 +455,8 @@ if ESCALIERS: print("escaliers : 4 x", 2 * n2, "marches |", long_e, "m de long |
 RXO = 920.0; RXI = RXO - T
 col_mx = bpy.data.collections.new("Mur_exterieur"); scn.collection.children.link(col_mx)
 col_mx.objects.link(cadre("Mur_exterieur", RXI, RXO, 0.0, H, cotes=False))
+# sol entre l'enceinte et le mur extérieur : comme celui de la cour, 10 m d'épaisseur (0 -> 10 m)
+col_mx.objects.link(cadre("Sol_mur_exterieur", RO, RXI, 0.0, T, cotes=False))
 me_px = box("Pilier_mur_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H).data
 me_px.name = "Pilier_mur_exterieur"; me_px.materials.append(bpy.data.materials["Pierre"])
 kx = 0
