@@ -141,9 +141,9 @@ zb0 = T + 10.0; zb1 = zb0 + 10.0
 H_MX = 230.0                                              # mur extérieur : 230 m de haut
 # bandes de 10 m ; panneaux (40 m de large) en alternance : 20 (10 avec le sol) | 75 | 10 | 75 | 10 (sommet)
 BANDES_MX = [(20.0, 30.0), (105.0, 115.0), (125.0, 135.0), (210.0, 220.0)]
-# grande arche (avant et arrière du mur extérieur) : 2 piliers centraux (±25 m) retirés, 10 m de mur jusqu'aux piliers à ±75 m -> 120 m de large ;
-# du sol (10 m) jusqu'à 10 m sous la bande à 210 m : sommet à 200 m (côtés droits de 10 à 140 m, demi-cercle de 60 m de rayon)
-GA_HW, GA_Z0, GA_TOP = 60.0, T, 200.0; GA_HS = GA_TOP - GA_Z0 - GA_HW
+# grande arche (une seule, à l'avant du mur extérieur) : 2 piliers centraux (±25 m) retirés, 20 m de mur tout autour :
+# jusqu'aux piliers à ±75 m -> 100 m de large ; sommet 20 m sous la bande à 210 m -> 190 m (côtés droits de 10 à 140 m, demi-cercle de 50 m)
+GA_HW, GA_Z0, GA_TOP = 50.0, T, 190.0; GA_HS = GA_TOP - GA_Z0 - GA_HW
 def baie_ga(u): return abs(u) < 50.0                     # piliers retirés (avant / arrière du mur extérieur)
 bords = [-b] + [e for i in range(1, NCOL + 1) for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [b]
 E = -bords[1]                                             # distance au centre du bord de la première colonne (74 m)
@@ -179,7 +179,7 @@ for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("
             cotes_ = ((-r1, -r0, -8.0, 8.0), (r0, r1, -8.0, 8.0)) if u0 < 0 < u1 else ()
         avar = ((u0, u1, -r1, -r0), (u0, u1, r0, r1)) if not (coupe and u0 < 0 < u1) else ()
         if r0 >= RXI - DEP and abs(u0 + u1) / 2 <= 50.0:  # mur extérieur, travée de la grande arche (entre les piliers à ±75 m)
-            avar = ((-70.0, 70.0, -r1, -r0), (-70.0, 70.0, r0, r1)) if (z0 >= GA_TOP and u0 < 0 < u1) else ()
+            avar = (((-70.0, 70.0, -r1, -r0),) if (z0 >= GA_TOP and u0 < 0 < u1) else ()) + (((u0, u1, r0, r1),) if not (coupe and u0 < 0 < u1) else ())
         for (x0, x1, y0, y1) in avar + cotes_:
             ajoute(box("tmp", x0, x1, y0, y1, z0, z1, origin=((x0 + x1) / 2, (y0 + y1) / 2, z0)))
     for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):   # angles : une seule forme en L
@@ -235,18 +235,18 @@ for i in IEXT:
 for i in IMX:
     u = -b + i * pas
     for mur in ("avant_mx", "arriere_mx", "gauche_mx", "droite_mx"):
-        if mur in ("avant_mx", "arriere_mx") and baie_ga(u): continue
+        if mur == "avant_mx" and baie_ga(u): continue
         for du in (-1, 1):
             for bande, zb_, zh_ in (("b%d" % round(z0_), z0_, z1_) for z0_, z1_ in BANDES_MX):
-                if mur in ("avant_mx", "arriere_mx") and abs(u) < 100 and du * u < 0 and zb_ < GA_TOP: continue   # côté grande arche
+                if mur == "avant_mx" and abs(u) < 100 and du * u < 0 and zb_ < GA_TOP: continue   # côté grande arche
                 for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
                     ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u + du * COL / 2, du, z_face, dz)
 for u in CMXI:                                            # face intérieure du mur extérieur
     for mur in ("avant_mxi", "arriere_mxi", "gauche_mxi", "droite_mxi"):
-        if mur in ("avant_mxi", "arriere_mxi") and baie_ga(u): continue
+        if mur == "avant_mxi" and baie_ga(u): continue
         for du in (-1, 1):
             for bande, zb_, zh_ in (("b%d" % round(z0_), z0_, z1_) for z0_, z1_ in BANDES_MX):
-                if mur in ("avant_mxi", "arriere_mxi") and abs(u) < 100 and du * u < 0 and zb_ < GA_TOP: continue
+                if mur == "avant_mxi" and abs(u) < 100 and du * u < 0 and zb_ < GA_TOP: continue
                 for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
                     ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u + du * COL / 2, du, z_face, dz)
 print("arrondis :", ka, "| rayon", RA, "m")
@@ -496,7 +496,7 @@ bmx = bmesh.new(); bmx.from_mesh(mur_mx.data)
 bmesh.ops.bisect_plane(bmx, geom=bmx.verts[:] + bmx.edges[:] + bmx.faces[:], plane_co=(0, 0, 0), plane_no=(1, 0, 0))
 bmx.to_mesh(mur_mx.data); bmx.free(); mur_mx.data.update()
 col_tmp2 = bpy.data.collections.new("tmp_ga"); scn.collection.children.link(col_tmp2)
-for nom_, sy_ in (("avant", -1), ("arriere", 1)):
+for nom_, sy_ in (("avant", -1),):
     prof_ = [(-GA_HW, GA_Z0), (GA_HW, GA_Z0), (GA_HW, GA_Z0 + GA_HS)]
     prof_ += [(GA_HW * math.cos(t_), GA_Z0 + GA_HS + GA_HW * math.sin(t_)) for t_ in (math.pi * i / 64 for i in range(1, 64))] + [(-GA_HW, GA_Z0 + GA_HS)]
     ya_, yb_ = sorted((sy_ * (RXI - M), sy_ * (RXO + M))); m_ = len(prof_)
@@ -519,7 +519,7 @@ print("Mur_exterieur avec grandes arches :", len(mex.vertices), "sommets, étanc
 col_mga = bpy.data.collections.new("Moulures_grandes_arches"); scn.collection.children.link(col_mga)
 Lga = 2 * GA_HS + math.pi * GA_HW
 nga = int((Lga + MG) // (MH + MG)) | 1; gga = (Lga - nga * MH) / (nga - 1); kga = 0
-for nom_, y0_, y1_ in (("avant_ext", -RXO - MS, -RXO), ("avant_int", -RXI, -RXI + MS), ("arriere_int", RXI - MS, RXI), ("arriere_ext", RXO, RXO + MS)):
+for nom_, y0_, y1_ in (("avant_ext", -RXO - MS, -RXO), ("avant_int", -RXI, -RXI + MS)):
     for i in range(nga):
         t0_ = i * (MH + gga)
         col_mga.objects.link(moulure("Moulure_grande_arche_%s_%02d" % (nom_, i + 1), t0_, t0_ + MH, ML[min(i, nga - 1 - i) % 2], y0_, y1_, GA_Z0, GA_HS, GA_HW)); kga += 1
@@ -531,14 +531,14 @@ me_px.name = "Pilier_mur_exterieur"; me_px.materials.append(bpy.data.materials["
 kx = 0
 for i in IMX:                                             # centres de -875 à 875 m, pas de 50 m
     u = -b + i * pas
-    for (x, y, rz) in (() if baie_ga(u) else ((u, -RXO - DEP / 2, 0), (u, RXO + DEP / 2, 0))) + ((-RXO - DEP / 2, u, 90), (RXO + DEP / 2, u, 90)):
+    for (x, y, rz) in (() if baie_ga(u) else ((u, -RXO - DEP / 2, 0),)) + ((u, RXO + DEP / 2, 0),) + ((-RXO - DEP / 2, u, 90), (RXO + DEP / 2, u, 90)):
         kx += 1; c = bpy.data.objects.new("Pilier_mur_ext_%02d" % kx, me_px); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
         col_mx.objects.link(c)
 me_pi = box("Pilier_mur_int_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, T, H_MX, origin=(0, 0, T)).data
 me_pi.name = "Pilier_mur_interieur"; me_pi.materials.append(bpy.data.materials["Pierre"])
 ki = 0
 for u in CMXI:                                            # piliers de la face intérieure, posés sur le sol (10 m)
-    for (x, y, rz) in (() if baie_ga(u) else ((u, -RXI + DEP / 2, 0), (u, RXI - DEP / 2, 0))) + ((-RXI + DEP / 2, u, 90), (RXI - DEP / 2, u, 90)):
+    for (x, y, rz) in (() if baie_ga(u) else ((u, -RXI + DEP / 2, 0),)) + ((u, RXI - DEP / 2, 0),) + ((-RXI + DEP / 2, u, 90), (RXI - DEP / 2, u, 90)):
         ki += 1; c = bpy.data.objects.new("Pilier_mur_int_%02d" % ki, me_pi); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
         col_mx.objects.link(c)
 # ponts du mur extérieur : relient chaque pilier intérieur au pilier extérieur d'en face, par-dessus le mur
@@ -549,7 +549,7 @@ me_pmx.name = "Pont_mur_exterieur"; me_pmx.materials.append(bpy.data.materials["
 col_pmx = bpy.data.collections.new("Ponts_mur_exterieur"); scn.collection.children.link(col_pmx)
 kpx = 0; mmx = (RXO + RXI) / 2
 for u in CMXI:
-    for (x, y, rz) in (() if baie_ga(u) else ((u, -mmx, 0), (u, mmx, 0))) + ((-mmx, u, 90), (mmx, u, 90)):
+    for (x, y, rz) in (() if baie_ga(u) else ((u, -mmx, 0),)) + ((u, mmx, 0),) + ((-mmx, u, 90), (mmx, u, 90)):
         kpx += 1; c = bpy.data.objects.new("Pont_mur_ext_%03d" % kpx, me_pmx); c.location = (x, y, H_MX); c.rotation_euler.z = math.radians(rz)
         col_pmx.objects.link(c)
 print("ponts du mur extérieur :", kpx, "| longueur", LMX, "m")
