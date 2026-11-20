@@ -138,6 +138,7 @@ print("ponts :", kp, "| longueur", L, "m, épaisseur", DEP, "m")
 #   basses intérieure et extérieure (20 -> 30 m, 10 m au-dessus du sol intérieur), rien entre les 2 colonnes centrales avant / arrière (arches)
 zc1 = H - 10.0; zc0 = zc1 - 10.0
 zb0 = T + 10.0; zb1 = zb0 + 10.0
+zs1 = 2 * H - 10.0; zs0 = zs1 - 10.0                       # mur extérieur (250 m) : bande du sommet, 10 m sous le haut (230 -> 240 m)
 bords = [-b] + [e for i in range(1, NCOL + 1) for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [b]
 E = -bords[1]                                             # distance au centre du bord de la première colonne (74 m)
 bords_mx = [-RXO - DEP] + [e for i in IMX for e in (-b + i * pas - COL / 2, -b + i * pas + COL / 2)] + [RXO + DEP]   # piliers du mur extérieur
@@ -155,7 +156,8 @@ def prisme(name, poly, z0, z1):
 for nom, r0, r1, z0, z1, coupe in (("Corniche", b - DEP, b, zc0, zc1, False), ("Corniche_haute_ext", RO, RO + DEP, zc0, zc1, False),
                                    ("Corniche_basse_int", b - DEP, b, zb0, zb1, True), ("Corniche_basse_ext", RO, RO + DEP, zb0, zb1, True),
                                    ("Corniche_haute_mur_ext", RXO, RXO + DEP, zc0, zc1, False), ("Corniche_basse_mur_ext", RXO, RXO + DEP, zb0, zb1, False),
-                                   ("Corniche_haute_mur_int", RXI - DEP, RXI, zc0, zc1, False), ("Corniche_basse_mur_int", RXI - DEP, RXI, zb0, zb1, False)):
+                                   ("Corniche_haute_mur_int", RXI - DEP, RXI, zc0, zc1, False), ("Corniche_basse_mur_int", RXI - DEP, RXI, zb0, zb1, False),
+                                   ("Corniche_sommet_mur_ext", RXO, RXO + DEP, zs0, zs1, False), ("Corniche_sommet_mur_int", RXI - DEP, RXI, zs0, zs1, False)):
     colb = bpy.data.collections.new(nom); scn.collection.children.link(colb)   # r0..r1 : bande en distance au centre
     n = 0
     def ajoute(ob):
@@ -226,13 +228,13 @@ for i in IMX:
     u = -b + i * pas
     for mur in ("avant_mx", "arriere_mx", "gauche_mx", "droite_mx"):
         for du in (-1, 1):
-            for bande, zb_, zh_ in (("haute", zc0, zc1), ("basse", zb0, zb1)):
+            for bande, zb_, zh_ in (("haute", zc0, zc1), ("basse", zb0, zb1), ("sommet", zs0, zs1)):
                 for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
                     ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u + du * COL / 2, du, z_face, dz)
 for u in CMXI:                                            # face intérieure du mur extérieur
     for mur in ("avant_mxi", "arriere_mxi", "gauche_mxi", "droite_mxi"):
         for du in (-1, 1):
-            for bande, zb_, zh_ in (("haute", zc0, zc1), ("basse", zb0, zb1)):
+            for bande, zb_, zh_ in (("haute", zc0, zc1), ("basse", zb0, zb1), ("sommet", zs0, zs1)):
                 for z_face, dz, pos in ((zh_, 1, "dessus"), (zb_, -1, "dessous")):
                     ka += 1; arrondi("Arrondi_%s_%d_%s_%s_%s" % (mur, round(u), "d" if du > 0 else "g", bande, pos), mur, u + du * COL / 2, du, z_face, dz)
 print("arrondis :", ka, "| rayon", RA, "m")
