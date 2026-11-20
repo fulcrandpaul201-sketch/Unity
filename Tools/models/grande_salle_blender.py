@@ -450,6 +450,22 @@ for sx, nom in (((-1, "Palier_gauche"), (1, "Palier_droit")) if ESCALIERS else (
     pal = prisme(nom, [(sx * x, y) for x, y in u], T, Z_HAUT); pal.data.materials.append(bpy.data.materials["Pierre"]); col_esc.objects.link(pal)
 if ESCALIERS: print("escaliers : 4 x", 2 * n2, "marches |", long_e, "m de long | paliers en U | pieds des escaliers à", XB - long_e, "m de l'axe des arches")
 
+# mur extérieur : englobe tout, face extérieure de 1 040 x 1 040 m (le plus proche de 1 km qui garde 40 m de mur entre piliers, angles compris),
+# 10 m d'épaisseur, de 0 à 125 m (même hauteur que la cour) ; 20 piliers de 10 m par côté sur la face extérieure, alignés sur les piliers actuels
+RXO = 520.0; RXI = RXO - T
+col_mx = bpy.data.collections.new("Mur_exterieur"); scn.collection.children.link(col_mx)
+col_mx.objects.link(cadre("Mur_exterieur", RXI, RXO, 0.0, H, cotes=False))
+me_px = box("Pilier_mur_ext_maillage", -COL / 2, COL / 2, -DEP / 2, DEP / 2, 0, H).data
+me_px.name = "Pilier_mur_exterieur"; me_px.materials.append(bpy.data.materials["Pierre"])
+kx = 0
+for i in range(-7, 13):                                   # centres de -475 à 475 m, pas de 50 m
+    u = -b + i * pas
+    for (x, y, rz) in ((u, -RXO - DEP / 2, 0), (u, RXO + DEP / 2, 0), (-RXO - DEP / 2, u, 90), (RXO + DEP / 2, u, 90)):
+        kx += 1; c = bpy.data.objects.new("Pilier_mur_ext_%02d" % kx, me_px); c.location = (x, y, 0); c.rotation_euler.z = math.radians(rz)
+        col_mx.objects.link(c)
+ecarts = [round((-b + (i + 1) * pas - COL / 2) - (-b + i * pas + COL / 2), 3) for i in range(-7, 12)]
+print("mur extérieur : 1040 m | piliers :", kx, "| écarts entre piliers :", set(ecarts), "| angle :", RXO - (-b + 12 * pas + COL / 2), "m")
+
 # lumière et caméra pour un premier rendu
 sun = bpy.data.objects.new("Soleil", bpy.data.lights.new("Soleil", "SUN")); sun.data.energy = 1.5                     # soleil plus doux : les faces éclairées ne virent pas au blanc
 sun.rotation_euler = (math.radians(50), math.radians(10), math.radians(35)); scn.collection.objects.link(sun)
