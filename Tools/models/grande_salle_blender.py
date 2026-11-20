@@ -72,8 +72,8 @@ b, o, M = a - T, OW / 2, 5.0          # M : débord pour des découpes franches
 SOL_NAV, SOL_MUR = 75.0, 10.0
 RE, RO = a + SOL_NAV, a + SOL_NAV + SOL_MUR                  # faces intérieure et extérieure du mur d'enceinte
 RXO = 920.0; IMX = range(-15, 21)                        # mur extérieur : face extérieure de 1 840 m, 36 piliers par côté
-EP_MX = 25.0; RXI = RXO - EP_MX                           # épaisseur 25 m : face intérieure de 1 790 m = 35 piliers de 10 m + 36 panneaux de 40 m
-CMXI = [-RXI + 45.0 + 50.0 * k for k in range(35)]       # centres des piliers intérieurs (-850 ... 850 m, un au centre)
+EP_MX = 50.0; RXI = RXO - EP_MX                           # épaisseur 50 m : face intérieure de 1 740 m = 34 piliers de 10 m + 35 panneaux de 40 m
+CMXI = [-RXI + 45.0 + 50.0 * k for k in range(34)]       # centres des piliers intérieurs (-825 ... 825 m), alignés en face des piliers extérieurs
 cutters = [
     box("Decoupe_interieur", -b, b, -b, b, T, H + M, origin=(0, 0, T)),
 ] + ([
@@ -477,7 +477,7 @@ for sx, nom in (((-1, "Palier_gauche"), (1, "Palier_droit")) if ESCALIERS else (
 if ESCALIERS: print("escaliers : 4 x", 2 * n2, "marches |", long_e, "m de long | paliers en U | pieds des escaliers à", XB - long_e, "m de l'axe des arches")
 
 # mur extérieur : englobe tout, face extérieure de 1 840 x 1 840 m (au moins 3 fois la surface de 1 040 m, en gardant 40 m de mur entre piliers, angles compris),
-# 25 m d'épaisseur (pour 40 m de mur entre piliers aussi à l'intérieur), de 0 à 125 m ; 36 piliers par côté dehors, 35 dedans
+# 50 m d'épaisseur (40 m de mur entre piliers des deux côtés, piliers intérieurs et extérieurs alignés) ; 36 piliers par côté dehors, 34 dedans
 col_mx = bpy.data.collections.new("Mur_exterieur"); scn.collection.children.link(col_mx)
 col_mx.objects.link(cadre("Mur_exterieur", RXI, RXO, 0.0, H_MX, cotes=False))
 # sol entre l'enceinte et le mur extérieur : comme celui de la cour, 10 m d'épaisseur (0 -> 10 m)
@@ -497,7 +497,7 @@ for u in CMXI:                                            # piliers de la face i
     for (x, y, rz) in ((u, -RXI + DEP / 2, 0), (u, RXI - DEP / 2, 0), (-RXI + DEP / 2, u, 90), (RXI - DEP / 2, u, 90)):
         ki += 1; c = bpy.data.objects.new("Pilier_mur_int_%02d" % ki, me_pi); c.location = (x, y, T); c.rotation_euler.z = math.radians(rz)
         col_mx.objects.link(c)
-ecarts_i = sorted(set([round(CMXI[0] - COL / 2 + RXI, 3)] + [round(CMXI[k + 1] - CMXI[k] - COL, 3) for k in range(34)]))
+ecarts_i = sorted(set([round(CMXI[0] - COL / 2 + RXI, 3)] + [round(CMXI[k + 1] - CMXI[k] - COL, 3) for k in range(len(CMXI) - 1)]))
 print("mur extérieur, face intérieure :", 2 * RXI, "m | piliers :", ki, "| écarts (angles compris) :", ecarts_i, "| épaisseur", EP_MX, "m")
 ecarts = [round((-b + (i + 1) * pas - COL / 2) - (-b + i * pas + COL / 2), 3) for i in range(-15, 20)]
 print("mur extérieur :", 2 * RXO, "m | piliers :", kx, "| écarts entre piliers :", set(ecarts), "| angle :", RXO - (-b + 20 * pas + COL / 2), "m")
