@@ -627,10 +627,13 @@ for scr in bpy.data.screens:
                 r3 = sp.region_3d; r3.view_location = (0, 0, 50); r3.view_distance = 620
                 r3.view_rotation = Euler((math.radians(62), 0, math.radians(38))).to_quaternion(); n += 1
 print("vues 3D réglées :", n)
-# moteur de rendu enregistré dans le fichier : Cycles (mêmes lumière et ombres que les aperçus), GPU si disponible, débruitage
-scn.render.engine = "CYCLES"; scn.cycles.device = "GPU"
-scn.cycles.samples = 32; scn.cycles.preview_samples = 16
+# moteur enregistré dans le fichier : EEVEE (fluide en navigation, ombres du soleil) ; Cycles reste réglé pour les images finales si on le choisit
+scn.cycles.device = "GPU"; scn.cycles.samples = 32; scn.cycles.preview_samples = 16
 scn.cycles.use_denoising = True; scn.cycles.use_preview_denoising = True
+scn.render.engine = "BLENDER_EEVEE_NEXT"
+ev = scn.eevee; ev.use_shadows = True; ev.use_raytracing = False; ev.use_taa_reprojection = True
+ev.taa_samples = 16; ev.taa_render_samples = 64; ev.shadow_resolution_scale = 1.0
+sun.data.use_shadow = True; sun.data.angle = math.radians(1.0)
 os.makedirs(OUT, exist_ok=True)
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, "grande_salle.blend"), compress=True)
 if os.path.exists(os.path.join(OUT, "grande_salle.blend1")): os.remove(os.path.join(OUT, "grande_salle.blend1"))
