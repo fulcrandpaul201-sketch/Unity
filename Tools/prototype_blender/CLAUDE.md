@@ -14,7 +14,7 @@
 - **Maillage** : aucun trait ni arête inutile. Uniquement les arêtes nécessaires à la forme (pas de diagonales, pas de découpes superflues). Le nombre de faces n'est pas limité, ce sont les arêtes superflues qu'on évite.
 - **Prêt pour les textures** (elles seront ajoutées plus tard) : UV propres à l'échelle réelle (1 m = 1 m de texture), échelle et rotations appliquées (échelle = 1), normales vers l'extérieur, aucune face superposée, faces plates pour la pierre et lissage seulement sur les courbes. Éviter tout outil ou procédé qui rendrait la texture étirée ou cassée.
 - **Unités** : mètres, 1 unité Blender = 1 m.
-- **Tailles en multiples de 2,5 m** : toutes les dimensions (salles, murs, hauteurs, ouvertures, positions) sont des multiples de 2,5 m.
+- **Tailles en multiples de 2,5 cm (0,025 m)** : toutes les dimensions (salles, murs, hauteurs, ouvertures, mobilier, positions) sont des multiples de 2,5 cm.
 - **La taille d'une salle = sa surface navigable** (l'intérieur, entre les murs). L'**épaisseur des murs** est toujours précisée à part et s'ajoute à l'extérieur.
 - **Noms** : utiliser exactement les noms donnés par l'utilisateur ; ne jamais inventer de nom sans demander.
 
