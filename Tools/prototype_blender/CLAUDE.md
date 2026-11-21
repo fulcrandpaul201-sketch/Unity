@@ -21,4 +21,4 @@
 ## Projet
 
 - Jeu en semi-monde ouvert pour **Unity** : chaque salle est un fichier Blender séparé ; on passe d'une salle à l'autre par téléportation depuis une carte.
-- Direction artistique : château en pierre unie (piliers, bandes horizontales, arrondis, arches avec moulures).
+- Direction artistique : **école de magie d'inspiration gothique (inspiration Poudlard)** : pierre, grandes fenêtres en ogive, voûtes et poutres, boiseries, estrade, bougies et lustres. Les éléments déjà faits (piliers, bandes, arrondis, arches avec moulures) restent réutilisables.
