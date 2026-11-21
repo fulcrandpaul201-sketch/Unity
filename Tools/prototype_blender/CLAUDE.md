@@ -6,6 +6,8 @@
 - **Avant chaque modification**, expliquer ce que j'ai compris de la demande et **attendre l'accord explicite** de l'utilisateur avant d'agir.
 - **Ne faire que les modifications demandées** : aucune initiative, aucun « tant que j'y suis ».
 - **Ne rien fusionner** : les objets restent séparés, sauf demande explicite.
+- **Toujours revérifier le fichier Blender** avant chaque modification : relire l'état actuel de la scène (objets, positions, dimensions) au lieu de se fier à ce qui a été fait avant, car l'utilisateur peut l'avoir modifié lui-même entre-temps. Signaler toute différence constatée avant d'agir.
+- **Relire aussi ce fichier CLAUDE.md** au début de chaque demande, car l'utilisateur peut l'avoir mis à jour.
 
 ## Règles de modélisation
 
